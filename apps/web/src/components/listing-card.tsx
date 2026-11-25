@@ -17,6 +17,7 @@ export function ListingCard({ l, priority, favorite }: { l: L; priority?: boolea
           {l.isTop && <span className="badge bg-surface text-ink shadow-card"><Zap className="size-3 text-brand" />Top</span>}
           {l.status === 'RESERVED' && <span className="badge bg-ink text-paper">Rezervováno</span>}
           {l.status === 'SOLD' && <span className="badge bg-ink text-paper">Prodáno</span>}
+          {l.status === 'EXPIRED' && <span className="badge bg-ink text-paper">Ukončeno</span>}
         </div>
         <FavoriteButton id={l.id} initial={favorite} className="absolute right-2 top-2 z-20" />
       </div>
