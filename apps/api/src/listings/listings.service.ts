@@ -7,6 +7,7 @@ import { config } from '../common/config';
 import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { LISTING_INCLUDE, SearchService } from '../search/search.service';
+import { recordListingStat } from '../stats/seller-stats';
 import { assessListing } from './moderation';
 
 export const ListingDto = z.object({
@@ -149,6 +150,7 @@ export class ListingsService {
     if (!l || l.status === 'DELETED' || (!isOwner && ['DRAFT', 'PENDING', 'REJECTED'].includes(l.status))) throw new NotFoundException('Inzerát neexistuje nebo byl odstraněn.');
     if (!isOwner && (await this.redis.lock(`view:${id}:${viewer?.id ?? ip}`, 3600))) {
       await this.prisma.listing.update({ where: { id }, data: { views: { increment: 1 } } });
+      await recordListingStat(this.prisma, id, 'views');
     }
     const [rating, activeCount, favCount, isFavorite] = await Promise.all([
       this.prisma.review.aggregate({ where: { sellerId: l.userId }, _avg: { rating: true }, _count: true }),
@@ -168,6 +170,7 @@ export class ListingsService {
     const l = await this.prisma.listing.findUnique({ where: { id }, include: { user: { select: { phone: true, phoneVerifiedAt: true } } } });
     if (!l?.user.phone) throw new NotFoundException('Prodejce telefon nezveřejnil.');
     if ((await this.redis.incr(`phone:${viewer.id}`, 86400)) > 50) throw new BadRequestException('Denní limit zobrazení telefonu vyčerpán.');
+    if (viewer.id !== l.userId && (await this.redis.lock(`phonestat:${id}:${viewer.id}`, 86400))) await recordListingStat(this.prisma, id, 'phoneReveals');
     return { phone: l.user.phone };
   }
 

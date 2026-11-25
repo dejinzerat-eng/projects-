@@ -1,10 +1,11 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, Heart, LayoutList, Search, Settings, Users } from 'lucide-react';
+import { Bell, ChartColumn, Heart, LayoutList, Search, Settings, Users } from 'lucide-react';
 
 const ITEMS = [
   { href: '/muj-ucet/inzeraty', label: 'Moje inzeráty', icon: LayoutList },
+  { href: '/muj-ucet/statistiky', label: 'Statistiky', icon: ChartColumn },
   { href: '/muj-ucet/oblibene', label: 'Oblíbené', icon: Heart },
   { href: '/muj-ucet/hledani', label: 'Uložená hledání', icon: Search },
   { href: '/muj-ucet/sledovani', label: 'Sledovaní prodejci', icon: Users },
