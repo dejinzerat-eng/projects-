@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { CITIES } from '@dej/shared';
 import type { Me } from '@/lib/api';
 import { call } from '@/lib/client';
+import { SellerSettings } from './seller-settings';
 import { useToast } from './toast';
 
 function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
@@ -64,6 +65,7 @@ export function Settings({ me, blocked, welcome }: { me: Me; blocked: { id: stri
           <div className="sm:col-span-2"><button className="btn btn-dark">Uložit profil</button></div>
         </form>
       </Section>
+      <SellerSettings refreshKey={me} />
 
       <Section title={me.hasPassword ? 'Změna hesla' : 'Nastavit heslo'}>
         <form className="grid gap-4 sm:grid-cols-2" onSubmit={async (e) => { e.preventDefault(); if (await run(() => call('/auth/password/change', 'POST', pw), 'Heslo změněno')) setPw({ current: '', password: '' }); }}>
