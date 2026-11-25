@@ -15,7 +15,7 @@ export default async function Page() {
     <div className="space-y-6">
       <h1 className="h-display text-3xl font-bold">Přehled</h1>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        {tiles.map(([l, v, sub]) => <div key={l} className="card p-4"><div className="text-sm text-muted">{l}</div><div className="mt-1 text-3xl font-extrabold tracking-tight">{typeof v === 'number' ? new Intl.NumberFormat('cs-CZ').format(v) : v}</div><div className="text-xs text-muted">{sub}</div></div>)}
+        {tiles.map(([l, v, sub]) => <div key={l} className="card p-4"><div className="text-sm text-muted">{l}</div><div className="mt-1 text-3xl font-bold tracking-tight">{typeof v === 'number' ? new Intl.NumberFormat('cs-CZ').format(v) : v}</div><div className="text-xs text-muted">{sub}</div></div>)}
       </div>
       <div className="card p-5">
         <h2 className="font-bold">Nové inzeráty za 30 dní</h2>

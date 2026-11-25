@@ -43,7 +43,7 @@ export default async function Page({ params }: Props) {
             {p.lastSeenAt && <p className="mt-3 text-xs text-muted">Naposledy aktivní {ago(p.lastSeenAt)}</p>}
           </div>
           <div className="card p-6">
-            <div className="flex items-center justify-between"><h2 className="font-bold">Skóre důvěryhodnosti</h2><span className="text-2xl font-extrabold text-trust">{p.trust}<span className="text-sm font-medium text-muted">/100</span></span></div>
+            <div className="flex items-center justify-between"><h2 className="font-bold">Skóre důvěryhodnosti</h2><span className="text-2xl font-bold text-trust">{p.trust}<span className="text-sm font-medium text-muted">/100</span></span></div>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-2"><div className="h-full rounded-full bg-trust" style={{ width: `${p.trust}%` }} /></div>
             <ul className="mt-4 space-y-2 text-sm">{p.trustBreakdown.map((t) => <li key={t.label} className="flex items-center gap-2">{t.ok ? <Check className="size-4 text-trust" /> : <X className="size-4 text-muted" />}<span className={t.ok ? '' : 'text-muted'}>{t.label}</span></li>)}</ul>
             <p className="mt-4 text-xs text-muted">Skóre počítáme jen z ověřitelných údajů. Hodnotit může pouze ten, kdo s prodejcem skutečně komunikoval.</p>

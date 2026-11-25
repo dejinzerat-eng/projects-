@@ -1,7 +1,8 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 
-const API = process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
+const API = process.env.API_INTERNAL_URL
+  ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api` : 'http://localhost:4000');
 
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 

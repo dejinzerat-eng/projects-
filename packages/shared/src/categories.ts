@@ -42,12 +42,13 @@ export const CATEGORIES: CategoryDef[] = [
       { key: 'power', label: 'Výkon', type: 'range', unit: 'kW', min: 0, max: 500 },
     ],
     children: [
-      { slug: 'osobni-auta', name: 'Osobní auta' },
-      { slug: 'motorky', name: 'Motorky a skútry' },
-      { slug: 'uzitkova-vozidla', name: 'Užitková vozidla' },
+      { slug: 'osobni-auta', name: 'Osobní automobily' },
+      { slug: 'motorky', name: 'Motocykly a skútry' },
+      { slug: 'uzitkova-vozidla', name: 'Užitkové vozy' },
       { slug: 'nahradni-dily', name: 'Náhradní díly', filters: [] },
       { slug: 'pneu-kola', name: 'Pneumatiky a kola', filters: [] },
       { slug: 'karavany', name: 'Karavany a přívěsy' },
+      { slug: 'auto-prislusenstvi', name: 'Příslušenství' },
     ],
   },
   {
@@ -60,7 +61,8 @@ export const CATEGORIES: CategoryDef[] = [
       { key: 'energy', label: 'Energetická třída', type: 'select', options: ['A', 'B', 'C', 'D', 'E', 'F', 'G'] },
     ],
     children: [
-      { slug: 'byty', name: 'Byty' },
+      { slug: 'byty', name: 'Byty na prodej' },
+      { slug: 'byty-pronajem', name: 'Byty k pronájmu' },
       { slug: 'domy', name: 'Domy' },
       { slug: 'pozemky', name: 'Pozemky' },
       { slug: 'chaty-chalupy', name: 'Chaty a chalupy' },
@@ -73,8 +75,8 @@ export const CATEGORIES: CategoryDef[] = [
     filters: [brand(['Samsung', 'LG', 'Sony', 'Philips', 'Panasonic', 'Bose', 'JBL', 'Xiaomi', 'Jiná']), { key: 'warranty', label: 'V záruce', type: 'boolean' }],
     children: [
       { slug: 'televize', name: 'Televize' },
-      { slug: 'audio', name: 'Audio a Hi-Fi' },
-      { slug: 'foto-video', name: 'Foto a video' },
+      { slug: 'audio', name: 'Audio technika' },
+      { slug: 'foto-video', name: 'Fotoaparáty a video' },
       { slug: 'herni-konzole', name: 'Herní konzole' },
       { slug: 'domaci-spotrebice', name: 'Domácí spotřebiče' },
       { slug: 'chytra-domacnost', name: 'Chytrá domácnost' },
@@ -174,7 +176,7 @@ export const CATEGORIES: CategoryDef[] = [
     ],
   },
   {
-    slug: 'zvirata', name: 'Zvířata', icon: 'paw-print',
+    slug: 'zvirata', name: 'Zvířata a chovatelské potřeby', icon: 'paw-print',
     filters: [{ key: 'pedigree', label: 'S průkazem původu', type: 'boolean' }, { key: 'sex', label: 'Pohlaví', type: 'select', options: ['Samec', 'Samice'] }],
     children: [
       { slug: 'psi', name: 'Psi' },
@@ -198,7 +200,7 @@ export const CATEGORIES: CategoryDef[] = [
     ],
   },
   {
-    slug: 'sluzby', name: 'Služby', icon: 'wrench',
+    slug: 'sluzby', name: 'Služby a řemesla', icon: 'wrench',
     filters: [{ key: 'area', label: 'Působnost', type: 'select', options: ['Místní', 'Celý kraj', 'Celá ČR', 'Online'] }],
     children: [
       { slug: 'remesla', name: 'Řemesla a opravy' },
@@ -241,7 +243,43 @@ export const CATEGORIES: CategoryDef[] = [
       { slug: 'starozitnosti', name: 'Starožitnosti' },
       { slug: 'umeni', name: 'Obrazy a umění' },
       { slug: 'modely', name: 'Modely a figurky' },
-      { slug: 'knihy', name: 'Knihy a komiksy' },
+      { slug: 'stare-knihy', name: 'Staré knihy a komiksy' },
+    ],
+  },
+  {
+    slug: 'knihy', name: 'Knihy a učebnice', icon: 'book-open',
+    filters: [{ key: 'bookLang', label: 'Jazyk', type: 'select', options: ['Čeština', 'Slovenština', 'Angličtina', 'Němčina', 'Jiný'] }, { key: 'binding', label: 'Vazba', type: 'select', options: ['Pevná', 'Brožovaná', 'E-kniha', 'Audiokniha'] }],
+    children: [
+      { slug: 'beletrie', name: 'Beletrie' },
+      { slug: 'ucebnice', name: 'Učebnice a skripta' },
+      { slug: 'odborna', name: 'Odborná literatura' },
+      { slug: 'detske-knihy', name: 'Dětské knihy' },
+      { slug: 'komiksy', name: 'Komiksy a manga' },
+      { slug: 'casopisy', name: 'Časopisy' },
+    ],
+  },
+  {
+    slug: 'hobby', name: 'Hobby a volný čas', icon: 'palette',
+    filters: [],
+    children: [
+      { slug: 'deskovky', name: 'Deskové a karetní hry' },
+      { slug: 'modelarstvi', name: 'Modelářství' },
+      { slug: 'rucni-prace', name: 'Ruční práce a výtvarné potřeby' },
+      { slug: 'rybareni', name: 'Rybaření' },
+      { slug: 'myslivost', name: 'Myslivost' },
+      { slug: 'vstupenky-zazitky', name: 'Zážitky a cestování' },
+    ],
+  },
+  {
+    slug: 'potraviny', name: 'Potraviny a zemědělství', icon: 'wheat',
+    filters: [{ key: 'bio', label: 'Bio / farmářské', type: 'select', options: ['Ano', 'Ne'] }],
+    children: [
+      { slug: 'farmarske', name: 'Farmářské potraviny' },
+      { slug: 'ovoce-zelenina', name: 'Ovoce a zelenina' },
+      { slug: 'med', name: 'Med a včelí produkty' },
+      { slug: 'hospodarska-zvirata', name: 'Hospodářská zvířata' },
+      { slug: 'zemedelska-technika', name: 'Zemědělská technika' },
+      { slug: 'osiva-sazenice', name: 'Osiva, sazenice a krmiva' },
     ],
   },
   {

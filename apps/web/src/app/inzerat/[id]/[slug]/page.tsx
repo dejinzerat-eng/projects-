@@ -158,7 +158,7 @@ function Summary({ l }: { l: Detail }) {
       {l.status !== 'ACTIVE' && <div className="badge mb-2 bg-ink text-paper">{STATUS_LABEL[l.status]}</div>}
       <h1 className="h-display text-2xl font-bold leading-tight sm:text-[28px]">{l.title}</h1>
       <div className="mt-3 flex items-baseline gap-2">
-        <span className="text-3xl font-extrabold tracking-tight">{price(l.price, l.priceNegotiable, l.currency)}</span>
+        <span className="text-3xl font-bold tracking-tight">{price(l.price, l.priceNegotiable, l.currency)}</span>
         {l.priceNegotiable && l.price != null && <span className="text-sm text-muted">· k jednání</span>}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">

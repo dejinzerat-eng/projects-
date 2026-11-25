@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { BarChart3, FileText, Flag, History, LayoutList, Tags, Users, Wallet } from 'lucide-react';
 
 export function AdminNav({ role }: { role: string }) {
-  const path = usePathname();
+  const path = usePathname()!;
   const items = [
     { href: '/admin', label: 'Přehled', icon: BarChart3 },
     { href: '/admin/inzeraty', label: 'Inzeráty', icon: LayoutList },

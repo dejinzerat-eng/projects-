@@ -8,7 +8,7 @@ import { useToast } from '../toast';
 interface Row { id: string; slug: string; title: string; price: number | null; priceNegotiable: boolean; image: string | null; status: string; spamScore: number; userEmail: string; userName: string; userId: string; description: string; createdAt: number; city: string; categoryName: string; rejectReason: string | null }
 
 export function ModerationList({ rows }: { rows: Row[] }) {
-  const router = useRouter(); const sp = useSearchParams(); const toast = useToast();
+  const router = useRouter(); const sp = useSearchParams()!; const toast = useToast();
   async function act(id: string, action: string) {
     const reason = action !== 'approve' ? prompt('Důvod (uvidí ho autor):') ?? undefined : undefined;
     if (action !== 'approve' && reason === undefined) return;

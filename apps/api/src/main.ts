@@ -8,7 +8,8 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { config } from './common/config';
 
-async function bootstrap() {
+/** Vytvoří a nakonfiguruje aplikaci (sdílené pro běžný server i serverless funkci na Vercelu). */
+export async function createApp() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: ['log', 'warn', 'error'] });
   app.set('trust proxy', 1);
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -23,8 +24,13 @@ async function bootstrap() {
   });
   app.enableCors({ origin: config.webOrigin, credentials: true });
   app.useStaticAssets('uploads', { prefix: '/uploads', maxAge: '365d', immutable: true });
+  return app;
+}
+
+async function bootstrap() {
+  const app = await createApp();
   app.enableShutdownHooks();
   await app.listen(config.port, '0.0.0.0');
   new Logger('API').log(`API běží na http://localhost:${config.port}`);
 }
-bootstrap();
+if (require.main === module) void bootstrap();

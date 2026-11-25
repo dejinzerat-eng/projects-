@@ -36,7 +36,7 @@ function ErrorBox({ error }: { error: string | null }) {
 }
 
 export function LoginForm() {
-  const sp = useSearchParams();
+  const sp = useSearchParams()!;
   const { error, busy, run } = useSubmit();
   const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
   return (
@@ -58,7 +58,7 @@ export function LoginForm() {
 }
 
 export function RegisterForm() {
-  const sp = useSearchParams();
+  const sp = useSearchParams()!;
   const { error, busy, run } = useSubmit();
   const [f, setF] = useState({ name: '', email: '', password: '', terms: false });
   return (
@@ -95,7 +95,7 @@ export function ForgotForm() {
 }
 
 export function ResetForm() {
-  const sp = useSearchParams(); const router = useRouter();
+  const sp = useSearchParams()!; const router = useRouter();
   const { error, busy, run } = useSubmit();
   const [password, setPassword] = useState('');
   return (

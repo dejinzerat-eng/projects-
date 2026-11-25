@@ -42,6 +42,7 @@ export class SearchService implements OnModuleInit {
   }
 
   async onModuleInit() {
+    if (!config.meiliUrl) { this.log.log('Meilisearch není nastaven – hledá se v PostgreSQL.'); return; }
     try {
       await this.meili('/health');
       await this.meili('/indexes', 'POST', { uid: 'listings', primaryKey: 'id' }).catch(() => undefined);

@@ -14,7 +14,7 @@ export function Logo() {
   return (
     <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="Dejinzerat.cz – úvodní stránka">
       <LogoMark />
-      <span className="h-display text-[21px] font-extrabold leading-none tracking-tight">
+      <span className="h-display text-[21px] font-bold leading-none tracking-tight">
         <span className="text-brand">dej</span>inzerat<span className="text-muted font-semibold">.cz</span>
       </span>
     </Link>

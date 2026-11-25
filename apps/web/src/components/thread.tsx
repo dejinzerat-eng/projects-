@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { AlertTriangle, ArrowLeft, Ban, ImagePlus, Loader2, Send, Star } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { call } from '@/lib/client';
+import { shrinkImage } from '@/lib/image';
 import { listingUrl, price, STATUS_LABEL } from '@/lib/format';
 import { Avatar } from './avatar';
 import { ReportButton } from './report-button';
@@ -28,7 +29,7 @@ export function Thread({ initial, meId }: { initial: ThreadData; meId: string })
     try { await call(`/conversations/${t.id}/messages`, 'POST', payload); setBody(''); await refresh(); } catch (e) { toast((e as Error).message, 'error'); } finally { setBusy(false); }
   }
   async function sendImage(f: File) {
-    const fd = new FormData(); fd.append('file', f);
+    const fd = new FormData(); fd.append('file', await shrinkImage(f));
     try { const r = await call<{ url: string }>('/media/message-image', 'POST', fd); await send({ body: '', imageUrl: r.url }); } catch (e) { toast((e as Error).message, 'error'); }
   }
   async function toggleBlock() {

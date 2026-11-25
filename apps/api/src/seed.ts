@@ -23,9 +23,9 @@ const ITEMS: Record<string, Item[]> = {
     ['karavany', 'Obytný přívěs Adria Altea 4 lůžka', 245000, 'USED', { year: 2015 }],
   ],
   reality: [
-    ['byty', 'Pronájem bytu 2+kk, 54 m², Praha 7 – Holešovice', 21500, null, { offerType: 'Pronájem', layout: '2+kk', area: 54, ownership: 'Osobní', energy: 'C' }],
+    ['byty-pronajem', 'Pronájem bytu 2+kk, 54 m², Praha 7 – Holešovice', 21500, null, { offerType: 'Pronájem', layout: '2+kk', area: 54, ownership: 'Osobní', energy: 'C' }],
     ['byty', 'Prodej bytu 3+1, 78 m², balkon, sklep', 4890000, null, { offerType: 'Prodej', layout: '3+1', area: 78, ownership: 'Osobní', energy: 'D' }],
-    ['byty', 'Pronájem 1+kk po rekonstrukci, u metra', 14900, null, { offerType: 'Pronájem', layout: '1+kk', area: 31, ownership: 'Osobní', energy: 'B' }],
+    ['byty-pronajem', 'Pronájem 1+kk po rekonstrukci, u metra', 14900, null, { offerType: 'Pronájem', layout: '1+kk', area: 31, ownership: 'Osobní', energy: 'B' }],
     ['domy', 'Rodinný dům 5+1 se zahradou 820 m²', 8950000, null, { offerType: 'Prodej', layout: '5+ a větší', area: 164, ownership: 'Osobní', energy: 'C' }],
     ['pozemky', 'Stavební pozemek 1 050 m², sítě na hranici', 2350000, null, { offerType: 'Prodej', area: 1050 }],
     ['chaty-chalupy', 'Chalupa v Krkonoších, krb, 4 pokoje', 3990000, null, { offerType: 'Prodej', area: 120 }],
@@ -119,7 +119,22 @@ const ITEMS: Record<string, Item[]> = {
     ['mince', 'Sada oběžných mincí ČSSR 1953–1990', 2500, null, { era: '1945–1989' }],
     ['starozitnosti', 'Starožitná komoda, ořech, kolem roku 1900', 15000, 'USED', { era: '1900–1945' }],
     ['modely', 'Modely aut Matchbox, 60 kusů, krabičky', 3200, 'USED', {}],
-    ['knihy', 'Komplet Harry Potter, 1. vydání CZ', 4500, 'USED', {}],
+    ['stare-knihy', 'Komplet Harry Potter, 1. vydání CZ', 4500, 'USED', {}],
+  ],
+  knihy: [
+    ['ucebnice', 'Učebnice matematiky pro gymnázia, sada 4 dílů', 900, 'USED', { bookLang: 'Čeština', binding: 'Brožovaná' }],
+    ['beletrie', 'Balík 20 detektivek – Nesbø, Läckberg, Christie', 1200, 'USED', { bookLang: 'Čeština', binding: 'Pevná' }],
+    ['detske-knihy', 'Dětské knihy s ilustracemi, 15 ks, jako nové', 600, 'LIKE_NEW', { bookLang: 'Čeština', binding: 'Pevná' }],
+  ],
+  hobby: [
+    ['deskovky', 'Catan + 2 rozšíření, kompletní', 1400, 'LIKE_NEW', {}],
+    ['rybareni', 'Kaprový prut Shimano + naviják, sada', 3200, 'USED', {}],
+    ['modelarstvi', 'RC model auta 1:10, 4x4, baterie a nabíječka', 2900, 'USED', {}],
+  ],
+  potraviny: [
+    ['med', 'Květový med z Vysočiny, 1 kg sklenice', 220, null, { bio: 'Ano' }],
+    ['ovoce-zelenina', 'Jablka ze sadu – Jonagold, bedýnka 10 kg', 250, null, { bio: 'Ne' }],
+    ['farmarske', 'Domácí vejce z volného chovu, 30 ks', 150, null, { bio: 'Ano' }],
   ],
   ostatni: [
     ['vstupenky', '2 vstupenky na koncert, sektor A, Praha', 3200, null, {}],
@@ -128,7 +143,8 @@ const ITEMS: Record<string, Item[]> = {
   ],
 };
 
-const COLORS = [['#FFE8D6', '#F2541B'], ['#E3F2EC', '#0F7B5F'], ['#E8EEFF', '#3B5BDB'], ['#FFF3C4', '#B7791F'], ['#F3E8FF', '#7C3AED'], ['#FDE2E4', '#C2255C'], ['#E0F4FF', '#0B7285']];
+/** Ukázkové fotky: neutrální šedé pozadí a grafitová ikona (skutečné fotky nahrají uživatelé). */
+const COLORS = [['#EEF1F3', '#353B42'], ['#F3F4F5', '#4A5159'], ['#E9EDEF', '#2B3036'], ['#F1F3F2', '#3E4449']];
 const iconSvg = (icon: string) => readFileSync(join(require.resolve('lucide-static/package.json'), '..', 'icons', `${icon}.svg`), 'utf8');
 
 async function demoImage(icon: string, seed: number, variant: number) {
@@ -137,8 +153,7 @@ async function demoImage(icon: string, seed: number, variant: number) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
     <defs><radialGradient id="g" cx="${30 + ((seed * 17) % 40)}%" cy="35%" r="80%"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="${bg}"/></radialGradient></defs>
     <rect width="1200" height="900" fill="${bg}"/><rect width="1200" height="900" fill="url(#g)"/>
-    <circle cx="${200 + ((seed * 53) % 800)}" cy="${700 - ((seed * 31) % 300)}" r="${180 + variant * 40}" fill="${fg}" opacity=".07"/>
-    <g transform="translate(${420 + variant * 30} ${270 - variant * 10}) scale(${15 - variant})" fill="none" stroke="${fg}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${inner}</g>
+    <g transform="translate(${420 + variant * 30} ${270 - variant * 10}) scale(${15 - variant})" fill="none" stroke="${fg}" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">${inner}</g>
   </svg>`;
   return sharp(Buffer.from(svg));
 }

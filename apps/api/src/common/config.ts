@@ -3,7 +3,7 @@ export const config = {
   webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:3000',
   publicApiUrl: process.env.PUBLIC_API_URL ?? 'http://localhost:4000',
   redisUrl: process.env.REDIS_URL,
-  meiliUrl: process.env.MEILI_URL ?? 'http://127.0.0.1:7700',
+  meiliUrl: process.env.MEILI_URL ?? (process.env.VERCEL ? '' : 'http://127.0.0.1:7700'),
   meiliKey: process.env.MEILI_KEY ?? '',
   cookieSecure: process.env.COOKIE_SECURE === '1',
   /** Inzeráty čekají na schválení moderátorem (jinak se zveřejní hned a kontroluje je automat). */

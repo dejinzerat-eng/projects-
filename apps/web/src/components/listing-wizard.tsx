@@ -2,6 +2,7 @@
 import { CATEGORIES, CITIES, CONDITIONS, filtersFor, OFFER_TYPES } from '@dej/shared';
 import { ArrowLeft, ArrowRight, Camera, Check, ChevronLeft, ChevronRight, ImagePlus, Lightbulb, Loader2, MapPin, Sparkles, Star, Trash2, Wand2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { shrinkImage } from '@/lib/image';
 import { useEffect, useRef, useState } from 'react';
 import { call } from '@/lib/client';
 import { CONDITION_LABEL, price as fmtPrice } from '@/lib/format';
@@ -167,7 +168,7 @@ function StepPhotos({ d, up }: StepProps) {
     const list = [...files].filter((f) => f.type.startsWith('image/')).slice(0, 20 - d.images.length);
     setUploading((n) => n + list.length);
     await Promise.all(list.map(async (f) => {
-      const fd = new FormData(); fd.append('file', f);
+      const fd = new FormData(); fd.append('file', await shrinkImage(f));
       try {
         const r = await call<{ id: string; url: string; thumbUrl: string }>('/media/image', 'POST', fd);
         up({ images: [...imgs.current, r] }); imgs.current = [...imgs.current, r];
@@ -277,7 +278,7 @@ function StepPrice({ d, up }: StepProps) {
           {sugg?.median && (
             <div className="mt-4 rounded-2xl border border-line bg-surface p-4">
               <div className="flex items-center gap-1.5 text-sm font-semibold"><Sparkles className="size-4 text-brand" />Doporučená cena podle {sugg.sample} podobných nabídek</div>
-              <div className="mt-2 flex flex-wrap items-baseline gap-x-3"><span className="text-2xl font-extrabold">{fmtPrice(sugg.median)}</span><span className="text-sm text-muted">obvykle {fmtPrice(sugg.low!)} – {fmtPrice(sugg.high!)}</span></div>
+              <div className="mt-2 flex flex-wrap items-baseline gap-x-3"><span className="text-2xl font-bold">{fmtPrice(sugg.median)}</span><span className="text-sm text-muted">obvykle {fmtPrice(sugg.low!)} – {fmtPrice(sugg.high!)}</span></div>
               <button type="button" onClick={() => up({ price: sugg.median })} className="btn btn-outline btn-sm mt-3">Použít doporučenou cenu</button>
             </div>
           )}
@@ -306,7 +307,7 @@ function StepPreview({ d }: { d: WizardInitial }) {
       <div className="space-y-3 p-6">
         <div className="text-sm text-muted">{cat?.name} › {sub?.name}</div>
         <h2 className="h-display text-2xl font-bold">{d.title}</h2>
-        <div className="text-2xl font-extrabold">{d.offerType === 'GIVE' ? 'Zdarma' : fmtPrice(d.price, d.priceNegotiable, d.currency)}</div>
+        <div className="text-2xl font-bold">{d.offerType === 'GIVE' ? 'Zdarma' : fmtPrice(d.price, d.priceNegotiable, d.currency)}</div>
         <div className="flex flex-wrap gap-2 text-sm"><span className="inline-flex items-center gap-1"><MapPin className="size-4 text-muted" />{d.city}</span>{d.condition && <span className="rounded-md bg-surface-2 px-2">{CONDITION_LABEL[d.condition]}</span>}<span className="text-muted">· {d.images.length} fotek</span></div>
         <p className="whitespace-pre-line border-t border-line pt-3 text-ink-2">{d.description}</p>
       </div>

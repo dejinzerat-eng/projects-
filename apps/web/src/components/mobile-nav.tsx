@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { Heart, Home, MessageCircle, Plus, User } from 'lucide-react';
 
 export function MobileNav({ unread = 0, loggedIn }: { unread?: number; loggedIn: boolean }) {
-  const path = usePathname();
+  const path = usePathname()!;
   const items = [
     { href: '/', label: 'Domů', icon: Home },
     { href: '/muj-ucet/oblibene', label: 'Oblíbené', icon: Heart },

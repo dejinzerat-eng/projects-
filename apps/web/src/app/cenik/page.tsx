@@ -15,7 +15,7 @@ export default async function Page() {
             <Zap className="size-6 text-brand" />
             <h2 className="mt-3 text-lg font-bold">{i.name}</h2>
             <p className="mt-1 flex-1 text-[15px] text-muted">{i.description}</p>
-            <div className="mt-4 text-2xl font-extrabold">{price(i.priceCzk)}</div>
+            <div className="mt-4 text-2xl font-bold">{price(i.priceCzk)}</div>
           </div>
         ))}
       </div>

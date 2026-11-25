@@ -9,6 +9,7 @@ import { MailerService, SmsService } from './common/mailer.service';
 import { PrismaService } from './common/prisma.service';
 import { RedisService } from './common/redis.service';
 import { HealthController } from './health.controller';
+import { JobsController } from './jobs/jobs.controller';
 import { JobsService } from './jobs/jobs.service';
 import { ListingsController } from './listings/listings.controller';
 import { ListingsService } from './listings/listings.service';
@@ -20,7 +21,7 @@ import { UsersController } from './users/users.controller';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }])],
-  controllers: [HealthController, AuthController, ListingsController, MessagesController, UsersController, MediaController, AdminController],
+  controllers: [HealthController, AuthController, ListingsController, MessagesController, UsersController, MediaController, AdminController, JobsController],
   providers: [
     PrismaService, RedisService, MailerService, SmsService, StorageService, SearchService, AuthService, ListingsService, JobsService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },

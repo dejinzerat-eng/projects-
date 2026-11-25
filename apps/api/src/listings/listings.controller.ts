@@ -43,6 +43,16 @@ export class ListingsController {
   @Get('search/suggest')
   suggest(@Query('q') q = '') { return this.search.suggest(q); }
 
+  /** Doporučené: topované a zvýrazněné nabídky, doplněné o nabídky ověřených prodejců. */
+  @Get('listings/featured')
+  async featured(@Query('limit') limit = '8') {
+    const n = Math.min(24, Number(limit) || 8);
+    const hits = (await this.search.search({}, { limit: 48 })).hits;
+    const paid = hits.filter((h) => h.isTop || h.highlighted);
+    const rest = hits.filter((h) => !(h.isTop || h.highlighted) && h.verified && h.image);
+    return [...paid, ...rest].slice(0, n);
+  }
+
   @Get('listings/latest')
   async latest(@Query('limit') limit = '12') {
     return (await this.search.search({ sort: 'newest' }, { limit: Math.min(48, Number(limit) || 12) })).hits;

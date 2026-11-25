@@ -2,7 +2,7 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 export function SortSelect({ hasGeo }: { hasGeo: boolean }) {
-  const sp = useSearchParams(); const router = useRouter(); const path = usePathname();
+  const sp = useSearchParams()!; const router = useRouter(); const path = usePathname()!;
   return (
     <label className="flex items-center gap-2 text-sm">
       <span className="text-muted">Řadit:</span>

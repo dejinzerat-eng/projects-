@@ -7,9 +7,9 @@ import type { Category, FilterDef } from '@/lib/types';
 
 /** Panel filtrů. Mění parametry v URL → stránka se znovu vykreslí na serveru (sdílitelné a indexovatelné odkazy). */
 export function Filters({ categories, filters, fixedCategory }: { categories: Category[]; filters: FilterDef[]; fixedCategory?: boolean }) {
-  const sp = useSearchParams();
+  const sp = useSearchParams()!;
   const router = useRouter();
-  const path = usePathname();
+  const path = usePathname()!;
   const [open, setOpen] = useState(false);
 
   function set(updates: Record<string, string | undefined>) {
@@ -50,7 +50,7 @@ export function Filters({ categories, filters, fixedCategory }: { categories: Ca
       </Field>
       <Field label="Lokalita">
         <select className="input" value={get('mesto')} onChange={(e) => set({ mesto: e.target.value, okruh: e.target.value ? get('okruh') || '20' : undefined })}>
-          <option value="">Celá ČR a SR</option>
+          <option value="">Celá ČR</option>
           {CITIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
         </select>
         {get('mesto') ? (

@@ -7,3 +7,4 @@ uploads/
 .turbo
 next-env.d.ts
 *.tsbuildinfo
+apps/web/.api/

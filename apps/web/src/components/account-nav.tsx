@@ -13,7 +13,7 @@ const ITEMS = [
 ];
 
 export function AccountNav({ unread }: { unread: number }) {
-  const path = usePathname();
+  const path = usePathname()!;
   return (
     <nav aria-label="Můj účet" className="-mx-4 overflow-x-auto scrollbar-none px-4 lg:mx-0 lg:px-0">
       <ul className="flex gap-1.5 lg:flex-col">
