@@ -8,6 +8,7 @@ import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { LISTING_INCLUDE, SearchService } from '../search/search.service';
 import { assessListing } from './moderation';
+import { ListingPolicyService } from '../admin/listing-policy.service';
 
 export const ListingDto = z.object({
   title: z.string().trim().min(5, 'Název musí mít alespoň 5 znaků.').max(90, 'Název může mít nejvýše 90 znaků.'),
@@ -30,7 +31,7 @@ export type ListingInput = z.infer<typeof ListingDto>;
 
 @Injectable()
 export class ListingsService {
-  constructor(private prisma: PrismaService, private search: SearchService, private redis: RedisService) {}
+  constructor(private prisma: PrismaService, private search: SearchService, private redis: RedisService, private policy: ListingPolicyService) {}
 
   private async resolveCategory(categorySlug: string, subSlug: string) {
     const cat = await this.prisma.category.findFirst({ where: { slug: subSlug, parent: { slug: categorySlug } }, include: { parent: true } });
@@ -54,15 +55,17 @@ export class ListingsService {
 
   private async checkSpam(userId: string) {
     const n = await this.redis.incr(`newlisting:${userId}`, 3600);
-    if (n > 20) throw new BadRequestException('Za hodinu lze vložit nejvýše 20 inzerátů.');
+    const max = await this.policy.maxPerHour();
+    if (n > max) throw new BadRequestException(`Za hodinu lze vložit nejvýše ${max} inzerátů.`);
   }
 
   async create(user: AuthUser, dto: ListingInput) {
+    if (dto.publish) await this.policy.beforePublish(user.id);
     await this.checkSpam(user.id);
     const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
     const city = findCity(dto.city);
     const risk = assessListing({ title: dto.title, description: dto.description, price: dto.price, categorySlug: dto.categorySlug });
-    const status: ListingStatus = !dto.publish ? 'DRAFT' : risk.score >= 50 || config.premoderation ? 'PENDING' : 'ACTIVE';
+    const status: ListingStatus = !dto.publish ? 'DRAFT' : risk.score >= 50 || (await this.policy.premoderation()) ? 'PENDING' : 'ACTIVE';
     const listing = await this.prisma.listing.create({
       data: {
         slug: slugify(dto.title), title: dto.title, description: dto.description, price: dto.price ?? null, priceNegotiable: dto.priceNegotiable,
@@ -71,11 +74,12 @@ export class ListingsService {
         attributes: this.cleanAttributes(dto.categorySlug, dto.subSlug, dto.attributes) as Prisma.InputJsonValue,
         videoUrl: dto.videoUrl || null, status, spamScore: risk.score,
         publishedAt: status === 'ACTIVE' ? new Date() : null,
-        expiresAt: new Date(Date.now() + config.listingDays * 864e5),
+        expiresAt: await this.policy.expiresAt(),
       },
     });
     await this.attachImages(listing.id, user.id, dto.imageIds);
     await this.search.index(listing.id);
+    await this.policy.afterSave(user.id, risk.score, dto.title);
     return { id: listing.id, slug: listing.slug, status, moderation: risk.reasons };
   }
 
@@ -87,18 +91,23 @@ export class ListingsService {
   async ownOrThrow(id: string, user: AuthUser) {
     const l = await this.prisma.listing.findUnique({ where: { id } });
     if (!l || l.status === 'DELETED') throw new NotFoundException('Inzerát neexistuje.');
-    if (l.userId !== user.id && user.role === 'USER') throw new ForbiddenException('Tento inzerát vám nepatří.');
+    // Jen vlastník; tým upravuje cizí inzeráty přes /admin/listings (s důvodem a auditem)
+    if (l.userId !== user.id) throw new ForbiddenException('Tento inzerát vám nepatří.');
     return l;
   }
 
   async update(id: string, user: AuthUser, dto: ListingInput) {
     const l = await this.ownOrThrow(id, user);
+    if (l.status !== 'DRAFT' || dto.publish) await this.policy.beforePublish(user.id, id, l.status === 'DRAFT');
     const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
     const city = findCity(dto.city);
     const risk = assessListing({ title: dto.title, description: dto.description, price: dto.price, categorySlug: dto.categorySlug });
+    const premoderation = await this.policy.premoderation();
     let status = l.status;
-    if (l.status === 'DRAFT' && dto.publish) status = risk.score >= 50 || config.premoderation ? 'PENDING' : 'ACTIVE';
+    if (l.status === 'DRAFT' && dto.publish) status = risk.score >= 50 || premoderation ? 'PENDING' : 'ACTIVE';
     else if (risk.score >= 50 && l.status === 'ACTIVE') status = 'PENDING';
+    // Při premoderaci jde ke schválení i změněný text schváleného inzerátu
+    else if (premoderation && l.status === 'ACTIVE' && (l.title !== dto.title || l.description !== dto.description)) status = 'PENDING';
     await this.prisma.listing.update({
       where: { id },
       data: {
@@ -111,6 +120,7 @@ export class ListingsService {
     });
     await this.attachImages(id, l.userId, dto.imageIds);
     await this.search.index(id);
+    await this.policy.afterSave(user.id, risk.score, dto.title);
     return { id, status };
   }
 
@@ -125,7 +135,8 @@ export class ListingsService {
   async renew(id: string, user: AuthUser) {
     const l = await this.ownOrThrow(id, user);
     if (!['ACTIVE', 'EXPIRED', 'RESERVED'].includes(l.status)) throw new BadRequestException('Tento inzerát nelze prodloužit.');
-    await this.prisma.listing.update({ where: { id }, data: { status: l.status === 'EXPIRED' ? 'ACTIVE' : l.status, expiresAt: new Date(Date.now() + config.listingDays * 864e5), expiryNotifiedAt: null } });
+    if (l.status === 'EXPIRED') await this.policy.beforePublish(user.id, id);
+    await this.prisma.listing.update({ where: { id }, data: { status: l.status === 'EXPIRED' ? 'ACTIVE' : l.status, expiresAt: await this.policy.expiresAt(), expiryNotifiedAt: null } });
     await this.search.index(id);
     return { ok: true };
   }
@@ -158,7 +169,7 @@ export class ListingsService {
     ]);
     const { phone, ...seller } = l.user;
     return {
-      ...l, user: undefined,
+      ...l, user: undefined, spamScore: undefined, rejectReason: viewer?.id === l.userId ? l.rejectReason : undefined,
       seller: { ...seller, phoneVerified: !!l.user.phoneVerifiedAt, emailVerified: !!l.user.emailVerifiedAt, phoneVerifiedAt: undefined, emailVerifiedAt: undefined, rating: rating._avg.rating, reviewCount: rating._count, activeListings: activeCount, hasPhone: !!phone },
       favorites: favCount, isFavorite, isOwner: !!isOwner, filters: filtersFor(l.category.parent?.slug ?? l.category.slug, l.category.slug),
     };

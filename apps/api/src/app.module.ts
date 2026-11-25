@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { AdminController } from './admin/admin.controller';
+import { ADMIN_CONTROLLERS, ADMIN_PROVIDERS } from './admin';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
 import { AuthGuard } from './common/auth.guard';
@@ -21,9 +21,9 @@ import { UsersController } from './users/users.controller';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }])],
-  controllers: [HealthController, AuthController, ListingsController, MessagesController, UsersController, MediaController, AdminController, JobsController],
+  controllers: [HealthController, AuthController, ListingsController, MessagesController, UsersController, MediaController, JobsController, ...ADMIN_CONTROLLERS],
   providers: [
-    PrismaService, RedisService, MailerService, SmsService, StorageService, SearchService, AuthService, ListingsService, JobsService,
+    PrismaService, RedisService, MailerService, SmsService, StorageService, SearchService, AuthService, ListingsService, JobsService, ...ADMIN_PROVIDERS,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],

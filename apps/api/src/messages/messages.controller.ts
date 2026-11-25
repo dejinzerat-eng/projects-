@@ -8,6 +8,7 @@ import { RedisService } from '../common/redis.service';
 import { ZodPipe } from '../common/zod';
 import { assessMessage } from '../listings/moderation';
 import { config } from '../common/config';
+import { TrustService } from '../admin/trust.service';
 
 const MsgDto = z.object({ body: z.string().trim().max(4000).default(''), imageUrl: z.string().max(500).optional() }).refine((d) => d.body.length > 0 || d.imageUrl, 'Zpráva je prázdná.');
 type Msg = z.infer<typeof MsgDto>;
@@ -15,7 +16,7 @@ type Msg = z.infer<typeof MsgDto>;
 @Auth()
 @Controller()
 export class MessagesController {
-  constructor(private prisma: PrismaService, private redis: RedisService, private mail: MailerService) {}
+  constructor(private prisma: PrismaService, private redis: RedisService, private mail: MailerService, private trust: TrustService) {}
 
   private async blocked(a: string, b: string) {
     return !!(await this.prisma.block.findFirst({ where: { OR: [{ blockerId: a, blockedId: b }, { blockerId: b, blockedId: a }] } }));
@@ -73,6 +74,7 @@ export class MessagesController {
     const l = await this.prisma.listing.findUnique({ where: { id: listingId } });
     if (!l || !['ACTIVE', 'RESERVED'].includes(l.status)) throw new NotFoundException('Inzerát není aktivní.');
     if (l.userId === u.id) throw new BadRequestException('Nemůžete psát sami sobě.');
+    await this.trust.assertNotRestricted(u.id); // WP6: omezený účet nesmí psát
     if (await this.blocked(u.id, l.userId)) throw new ForbiddenException('Komunikace s tímto uživatelem není možná.');
     if ((await this.redis.incr(`newconv:${u.id}`, 3600)) > 30) throw new BadRequestException('Příliš mnoho nových konverzací. Zkuste to později.');
     const conv = await this.prisma.conversation.upsert({ where: { listingId_buyerId: { listingId, buyerId: u.id } }, create: { listingId, buyerId: u.id, sellerId: l.userId }, update: {} });
@@ -85,11 +87,13 @@ export class MessagesController {
   async send(@Param('id') id: string, @CurrentUser() u: AuthUser, @Body(new ZodPipe(MsgDto)) dto: Msg) {
     const c = await this.prisma.conversation.findUnique({ where: { id }, include: { listing: { select: { title: true } } } });
     if (!c || (c.buyerId !== u.id && c.sellerId !== u.id)) throw new ForbiddenException();
+    await this.trust.assertNotRestricted(u.id); // WP6: omezený účet nesmí psát
     const otherId = c.buyerId === u.id ? c.sellerId : c.buyerId;
     if (await this.blocked(u.id, otherId)) throw new ForbiddenException('Komunikace s tímto uživatelem byla zablokována.');
     if (dto.imageUrl && !/^(\/uploads\/messages\/|https:\/\/)/.test(dto.imageUrl)) throw new BadRequestException('Neplatný obrázek.');
     const msg = await this.prisma.message.create({ data: { conversationId: id, senderId: u.id, body: dto.body, imageUrl: dto.imageUrl } });
     await this.prisma.conversation.update({ where: { id }, data: { lastMessageAt: msg.createdAt } });
+    if (dto.body) await this.trust.afterMessage(u.id, dto.body).catch(() => false); // WP6: podezřelé zprávy → automatické omezení
     // Notifikace – e-mail max. 1× za 30 min na konverzaci
     await this.prisma.notification.create({ data: { userId: otherId, type: 'message', title: `Nová zpráva od ${u.name}`, body: dto.body.slice(0, 140), link: `/zpravy/${id}` } });
     if (await this.redis.lock(`msgmail:${id}:${otherId}`, 1800)) {
