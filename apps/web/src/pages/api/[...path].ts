@@ -1,9 +1,10 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { NextApiRequest, NextApiResponse } from 'next';
-// Statické importy jen kvůli trasování souborů – API je používá za běhu.
-import '@prisma/client';
-import 'sharp';
+// sharp je nativní knihovna: web ji načte (Vercel ji tak správně zahrne do funkce) a předá zabalenému API.
+import sharp from 'sharp';
+
+(globalThis as { __dejSharp?: unknown }).__dejSharp = sharp;
 
 /**
  * Na Vercelu běží backend (NestJS) uvnitř této funkce: /api/* → aplikace z apps/api.
