@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 
 const port = process.env.SMOKE_PORT ?? '4100';
 const base = `http://127.0.0.1:${port}`;
+// zápisy musí mít Origin našeho webu (ochrana proti CSRF)
+const webOrigin = process.env.WEB_ORIGIN ?? 'http://localhost:3000';
 const api = spawn(process.execPath, ['dist/main.js'], {
   env: { ...process.env, PORT: port, DISABLE_JOBS: '1' },
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -53,11 +55,11 @@ try {
     assert.ok(Array.isArray(body) && body.length > 0);
   });
   await check('POST /auth/login odmítne špatné heslo', async () => {
-    const { status } = await json('/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'demo1@dejinzerat.cz', password: 'spatne-heslo' }) });
+    const { status } = await json('/auth/login', { method: 'POST', headers: { 'content-type': 'application/json', origin: webOrigin }, body: JSON.stringify({ email: 'demo1@dejinzerat.cz', password: 'spatne-heslo' }) });
     assert.ok(status >= 400 && status < 500, `stav ${status}`);
   });
   await check('POST /auth/login přihlásí ukázkového uživatele', async () => {
-    const { status, headers } = await json('/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'demo1@dejinzerat.cz', password: 'Heslo1234' }) });
+    const { status, headers } = await json('/auth/login', { method: 'POST', headers: { 'content-type': 'application/json', origin: webOrigin }, body: JSON.stringify({ email: 'demo1@dejinzerat.cz', password: 'Heslo1234' }) });
     assert.ok(status === 200 || status === 201, `stav ${status}`);
     assert.ok(headers.getSetCookie().length > 0, 'chybí přihlašovací cookie');
   });

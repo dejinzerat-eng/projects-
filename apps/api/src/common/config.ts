@@ -5,7 +5,10 @@ export const config = {
   redisUrl: process.env.REDIS_URL,
   meiliUrl: process.env.MEILI_URL ?? (process.env.VERCEL ? '' : 'http://127.0.0.1:7700'),
   meiliKey: process.env.MEILI_KEY ?? '',
-  cookieSecure: process.env.COOKIE_SECURE === '1',
+  /** Cookie jen přes HTTPS: výchozí na Vercelu, jinak COOKIE_SECURE=1 (COOKIE_SECURE=0 vypne). */
+  cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === '1' : !!process.env.VERCEL,
+  /** Verze podmínek používání, se kterou uživatel souhlasí při registraci (ukládá se k účtu). */
+  termsVersion: process.env.TERMS_VERSION ?? '2026-11-25',
   /** Inzeráty čekají na schválení moderátorem (jinak se zveřejní hned a kontroluje je automat). */
   premoderation: process.env.PREMODERATION === '1',
   listingDays: Number(process.env.LISTING_DAYS ?? 30),
@@ -19,7 +22,8 @@ export const config = {
     channel: process.env.GOSMS_CHANNEL ? Number(process.env.GOSMS_CHANNEL) : undefined,
     apiBase: process.env.GOSMS_API_URL ?? 'https://app.gosms.cz',
   },
-  turnstileSecret: process.env.TURNSTILE_SECRET,
+  turnstileSecret: process.env.TURNSTILE_SECRET?.trim() || undefined,
+  turnstileSiteKey: process.env.TURNSTILE_SITE_KEY?.trim() || undefined,
   resendKey: process.env.RESEND_API_KEY,
   mailFrom: process.env.MAIL_FROM ?? 'Dejinzerat.cz <noreply@dejinzerat.cz>',
   s3: {
