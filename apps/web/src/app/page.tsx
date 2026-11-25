@@ -21,7 +21,7 @@ function Section({ id, title, href, children }: { id: string; title: string; hre
 }
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ ikony?: string }> }) {
-  const variant = (await searchParams).ikony === 'b' ? 'solid' : 'soft';
+  const variant = (await searchParams).ikony === 'a' ? 'soft' : 'solid';
   const [cats, featured, latest, me] = await Promise.all([
     api<Category[]>('/categories', { revalidate: 60, auth: false }).catch(() => [] as Category[]),
     api<ListingCard[]>('/listings/featured?limit=8', { auth: false }).catch(() => [] as ListingCard[]),
