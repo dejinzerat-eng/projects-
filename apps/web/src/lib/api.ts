@@ -28,7 +28,7 @@ export async function getMe() {
 }
 
 export interface Me {
-  id: string; email: string; name: string; role: 'USER' | 'MODERATOR' | 'ADMIN'; phone: string | null; avatarUrl: string | null;
+  id: string; email: string; name: string; role: import('@dej/shared').Role; phone: string | null; avatarUrl: string | null;
   city: string | null; bio: string | null; isBusiness: boolean; companyName: string | null; companyId: string | null;
   emailVerifiedAt: string | null; phoneVerifiedAt: string | null; createdAt: string; hasPassword: boolean; unreadMessages: number; unreadNotifications: number;
 }
