@@ -142,7 +142,7 @@ export class ListingsService {
       where: { id },
       include: {
         images: { orderBy: { position: 'asc' } }, category: { include: { parent: true } },
-        user: { select: { id: true, name: true, avatarUrl: true, city: true, createdAt: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, lastSeenAt: true, phone: true } },
+        user: { select: { id: true, name: true, avatarUrl: true, city: true, createdAt: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, companyId: true, lastSeenAt: true, phone: true } },
       },
     });
     const isOwner = viewer && (viewer.id === l?.userId || viewer.role !== 'USER');

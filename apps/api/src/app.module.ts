@@ -16,12 +16,14 @@ import { ListingsService } from './listings/listings.service';
 import { MediaController } from './media/media.controller';
 import { StorageService } from './media/storage.service';
 import { MessagesController } from './messages/messages.controller';
+import { NoticesAdminController, NoticesController } from './notices/notices.controller';
 import { SearchService } from './search/search.service';
+import { SeoAdminController, SeoController } from './seo/seo.controller';
 import { UsersController } from './users/users.controller';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }])],
-  controllers: [HealthController, AuthController, ListingsController, MessagesController, UsersController, MediaController, AdminController, JobsController],
+  controllers: [HealthController, AuthController, ListingsController, MessagesController, UsersController, MediaController, AdminController, JobsController, NoticesController, NoticesAdminController, SeoController, SeoAdminController],
   providers: [
     PrismaService, RedisService, MailerService, SmsService, StorageService, SearchService, AuthService, ListingsService, JobsService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
