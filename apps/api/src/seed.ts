@@ -189,7 +189,7 @@ async function main() {
   ];
   for (const [slug, title, content] of pages) await prisma.page.upsert({ where: { slug }, update: {}, create: { slug, title, content } });
 
-  if (await prisma.listing.count()) { console.log('Ukázkové inzeráty už existují, přeskakuji.'); return; }
+  if (await prisma.listing.count()) { console.log('Ukázkové inzeráty už existují, přeskakuji.'); await seedDemoStats(); return; }
 
   console.log('Uživatelé…');
   const hash = await bcrypt.hash('Heslo1234', 12);
@@ -252,6 +252,26 @@ async function main() {
     await prisma.review.create({ data: { authorId: buyer.id, sellerId: l.userId, conversationId: conv.id, rating: 4 + (i % 2), text: ['Vše proběhlo bez problémů, doporučuji.', 'Rychlá domluva, zboží odpovídalo popisu.', 'Super prodejce, děkuji!'][i % 3] } });
   }
   console.log(`Hotovo: ${n} inzerátů.`);
+  await seedDemoStats();
+}
+
+/** Ukázkové denní statistiky (30 dní) pro inzeráty demo prodejců, ať je přehled „Statistiky“ hned k vidění. Jen jednou. */
+async function seedDemoStats() {
+  if (await prisma.listingStatDay.count()) return;
+  const listings = await prisma.listing.findMany({ where: { user: { email: { startsWith: 'demo', endsWith: '@dejinzerat.cz' } }, status: 'ACTIVE' }, select: { id: true, views: true } });
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  const data: Prisma.ListingStatDayCreateManyInput[] = [];
+  for (const [i, l] of listings.entries()) {
+    const base = Math.max(1, Math.round(l.views / 60));
+    for (let d = 0; d < 30; d++) {
+      const day = new Date(today.getTime() - d * 864e5);
+      const weekend = [0, 6].includes(day.getUTCDay()) ? 1.6 : 1;
+      const views = Math.round(base * weekend * (0.4 + (((i + 1) * (d + 3) * 7919) % 100) / 80));
+      data.push({ listingId: l.id, day, views, phoneReveals: views > 4 && (i + d) % 4 === 0 ? 1 + ((i + d) % 3) : 0 });
+    }
+  }
+  if (data.length) await prisma.listingStatDay.createMany({ data, skipDuplicates: true });
+  console.log(`Ukázkové statistiky: ${data.length} záznamů.`);
 }
 
 main().finally(() => prisma.$disconnect());

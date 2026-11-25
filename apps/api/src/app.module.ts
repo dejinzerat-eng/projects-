@@ -17,11 +17,12 @@ import { MediaController } from './media/media.controller';
 import { StorageService } from './media/storage.service';
 import { MessagesController } from './messages/messages.controller';
 import { SearchService } from './search/search.service';
+import { StatsController } from './stats/stats.controller';
 import { UsersController } from './users/users.controller';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }])],
-  controllers: [HealthController, AuthController, ListingsController, MessagesController, UsersController, MediaController, AdminController, JobsController],
+  controllers: [HealthController, AuthController, ListingsController, MessagesController, UsersController, MediaController, AdminController, JobsController, StatsController],
   providers: [
     PrismaService, RedisService, MailerService, SmsService, StorageService, SearchService, AuthService, ListingsService, JobsService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },

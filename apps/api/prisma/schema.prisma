@@ -164,6 +164,7 @@ model Listing {
   images        ListingImage[]
   favorites     Favorite[]
   conversations Conversation[]
+  statDays      ListingStatDay[]
 
   @@index([status, categoryId])
   @@index([userId, status])
@@ -358,4 +359,16 @@ model PriceItem {
   priceCzk     Int
   durationDays Int?
   active       Boolean @default(true)
+}
+
+/// Denní statistiky inzerátu pro prodejce: zobrazení detailu a zobrazení telefonu (den podle času v Praze)
+model ListingStatDay {
+  listingId    String
+  listing      Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  day          DateTime @db.Date
+  views        Int      @default(0)
+  phoneReveals Int      @default(0)
+
+  @@id([listingId, day])
+  @@index([day])
 }
