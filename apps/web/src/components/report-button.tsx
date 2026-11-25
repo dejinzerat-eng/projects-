@@ -32,6 +32,7 @@ export function ReportButton({ targetType, targetId, label = 'Nahlásit' }: { ta
               ))}
             </div>
             <textarea className="input mt-3" rows={3} placeholder="Doplňující informace (nepovinné)" value={note} onChange={(e) => setNote(e.target.value)} />
+            <p className="mt-3 text-xs text-muted">Jde o nezákonný obsah? <a href={`/nahlasit-obsah?url=${encodeURIComponent(typeof window === 'undefined' ? '' : location.href)}`} className="font-medium text-brand-ink underline">Podejte oznámení podle DSA</a> – i bez přihlášení.</p>
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setOpen(false)} className="btn btn-ghost">Zrušit</button>
               <button onClick={submit} className="btn btn-dark">Odeslat</button>

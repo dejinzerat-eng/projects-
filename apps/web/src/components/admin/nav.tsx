@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, FileText, Flag, History, LayoutList, Tags, Users, Wallet } from 'lucide-react';
+import { BarChart3, FileText, Flag, Globe, History, LayoutList, ShieldAlert, Tags, Users, Wallet } from 'lucide-react';
 
 export function AdminNav({ role }: { role: string }) {
   const path = usePathname()!;
@@ -9,11 +9,13 @@ export function AdminNav({ role }: { role: string }) {
     { href: '/admin', label: 'Přehled', icon: BarChart3 },
     { href: '/admin/inzeraty', label: 'Inzeráty', icon: LayoutList },
     { href: '/admin/nahlaseni', label: 'Nahlášení', icon: Flag },
+    { href: '/admin/nezakonny-obsah', label: 'Nezákonný obsah', icon: ShieldAlert },
     ...(role === 'ADMIN' ? [
       { href: '/admin/uzivatele', label: 'Uživatelé', icon: Users },
       { href: '/admin/kategorie', label: 'Kategorie a SEO', icon: Tags },
       { href: '/admin/cenik', label: 'Ceník služeb', icon: Wallet },
       { href: '/admin/stranky', label: 'Texty a stránky', icon: FileText },
+      { href: '/admin/seo', label: 'SEO', icon: Globe },
       { href: '/admin/audit', label: 'Auditní log', icon: History },
     ] : []),
   ];

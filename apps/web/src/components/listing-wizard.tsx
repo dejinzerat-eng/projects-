@@ -79,6 +79,7 @@ export function ListingWizard({ initial, defaultCity }: { initial?: WizardInitia
       {step === 2 && <StepDetails d={d} up={up} />}
       {step === 3 && <StepPrice d={d} up={up} />}
       {step === 4 && <StepPreview d={d} />}
+      {step === 4 && <p className="mt-6 text-sm text-muted">Zveřejněním souhlasíte s <a href="/stranka/pravidla-inzerovani" target="_blank" className="font-medium text-brand-ink underline">Pravidly inzerování</a> a <a href="/stranka/podminky" target="_blank" className="underline">podmínkami používání</a>.</p>}
 
       {err && <p role="alert" className="mt-6 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-danger">{err}</p>}
 
