@@ -27,7 +27,7 @@ export class AuthService {
     if ((await this.redis.incr(key, 900)) > 10) throw new UnauthorizedException('Příliš mnoho pokusů. Zkuste to za 15 minut.');
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (!user?.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) throw new UnauthorizedException('Nesprávný e-mail nebo heslo.');
-    if (user.status !== 'ACTIVE') throw new UnauthorizedException('Účet je zablokován. Kontaktujte podporu.');
+    if (user.status === 'BLOCKED') throw new UnauthorizedException('Účet je zablokován. Kontaktujte podporu.');
     await this.redis.del(key);
     return user;
   }

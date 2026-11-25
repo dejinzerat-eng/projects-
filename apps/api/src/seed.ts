@@ -189,11 +189,17 @@ async function main() {
   ];
   for (const [slug, title, content] of pages) await prisma.page.upsert({ where: { slug }, update: {}, create: { slug, title, content } });
 
+  // Seedovaný admin je hlavní administrátor (i v existující databázi), dokud žádný hlavní administrátor není.
+  if (!(await prisma.user.count({ where: { role: 'SUPERADMIN' } }))) {
+    const r = await prisma.user.updateMany({ where: { email: 'admin@dejinzerat.cz' }, data: { role: 'SUPERADMIN' } });
+    if (r.count) console.log('admin@dejinzerat.cz je nyní hlavní administrátor.');
+  }
+
   if (await prisma.listing.count()) { console.log('Ukázkové inzeráty už existují, přeskakuji.'); return; }
 
   console.log('Uživatelé…');
   const hash = await bcrypt.hash('Heslo1234', 12);
-  await prisma.user.upsert({ where: { email: 'admin@dejinzerat.cz' }, update: {}, create: { email: 'admin@dejinzerat.cz', name: 'Administrátor', role: 'ADMIN', passwordHash: await bcrypt.hash(process.env.ADMIN_PASSWORD ?? 'Admin12345', 12), emailVerifiedAt: new Date(), phoneVerifiedAt: new Date() } });
+  await prisma.user.upsert({ where: { email: 'admin@dejinzerat.cz' }, update: {}, create: { email: 'admin@dejinzerat.cz', name: 'Administrátor', role: 'SUPERADMIN', passwordHash: await bcrypt.hash(process.env.ADMIN_PASSWORD ?? 'Admin12345', 12), emailVerifiedAt: new Date(), phoneVerifiedAt: new Date() } });
   const names = ['Jana Nováková', 'Petr Svoboda', 'Lucie Dvořáková', 'Tomáš Černý', 'Kateřina Procházková', 'Martin Kučera', 'Eva Veselá', 'Jakub Horák', 'Autobazar Morava s.r.o.', 'Reality Plus'];
   const users = [];
   for (const [i, name] of names.entries()) {
