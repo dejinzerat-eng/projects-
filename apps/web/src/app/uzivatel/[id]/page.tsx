@@ -5,7 +5,10 @@ import { Avatar } from '@/components/avatar';
 import { FollowButton } from '@/components/follow-button';
 import { ListingGrid } from '@/components/listing-card';
 import { ReportButton } from '@/components/report-button';
+import { JsonLd } from '@/components/json-ld';
 import { api } from '@/lib/api';
+import { profileJsonLd } from '@/lib/jsonld';
+import { social } from '@/lib/seo';
 import { ago, plural } from '@/lib/format';
 import type { ListingCard } from '@/lib/types';
 
@@ -15,7 +18,8 @@ const load = (id: string) => api<Profile>(`/users/${id}`).catch(() => notFound()
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const p = await load((await params).id);
-  return { title: `${p.companyName ?? p.name} – inzeráty a hodnocení`, description: `${p.listings.length} aktivních inzerátů, hodnocení ${p.rating?.toFixed(1) ?? '–'} z 5.` };
+  const title = `${p.companyName ?? p.name} – inzeráty a hodnocení`, description = `${p.listings.length} aktivních inzerátů, hodnocení ${p.rating?.toFixed(1) ?? '–'} z 5.`;
+  return { title, description, alternates: { canonical: `/uzivatel/${p.id}` }, ...social({ title, description, path: `/uzivatel/${p.id}`, image: p.avatarUrl, type: 'profile' }) };
 }
 
 export default async function Page({ params }: Props) {
@@ -23,6 +27,7 @@ export default async function Page({ params }: Props) {
   const name = p.companyName ?? p.name;
   return (
     <div className="container-x py-8">
+      <JsonLd data={profileJsonLd(p)} />
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-4">
           <div className="card p-6">

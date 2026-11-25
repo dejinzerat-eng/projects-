@@ -9,8 +9,11 @@ import { FavoriteButton } from '@/components/favorite-button';
 import { Gallery } from '@/components/gallery';
 import { ListingGrid } from '@/components/listing-card';
 import { ReportButton } from '@/components/report-button';
+import { SellerStatus } from '@/components/seller-status';
 import { ShareButton } from '@/components/share-button';
 import { api, ApiError, getMe } from '@/lib/api';
+import { listingJsonLd } from '@/lib/jsonld';
+import { social } from '@/lib/seo';
 import { ago, CONDITION_LABEL, OFFER_LABEL, plural, price, STATUS_LABEL } from '@/lib/format';
 import type { FilterDef, ListingCard } from '@/lib/types';
 
@@ -19,13 +22,24 @@ interface Detail {
   condition: string | null; offerType: string; status: string; city: string; region: string; zip: string | null; attributes: Record<string, unknown>;
   videoUrl: string | null; views: number; publishedAt: string | null; createdAt: string; expiresAt: string;
   images: { url: string; thumbUrl: string }[]; category: { slug: string; name: string; parent: { slug: string; name: string } | null };
-  seller: { id: string; name: string; avatarUrl: string | null; city: string | null; createdAt: string; phoneVerified: boolean; emailVerified: boolean; isBusiness: boolean; companyName: string | null; lastSeenAt: string | null; rating: number | null; reviewCount: number; activeListings: number; hasPhone: boolean };
+  seller: { id: string; name: string; avatarUrl: string | null; city: string | null; createdAt: string; phoneVerified: boolean; emailVerified: boolean; isBusiness: boolean; companyName: string | null; companyId?: string | null; lastSeenAt: string | null; rating: number | null; reviewCount: number; activeListings: number; hasPhone: boolean };
   favorites: number; isFavorite: boolean; isOwner: boolean; filters: FilterDef[];
 }
 type Props = { params: Promise<{ id: string; slug: string }> };
 
 async function load(id: string) {
-  try { return await api<Detail>(`/listings/${id}`); } catch (e) { if (e instanceof ApiError && e.status === 404) notFound(); throw e; }
+  let l: Detail;
+  try { l = await api<Detail>(`/listings/${id}`); } catch (e) { if (e instanceof ApiError && e.status === 404) await gone(id); throw e; }
+  // Dávno vypršelé nebo prodané inzeráty návštěvníky (ne autora) přesměrujeme stejně jako smazané
+  if (!l.isOwner && ['EXPIRED', 'SOLD'].includes(l.status)) await gone(id, false);
+  return l;
+}
+
+/** Smazaný / dávno neaktivní inzerát: trvalé přesměrování (308) do jeho kategorie, jinak 404. */
+async function gone(id: string, orNotFound = true) {
+  const g = await api<{ path: string | null }>(`/seo/gone/${id}`, { auth: false }).catch(() => null);
+  if (g?.path) permanentRedirect(`${g.path}?odstraneno=1`);
+  if (orNotFound) notFound();
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -35,7 +49,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: `${l.title} – ${price(l.price, l.priceNegotiable, l.currency)}, ${l.city}`, description: desc,
     alternates: { canonical: `/inzerat/${l.id}/${l.slug}` },
-    openGraph: { title: l.title, description: desc, images: l.images[0] ? [{ url: l.images[0].url }] : undefined, type: 'article' },
+    ...social({ title: l.title, description: desc, path: `/inzerat/${l.id}/${l.slug}`, image: l.images[0]?.url, type: 'article' }),
     robots: ['ACTIVE', 'RESERVED'].includes(l.status) ? undefined : { index: false },
   };
 }
@@ -56,10 +70,7 @@ export default async function Page({ params }: Props) {
   const params2 = l.filters.map((f) => ({ f, v: l.attributes[f.key] })).filter((x) => x.v !== undefined && x.v !== '');
   const fmt = (f: FilterDef, v: unknown) => f.type === 'boolean' ? 'Ano' : f.type === 'range' ? `${new Intl.NumberFormat('cs-CZ').format(Number(v))}${f.unit ? ` ${f.unit}` : ''}` : Array.isArray(v) ? v.join(', ') : String(v);
   const embed = l.videoUrl ? videoEmbed(l.videoUrl) : null;
-  const jsonLd = {
-    '@context': 'https://schema.org', '@type': 'Product', name: l.title, description: l.description.slice(0, 500), image: l.images.map((i) => i.url), category: `${parent.name} > ${l.category.name}`,
-    ...(l.price != null ? { offers: { '@type': 'Offer', price: l.price, priceCurrency: l.currency, availability: l.status === 'SOLD' ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock', itemCondition: l.condition === 'NEW' ? 'https://schema.org/NewCondition' : l.condition === 'DAMAGED' ? 'https://schema.org/DamagedCondition' : 'https://schema.org/UsedCondition', areaServed: l.city } } : {}),
-  };
+  const jsonLd = listingJsonLd(l);
 
   return (
     <div className="container-x py-4 sm:py-8">
@@ -138,6 +149,7 @@ export default async function Page({ params }: Props) {
               <div className="text-sm text-muted">Registrace: {new Date(l.seller.createdAt).toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' })}</div>
             </div>
           </Link>
+          <SellerStatus isBusiness={l.seller.isBusiness} companyName={l.seller.companyName} companyId={l.seller.companyId} />
         </aside>
       </div>
 

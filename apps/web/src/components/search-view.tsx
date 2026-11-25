@@ -13,7 +13,7 @@ import { SortSelect } from './sort-select';
 
 type SP = Record<string, string | string[] | undefined>;
 
-export async function SearchView({ searchParams, category, sub, basePath }: { searchParams: SP; category?: string; sub?: string; basePath: string }) {
+export async function SearchView({ searchParams, category, sub, basePath, heading }: { searchParams: SP; category?: string; sub?: string; basePath: string; heading?: string }) {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(searchParams)) if (typeof v === 'string') qs.set(k, v);
   if (category) qs.set('kategorie', category);
@@ -31,7 +31,7 @@ export async function SearchView({ searchParams, category, sub, basePath }: { se
   const cat = cats.find((c) => c.slug === p.category);
   const subCat = cat?.children.find((s) => s.slug === p.sub);
   const filters = p.category ? filtersFor(p.category, p.sub) : [];
-  const title = p.q ? `„${p.q}“` : subCat?.name ?? cat?.name ?? 'Všechny inzeráty';
+  const title = p.q ? `„${p.q}“` : heading ?? subCat?.name ?? cat?.name ?? 'Všechny inzeráty';
   const pageHref = (n: number) => {
     const { category: _c, sub: _s, ...rest } = p;
     const s = toSearchString({ ...(basePath === '/hledat' ? p : rest), page: n });

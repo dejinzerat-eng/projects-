@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { AccountNav } from '@/components/account-nav';
 import { getMe } from '@/lib/api';
 
+export const metadata = { robots: { index: false, follow: false } };
+
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const me = await getMe();
   if (!me) redirect('/prihlaseni?zpet=/muj-ucet/inzeraty');
