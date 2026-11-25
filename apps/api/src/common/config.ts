@@ -1,7 +1,7 @@
 export const config = {
   port: Number(process.env.PORT ?? 4000),
-  webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:3000',
-  publicApiUrl: process.env.PUBLIC_API_URL ?? 'http://localhost:4000',
+  webOrigin: process.env.WEB_ORIGIN ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:3000'),
+  publicApiUrl: process.env.PUBLIC_API_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:4000'),
   redisUrl: process.env.REDIS_URL,
   meiliUrl: process.env.MEILI_URL ?? (process.env.VERCEL ? '' : 'http://127.0.0.1:7700'),
   meiliKey: process.env.MEILI_KEY ?? '',

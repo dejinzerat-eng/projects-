@@ -16,6 +16,8 @@ export async function createApp() {
   app.use(cookieParser());
   // Ochrana proti CSRF: zápisové požadavky musí přijít z našeho webu
   const allowed = new Set([config.webOrigin, config.publicApiUrl]);
+  // Na Vercelu povolíme i adresu konkrétního nasazení a větve
+  for (const h of [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL]) if (h) allowed.add(`https://${h}`);
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
     const origin = req.headers.origin;
