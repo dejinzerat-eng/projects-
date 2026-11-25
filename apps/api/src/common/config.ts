@@ -10,6 +10,15 @@ export const config = {
   premoderation: process.env.PREMODERATION === '1',
   listingDays: Number(process.env.LISTING_DAYS ?? 30),
   google: { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET },
+  apple: {
+    clientId: process.env.APPLE_CLIENT_ID, teamId: process.env.APPLE_TEAM_ID, keyId: process.env.APPLE_KEY_ID,
+    privateKey: process.env.APPLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  },
+  gosms: {
+    clientId: process.env.GOSMS_CLIENT_ID?.trim(), clientSecret: process.env.GOSMS_CLIENT_SECRET?.trim(),
+    channel: process.env.GOSMS_CHANNEL ? Number(process.env.GOSMS_CHANNEL) : undefined,
+    apiBase: process.env.GOSMS_API_URL ?? 'https://app.gosms.cz',
+  },
   turnstileSecret: process.env.TURNSTILE_SECRET,
   resendKey: process.env.RESEND_API_KEY,
   mailFrom: process.env.MAIL_FROM ?? 'Dejinzerat.cz <noreply@dejinzerat.cz>',

@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { TokenType, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { randomBytes, randomInt } from 'crypto';
+import { randomBytes, randomInt, sign } from 'crypto';
 import { hashToken } from '../common/auth.guard';
 import { config } from '../common/config';
 import { MailerService, SmsService } from '../common/mailer.service';
@@ -136,6 +136,53 @@ export class AuthService {
       return this.prisma.user.update({ where: { id: existing.id }, data: { googleId: info.sub, emailVerifiedAt: existing.emailVerifiedAt ?? new Date(), avatarUrl: existing.avatarUrl ?? info.picture } });
     }
     return this.prisma.user.create({ data: { email: info.email.toLowerCase(), name: info.name, googleId: info.sub, emailVerifiedAt: new Date(), avatarUrl: info.picture } });
+  }
+
+  /** Přihlášení přes Apple (Sign in with Apple, webový tok s response_mode=form_post). */
+  appleRedirectUri() { return `${config.webOrigin}/api/auth/apple/callback`; }
+
+  appleAuthUrl(state: string) {
+    const p = new URLSearchParams({
+      client_id: config.apple.clientId!, redirect_uri: this.appleRedirectUri(),
+      response_type: 'code', response_mode: 'form_post', scope: 'name email', state,
+    });
+    return `https://appleid.apple.com/auth/authorize?${p}`;
+  }
+
+  /** client_secret pro Apple je krátkodobý JWT podepsaný klíčem .p8 (ES256). */
+  private appleClientSecret() {
+    const b64 = (v: object | Buffer) => (Buffer.isBuffer(v) ? v : Buffer.from(JSON.stringify(v))).toString('base64url');
+    const now = Math.floor(Date.now() / 1000);
+    const head = b64({ alg: 'ES256', kid: config.apple.keyId });
+    const body = b64({ iss: config.apple.teamId, iat: now, exp: now + 300, aud: 'https://appleid.apple.com', sub: config.apple.clientId });
+    const sig = sign('sha256', Buffer.from(`${head}.${body}`), { key: config.apple.privateKey!, dsaEncoding: 'ieee-p1363' });
+    return `${head}.${body}.${b64(sig)}`;
+  }
+
+  async appleCallback(code: string, userJson?: string) {
+    const r = await fetch('https://appleid.apple.com/auth/token', {
+      method: 'POST',
+      body: new URLSearchParams({ client_id: config.apple.clientId!, client_secret: this.appleClientSecret(), code, grant_type: 'authorization_code', redirect_uri: this.appleRedirectUri() }),
+    });
+    if (!r.ok) throw new UnauthorizedException('Přihlášení přes Apple selhalo.');
+    const { id_token } = (await r.json()) as { id_token: string };
+    // id_token přišel přímo od Apple přes TLS, ověřujeme jen jeho adresáta a vydavatele
+    const claims = JSON.parse(Buffer.from(id_token.split('.')[1], 'base64url').toString()) as { iss: string; aud: string; sub: string; email?: string; email_verified?: boolean | string };
+    if (claims.iss !== 'https://appleid.apple.com' || claims.aud !== config.apple.clientId) throw new UnauthorizedException('Neplatná odpověď od Apple.');
+    const byApple = await this.prisma.user.findUnique({ where: { appleId: claims.sub } });
+    if (byApple) return byApple;
+    const verified = claims.email_verified === true || claims.email_verified === 'true';
+    if (!claims.email || !verified) throw new UnauthorizedException('Apple nesdílel ověřený e-mail.');
+    const email = claims.email.toLowerCase();
+    let name = 'Uživatel Apple';
+    try {
+      const u = userJson ? (JSON.parse(userJson) as { name?: { firstName?: string; lastName?: string } }) : undefined;
+      const n = [u?.name?.firstName, u?.name?.lastName].filter(Boolean).join(' ').trim();
+      if (n) name = n.slice(0, 60);
+    } catch { /* jméno posílá Apple jen při prvním přihlášení */ }
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) return this.prisma.user.update({ where: { id: existing.id }, data: { appleId: claims.sub, emailVerifiedAt: existing.emailVerifiedAt ?? new Date() } });
+    return this.prisma.user.create({ data: { email, name, appleId: claims.sub, emailVerifiedAt: new Date() } });
   }
 
   async flushUser(userId: string) {

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Auth, AuthUser, CurrentUser, SESSION_COOKIE } from '../common/auth.guard';
 import { verifyCaptcha } from '../common/captcha';
 import { config } from '../common/config';
+import { SmsService } from '../common/mailer.service';
 import { PrismaService } from '../common/prisma.service';
 import { ZodPipe } from '../common/zod';
 import { AuthService } from './auth.service';
@@ -16,14 +17,17 @@ const LoginDto = z.object({ email: z.email('Zadejte platný e-mail.'), password:
 
 @Controller('auth')
 export class AuthController {
-  constructor(private auth: AuthService, private prisma: PrismaService) {}
+  constructor(private auth: AuthService, private prisma: PrismaService, private sms: SmsService) {}
 
   private setCookie(res: Response, token: string, expires: Date) {
     res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: config.cookieSecure, expires, path: '/' });
   }
 
   @Get('providers')
-  providers() { return { google: !!config.google.clientId, apple: false, captchaSiteKey: process.env.TURNSTILE_SITE_KEY ?? null }; }
+  providers() {
+    const a = config.apple;
+    return { google: !!config.google.clientId, apple: !!(a.clientId && a.teamId && a.keyId && a.privateKey), sms: this.sms.enabled, captchaSiteKey: process.env.TURNSTILE_SITE_KEY ?? null };
+  }
 
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('register')
@@ -128,6 +132,27 @@ export class AuthController {
     const s = await this.auth.createSession(user.id);
     this.setCookie(res, s.token, s.expiresAt);
     res.clearCookie('dej_oauth', { path: '/' });
+    return res.redirect(`${config.webOrigin}/`);
+  }
+
+  @Get('apple')
+  apple(@Res() res: Response) {
+    const a = config.apple;
+    if (!(a.clientId && a.teamId && a.keyId && a.privateKey)) return res.redirect(`${config.webOrigin}/prihlaseni?chyba=apple`);
+    const state = randomBytes(16).toString('hex');
+    // Apple vrací odpověď jako POST z appleid.apple.com, proto musí cookie se stavem projít i mezi weby (SameSite=None).
+    res.cookie('dej_oauth_apple', state, { httpOnly: true, sameSite: 'none', secure: true, maxAge: 600_000, path: '/' });
+    return res.redirect(this.auth.appleAuthUrl(state));
+  }
+
+  @Post('apple/callback')
+  async appleCb(@Body() body: { code?: string; state?: string; user?: string; error?: string }, @Req() req: Request, @Res() res: Response) {
+    res.clearCookie('dej_oauth_apple', { path: '/', sameSite: 'none', secure: true });
+    if (body?.error) return res.redirect(`${config.webOrigin}/prihlaseni`);
+    if (!body?.code || !body.state || body.state !== req.cookies?.dej_oauth_apple) throw new UnauthorizedException('Neplatný požadavek.');
+    const user = await this.auth.appleCallback(body.code, body.user);
+    const s = await this.auth.createSession(user.id);
+    this.setCookie(res, s.token, s.expiresAt);
     return res.redirect(`${config.webOrigin}/`);
   }
 }

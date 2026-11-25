@@ -20,6 +20,8 @@ export async function createApp() {
   for (const h of [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL]) if (h) allowed.add(`https://${h}`);
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+    // Odpověď Apple přichází POSTem z appleid.apple.com; chrání ji kontrola parametru state
+    if (req.path === '/auth/apple/callback') return next();
     const origin = req.headers.origin;
     if (origin && !allowed.has(origin)) return res.status(403).json({ message: 'Nepovolený původ požadavku.' });
     next();
