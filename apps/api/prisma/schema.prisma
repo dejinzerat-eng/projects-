@@ -50,6 +50,7 @@ enum ReportTarget {
   LISTING
   USER
   MESSAGE
+  CONVERSATION
 }
 
 enum ReportStatus {
@@ -219,16 +220,23 @@ model SavedSearch {
 
 model Conversation {
   id            String    @id @default(cuid())
-  listingId     String
-  listing       Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  /// Bez inzerátu = konverzace zahájená z profilu uživatele
+  listingId     String?
+  listing       Listing?  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  /// Jen u konverzací bez inzerátu: "menšíId:většíId" – jedna přímá konverzace na dvojici uživatelů
+  directKey     String?   @unique
   buyerId       String
   buyer         User      @relation("buyer", fields: [buyerId], references: [id])
   sellerId      String
   seller        User      @relation("seller", fields: [sellerId], references: [id])
   lastMessageAt DateTime  @default(now())
   createdAt     DateTime  @default(now())
+  /// Archivace zvlášť pro každého účastníka
+  buyerArchivedAt  DateTime?
+  sellerArchivedAt DateTime?
   messages      Message[]
   reviews       Review[]
+  attachments   MessageAttachment[]
 
   @@unique([listingId, buyerId])
   @@index([buyerId])
@@ -245,6 +253,7 @@ model Message {
   imageUrl       String?
   readAt         DateTime?
   createdAt      DateTime     @default(now())
+  attachment     MessageAttachment?
 
   @@index([conversationId, createdAt])
 }
@@ -265,6 +274,8 @@ model Report {
   reporter     User         @relation("reporter", fields: [reporterId], references: [id])
   targetType   ReportTarget
   targetId     String
+  /// Konverzace, které se hlášení týká (CONVERSATION a MESSAGE) – moderátor ji smí zobrazit jen ke čtení
+  conversationId String?
   reason       String
   note         String?
   status       ReportStatus @default(OPEN)
@@ -358,4 +369,27 @@ model PriceItem {
   priceCzk     Int
   durationDays Int?
   active       Boolean @default(true)
+}
+
+/// Fotka ve zprávě – nahraná přes naše úložiště do konkrétní konverzace. Zpráva smí odkazovat jen na takovou přílohu.
+model MessageAttachment {
+  id             String        @id @default(cuid())
+  ownerId        String
+  conversationId String
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  messageId      String?       @unique
+  message        Message?      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  url            String
+  width          Int
+  height         Int
+  createdAt      DateTime      @default(now())
+
+  @@index([ownerId, createdAt])
+}
+
+/// Nastavení zpráv uživatele (odděleně od User)
+model MessagePreference {
+  userId         String   @id
+  emailOnMessage Boolean  @default(true)
+  updatedAt      DateTime @updatedAt
 }
