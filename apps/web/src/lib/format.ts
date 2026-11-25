@@ -2,7 +2,8 @@ export const CONDITION_LABEL: Record<string, string> = { NEW: 'Nové', LIKE_NEW:
 export const OFFER_LABEL: Record<string, string> = { SELL: 'Prodám', BUY: 'Koupím', EXCHANGE: 'Vyměním', GIVE: 'Daruji', RENT: 'Pronajmu' };
 export const STATUS_LABEL: Record<string, string> = { DRAFT: 'Koncept', PENDING: 'Čeká na schválení', ACTIVE: 'Aktivní', RESERVED: 'Rezervováno', SOLD: 'Prodáno', EXPIRED: 'Vypršelo', REJECTED: 'Zamítnuto', DELETED: 'Smazáno' };
 
-export function price(p: number | null | undefined, negotiable = false, currency = 'CZK') {
+export function price(p: number | null | undefined, negotiable = false, currency = 'CZK', offerType?: string) {
+  if (offerType === 'GIVE') return 'Zdarma';
   if (p == null) return negotiable ? 'Dohodou' : 'Cena v textu';
   if (p === 0) return 'Zdarma';
   return `${new Intl.NumberFormat('cs-CZ').format(p)} ${currency === 'EUR' ? '€' : 'Kč'}`;

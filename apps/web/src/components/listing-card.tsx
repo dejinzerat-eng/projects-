@@ -21,7 +21,7 @@ export function ListingCard({ l, priority, favorite }: { l: L; priority?: boolea
         <FavoriteButton id={l.id} initial={favorite} className="absolute right-2 top-2 z-20" />
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
-        <div className="text-[16px] font-bold tracking-tight">{price(l.price, l.priceNegotiable, l.currency)}</div>
+        <div className="text-[16px] font-bold tracking-tight">{price(l.price, l.priceNegotiable, l.currency, l.offerType)}</div>
         <h3 className="line-clamp-2 text-[14.5px] leading-snug text-ink-2">{l.title}</h3>
         <div className="mt-auto flex items-center gap-1.5 pt-2 text-[12.5px] text-muted">
           <MapPin className="size-3.5 shrink-0" />
