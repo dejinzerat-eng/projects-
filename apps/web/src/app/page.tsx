@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight, Plus } from 'lucide-react';
-import { CategoryIcon } from '@/components/icons';
+import { CategoryTile } from '@/components/icons';
 import { ListingGrid } from '@/components/listing-card';
 import { SearchBox } from '@/components/search-box';
 import { api, getMe } from '@/lib/api';
@@ -20,7 +20,8 @@ function Section({ id, title, href, children }: { id: string; title: string; hre
   );
 }
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ ikony?: string }> }) {
+  const variant = (await searchParams).ikony === 'b' ? 'solid' : 'soft';
   const [cats, featured, latest, me] = await Promise.all([
     api<Category[]>('/categories', { revalidate: 60, auth: false }).catch(() => [] as Category[]),
     api<ListingCard[]>('/listings/featured?limit=8', { auth: false }).catch(() => [] as ListingCard[]),
@@ -48,9 +49,7 @@ export default async function Home() {
         <div className="grid grid-cols-4 gap-x-2 gap-y-5 sm:grid-cols-5 lg:grid-cols-10">
           {cats.map((c) => (
             <Link key={c.slug} href={`/kategorie/${c.slug}`} className="group flex flex-col items-center gap-2 text-center">
-              <span className="grid size-14 place-items-center rounded-2xl bg-surface border border-line text-ink-2 transition group-hover:border-brand group-hover:text-brand">
-                <CategoryIcon name={c.icon} className="size-6" />
-              </span>
+              <CategoryTile slug={c.slug} icon={c.icon} variant={variant} />
               <span className="text-[12.5px] leading-tight text-ink-2 group-hover:text-ink">{c.name}</span>
             </Link>
           ))}
