@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListingStatus, Prisma } from '@prisma/client';
-import { filtersFor, findCity, slugify } from '@dej/shared';
+import { buildSearchText, filtersFor, slugify } from '@dej/shared';
+import { resolveLocation } from '@dej/shared/dist/municipalities';
 import { z } from 'zod';
 import { AuthUser } from '../common/auth.guard';
 import { config } from '../common/config';
@@ -60,15 +61,16 @@ export class ListingsService {
   async create(user: AuthUser, dto: ListingInput) {
     await this.checkSpam(user.id);
     const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
-    const city = findCity(dto.city);
+    const loc = resolveLocation(dto.city, dto.zip);
+    const attributes = this.cleanAttributes(dto.categorySlug, dto.subSlug, dto.attributes);
     const risk = assessListing({ title: dto.title, description: dto.description, price: dto.price, categorySlug: dto.categorySlug });
     const status: ListingStatus = !dto.publish ? 'DRAFT' : risk.score >= 50 || config.premoderation ? 'PENDING' : 'ACTIVE';
     const listing = await this.prisma.listing.create({
       data: {
         slug: slugify(dto.title), title: dto.title, description: dto.description, price: dto.price ?? null, priceNegotiable: dto.priceNegotiable,
         currency: dto.currency, categoryId: cat.id, userId: user.id, condition: dto.condition ?? null, offerType: dto.offerType,
-        city: city?.name ?? dto.city, region: city?.region ?? '', zip: dto.zip?.replace(/\s/g, '') || city?.zip, lat: city?.lat, lng: city?.lng,
-        attributes: this.cleanAttributes(dto.categorySlug, dto.subSlug, dto.attributes) as Prisma.InputJsonValue,
+        city: loc.city, region: loc.region, zip: loc.zip, lat: loc.lat, lng: loc.lng,
+        attributes: attributes as Prisma.InputJsonValue, searchText: buildSearchText({ ...dto, attributes, city: loc.city }),
         videoUrl: dto.videoUrl || null, status, spamScore: risk.score,
         publishedAt: status === 'ACTIVE' ? new Date() : null,
         expiresAt: new Date(Date.now() + config.listingDays * 864e5),
@@ -94,7 +96,9 @@ export class ListingsService {
   async update(id: string, user: AuthUser, dto: ListingInput) {
     const l = await this.ownOrThrow(id, user);
     const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
-    const city = findCity(dto.city);
+    // Lokalita se určí vždy znovu – neznámá obec smaže kraj i souřadnice, nezůstanou ty staré
+    const loc = resolveLocation(dto.city, dto.zip);
+    const attributes = this.cleanAttributes(dto.categorySlug, dto.subSlug, dto.attributes);
     const risk = assessListing({ title: dto.title, description: dto.description, price: dto.price, categorySlug: dto.categorySlug });
     let status = l.status;
     if (l.status === 'DRAFT' && dto.publish) status = risk.score >= 50 || config.premoderation ? 'PENDING' : 'ACTIVE';
@@ -104,8 +108,8 @@ export class ListingsService {
       data: {
         slug: slugify(dto.title), title: dto.title, description: dto.description, price: dto.price ?? null, priceNegotiable: dto.priceNegotiable, currency: dto.currency,
         categoryId: cat.id, condition: dto.condition ?? null, offerType: dto.offerType,
-        city: city?.name ?? dto.city, region: city?.region ?? l.region, zip: dto.zip?.replace(/\s/g, '') || city?.zip, lat: city?.lat ?? l.lat, lng: city?.lng ?? l.lng,
-        attributes: this.cleanAttributes(dto.categorySlug, dto.subSlug, dto.attributes) as Prisma.InputJsonValue,
+        city: loc.city, region: loc.region, zip: loc.zip, lat: loc.lat, lng: loc.lng,
+        attributes: attributes as Prisma.InputJsonValue, searchText: buildSearchText({ ...dto, attributes, city: loc.city }),
         videoUrl: dto.videoUrl || null, status, spamScore: risk.score, publishedAt: status === 'ACTIVE' && !l.publishedAt ? new Date() : l.publishedAt,
       },
     });

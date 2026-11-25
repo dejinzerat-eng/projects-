@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CITIES, findCity } from '@dej/shared';
 import { z } from 'zod';
@@ -120,8 +120,11 @@ export class UsersController {
   @Auth()
   @Post('me/saved-searches')
   async save(@CurrentUser() u: AuthUser, @Body(new ZodPipe(SavedSearchDto)) dto: z.infer<typeof SavedSearchDto>) {
+    // Stejné hledání podruhé neukládáme
+    const existing = await this.prisma.savedSearch.findFirst({ where: { userId: u.id, query: { equals: dto.query as Prisma.InputJsonValue } } });
+    if (existing) return existing;
     const n = await this.prisma.savedSearch.count({ where: { userId: u.id } });
-    if (n >= 50) return { error: 'Nejvýše 50 uložených hledání.' };
+    if (n >= 50) throw new BadRequestException('Nejvýše 50 uložených hledání.');
     return this.prisma.savedSearch.create({ data: { userId: u.id, name: dto.name, query: dto.query as Prisma.InputJsonValue, notify: dto.notify } });
   }
 

@@ -49,7 +49,7 @@ export class JobsService implements OnApplicationBootstrap, OnModuleDestroy {
     const searches = await this.prisma.savedSearch.findMany({ where: { notify: true, lastCheckedAt: { lte: new Date(Date.now() - 4 * 60_000) } }, include: { user: true }, take: 2000 });
     for (const s of searches) {
       const since = s.lastCheckedAt;
-      const r = await this.search.search(s.query as SearchParams, { createdAfter: since, limit: 10 });
+      const r = await this.search.search(s.query as SearchParams, { publishedAfter: since, limit: 10 });
       await this.prisma.savedSearch.update({ where: { id: s.id }, data: { lastCheckedAt: new Date() } });
       const fresh = r.hits.filter((h) => h.createdAt > since.getTime());
       if (!fresh.length) continue;

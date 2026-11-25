@@ -1,0 +1,168 @@
+import { strict as assert } from 'node:assert';
+import { describe, it } from 'node:test';
+import { Prisma } from '@prisma/client';
+import { buildSearchText, fromSearchString, haversine, normalizeSearchText, queryWords, stemCz, synonymsOf, toSearchString } from '@dej/shared';
+import { findMunicipality, municipalityByZip, nearestMunicipality, resolveLocation, suggestMunicipalities } from '@dej/shared/dist/municipalities';
+import { boundingBox, buildTerms, filterSql, orderSql, termsFuzzy } from './search-query';
+
+const sqlText = (s: Prisma.Sql) => s.sql;
+
+describe('normalizace textu pro hledání', () => {
+  it('odstraní diakritiku, velká písmena a interpunkci', () => {
+    assert.equal(normalizeSearchText('Kočárek – ŠKODA 1.6, Łódź!'), 'kocarek skoda 1 6 lodz');
+    assert.equal(normalizeSearchText('Ťuhýk Ůžasný Ěščřžýáíé'), 'tuhyk uzasny escrzyaie');
+  });
+
+  it('searchText obsahuje název, popis, parametry a město', () => {
+    const t = buildSearchText({ title: 'Škoda Octavia', description: 'Servisní knížka', attributes: { brand: 'Škoda', year: 2018, abs: true, extras: ['Tažné', 'Klima'] }, city: 'Plzeň' });
+    assert.equal(t, 'skoda octavia servisni knizka skoda 2018 tazne klima plzen');
+  });
+
+  it('slova dotazu bez duplicit', () => {
+    assert.deepEqual(queryWords('  iPhone  IPHONE 15 '), ['iphone', '15']);
+  });
+
+  it('zkracuje české koncovky jen u delších slov', () => {
+    assert.equal(stemCz('kocarky'), 'kocar');
+    assert.equal(stemCz('kolo'), 'kolo');
+    assert.equal(stemCz('ps5'), 'ps5');
+  });
+});
+
+describe('synonyma', () => {
+  it('fungují bez diakritiky a obousměrně', () => {
+    assert.ok(synonymsOf('gauc').includes('pohovka'));
+    assert.ok(synonymsOf('Sedačka').includes('gauc'));
+    assert.ok(synonymsOf('notebook').includes('laptop'));
+    assert.ok(synonymsOf('laptop').includes('notebook'));
+    assert.deepEqual(synonymsOf('xyzabc'), ['xyzabc']);
+  });
+
+  it('fráze se rozpozná jako jeden výraz', () => {
+    const terms = buildTerms('horské kolo');
+    assert.equal(terms.length, 1);
+    assert.equal(terms[0].word, 'horske kolo');
+    assert.ok(terms[0].alts.some((a) => a.length === 1 && a[0] === 'mtb'));
+    // obě slova kdekoli v textu
+    assert.ok(terms[0].alts.some((a) => a.length === 2));
+  });
+
+  it('slovo dostane synonyma i zkrácený tvar, předložky se vynechají', () => {
+    const terms = buildTerms('kočárky v Brně');
+    assert.deepEqual(terms.map((t) => t.word), ['kocarky', 'brne']);
+    const alts = terms[0].alts.map((a) => a[0]);
+    assert.ok(alts.includes('kocar'));
+    // „kocarky“ je zbytečné vedle kratšího „kocar“
+    assert.ok(!alts.includes('kocarky'));
+  });
+});
+
+describe('SQL pro vyhledávání v PostgreSQL', () => {
+  const base = { attrKeys: ['brand', 'year'], now: new Date('2026-11-25T12:00:00Z') };
+
+  it('okruh je kruh (haversine) s obdélníkem pro index a omezený na 500 km', () => {
+    const where = filterSql({ radius: 900 }, { ...base, geo: { lat: 50, lng: 14 } }).map(sqlText).join(' AND ');
+    assert.match(where, /asin/);
+    assert.match(where, /BETWEEN/);
+    const b = boundingBox({ lat: 50, lng: 14 }, 500);
+    const values = filterSql({ radius: 900 }, { ...base, geo: { lat: 50, lng: 14 } }).flatMap((s) => s.values);
+    assert.ok(values.includes(500));
+    assert.ok(Math.abs(b.maxLat - 50 - 500 / 111.32) < 1e-9);
+  });
+
+  it('filtr data i řazení podle data používají publishedAt', () => {
+    const where = filterSql({ since: '7d' }, base).map(sqlText).join(' ');
+    assert.match(where, /"publishedAt" >/);
+    assert.doesNotMatch(where, /createdAt/);
+    assert.match(sqlText(orderSql('newest', base)), /^l\."publishedAt" DESC NULLS LAST/);
+  });
+
+  it('nejdražší dávají ceny „dohodou“ na konec', () => {
+    assert.match(sqlText(orderSql('price_desc', base)), /"price" DESC NULLS LAST/);
+    assert.match(sqlText(orderSql('price_asc', base)), /"price" ASC NULLS LAST/);
+  });
+
+  it('relevance: kvalita shody → platné topování → datum', () => {
+    const quality = Prisma.sql`quality`;
+    const o = sqlText(orderSql(undefined, { ...base, quality }));
+    assert.ok(o.indexOf('quality') < o.indexOf('topUntil'));
+    assert.ok(o.indexOf('topUntil') < o.indexOf('COALESCE'));
+    // topování se porovnává s aktuálním časem (vypršelé se nepočítá)
+    assert.match(o, /"topUntil" > /);
+  });
+
+  it('„Nejblíže“ řadí podle vzdálenosti, bez polohy podle relevance', () => {
+    assert.match(sqlText(orderSql('distance', { ...base, geo: { lat: 50, lng: 14 } })), /asin/);
+    assert.doesNotMatch(sqlText(orderSql('distance', base)), /asin/);
+  });
+
+  it('typ prodejce a ověření', () => {
+    assert.match(filterSql({ sellerType: 'business' }, base).map(sqlText).join(' '), /"isBusiness" = true/);
+    assert.match(filterSql({ sellerType: 'private' }, base).map(sqlText).join(' '), /"isBusiness" = false/);
+  });
+
+  it('neznámé parametry se ignorují', () => {
+    const w = filterSql({ attrs: { 'x; DROP TABLE': 'a', brand: 'Škoda' } }, base);
+    assert.equal(w.length, 2);
+    assert.ok(w[1].values.includes('Škoda'));
+  });
+
+  it('oprava překlepů jen pro slova od 4 znaků', () => {
+    assert.equal(termsFuzzy(Prisma.sql`t`, buildTerms('tv')), undefined);
+    assert.match(sqlText(termsFuzzy(Prisma.sql`t`, buildTerms('iphoen 15'))!), /<%/);
+  });
+});
+
+describe('obce ČR', () => {
+  it('najde obec bez diakritiky i s okresem', () => {
+    assert.equal(findMunicipality('plzen')?.name, 'Plzeň');
+    assert.equal(findMunicipality('USTI NAD LABEM')?.region, 'ULK');
+    assert.equal(findMunicipality('Adamov (okres Blansko)')?.district, 'Blansko');
+    assert.equal(findMunicipality('Kutná Hora')?.region, 'STC');
+  });
+
+  it('rozliší stejné názvy podle PSČ a rozumí částem obce', () => {
+    assert.equal(findMunicipality('Říčany', '251 01')?.district, 'Praha-východ');
+    assert.equal(findMunicipality('Říčany', '66482')?.district, 'Brno-venkov');
+    assert.equal(findMunicipality('Praha 4')?.name, 'Praha');
+    assert.equal(findMunicipality('Brno-Líšeň')?.name, 'Brno');
+  });
+
+  it('PSČ: přesná shoda, pražská PSČ, jinak nejbližší ve stejné oblasti', () => {
+    assert.equal(municipalityByZip('60200')?.name, 'Brno');
+    assert.equal(municipalityByZip('14800')?.name, 'Praha');
+    assert.equal(municipalityByZip('abc'), undefined);
+  });
+
+  it('lokalita inzerátu: PSČ uživatele má přednost, neznámá obec bez souřadnic', () => {
+    assert.deepEqual(resolveLocation('brno', ''), { city: 'Brno', region: 'JHM', zip: '60200', lat: 49.1952, lng: 16.6069, matched: 'name' });
+    assert.equal(resolveLocation('Brno', '62500').zip, '62500');
+    const unknown = resolveLocation('Neexistujícíves', '');
+    assert.deepEqual([unknown.region, unknown.lat, unknown.matched], ['', null, 'none']);
+    const byZip = resolveLocation('Chodov u Prahy', '14800');
+    assert.deepEqual([byZip.city, byZip.region, byZip.matched], ['Chodov u Prahy', 'PHA', 'zip']);
+  });
+
+  it('našeptávač podle začátku názvu, slova i PSČ', () => {
+    assert.equal(suggestMunicipalities('kutna')[0].name, 'Kutná Hora');
+    assert.ok(suggestMunicipalities('labem').some((m) => m.name === 'Ústí nad Labem'));
+    assert.equal(suggestMunicipalities('602')[0].name, 'Brno');
+    assert.ok(suggestMunicipalities('adamov').every((m) => m.label.includes('okres')));
+  });
+
+  it('nejbližší obec a vzdálenost', () => {
+    assert.equal(nearestMunicipality(49.1951, 16.6068)?.name, 'Brno');
+    assert.ok(Math.abs(haversine({ lat: 50.0755, lng: 14.4378 }, { lat: 49.1951, lng: 16.6068 }) - 185) < 5);
+  });
+});
+
+describe('parametry v URL', () => {
+  it('typ prodejce a poloha', () => {
+    const p = fromSearchString(new URLSearchParams('prodejce=firma&lat=50.1&lng=14.4&okruh=30'));
+    assert.equal(p.sellerType, 'business');
+    assert.deepEqual([p.lat, p.lng, p.radius], [50.1, 14.4, 30]);
+    assert.match(toSearchString({ sellerType: 'private', lat: 50.1, lng: 14.4 }), /prodejce=soukromy/);
+    assert.equal(fromSearchString(new URLSearchParams('lat=500&lng=14')).lat, undefined);
+    assert.equal(fromSearchString(new URLSearchParams('prodejce=xyz')).sellerType, undefined);
+  });
+});

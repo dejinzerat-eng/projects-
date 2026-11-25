@@ -1,12 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { Prisma } from '@prisma/client';
 import { fromSearchString, parseNaturalQuery } from '@dej/shared';
 import type { Request } from 'express';
 import { z } from 'zod';
 import { Auth, AuthUser, CurrentUser } from '../common/auth.guard';
 import { PrismaService } from '../common/prisma.service';
 import { ZodPipe } from '../common/zod';
-import { SearchService } from '../search/search.service';
+import { LISTING_INCLUDE, SearchService } from '../search/search.service';
 import { ListingDto, ListingInput, ListingsService } from './listings.service';
 
 @Controller()
@@ -36,21 +37,30 @@ export class ListingsController {
       // Rozpoznané město hledáme i v okolí (30 km)
       if (parsed.params.city && params.radius === undefined) { params.radius = 30; recognized = recognized.map((r) => (r === parsed.params.city ? `${r} + 30 km` : r)); }
     }
-    const r = await this.search.search(params);
+    const limit = Math.min(48, Math.max(1, Number(query.limit) || 24));
+    const r = await this.search.search(params, { limit });
     return { ...r, params, recognized };
   }
 
   @Get('search/suggest')
   suggest(@Query('q') q = '') { return this.search.suggest(q); }
 
-  /** Doporučené: topované a zvýrazněné nabídky, doplněné o nabídky ověřených prodejců. */
+  /**
+   * Doporučené: nejnovější nabídky ověřených prodejců a firem s fotkou, doplněné o další nabídky s fotkou.
+   * Topované a zvýrazněné mají na hlavní stránce vlastní sekci (GET /search/premium), proto se tu neopakují.
+   */
   @Get('listings/featured')
   async featured(@Query('limit') limit = '8') {
-    const n = Math.min(24, Number(limit) || 8);
-    const hits = (await this.search.search({}, { limit: 48 })).hits;
-    const paid = hits.filter((h) => h.isTop || h.highlighted);
-    const rest = hits.filter((h) => !(h.isTop || h.highlighted) && h.verified && h.image);
-    return [...paid, ...rest].slice(0, n);
+    const n = Math.min(24, Math.max(1, Number(limit) || 8));
+    const now = new Date();
+    const base: Prisma.ListingWhereInput = {
+      status: 'ACTIVE', images: { some: {} },
+      NOT: { OR: [{ topUntil: { gt: now } }, { highlightedUntil: { gt: now } }] },
+    };
+    const order: Prisma.ListingOrderByWithRelationInput[] = [{ publishedAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }];
+    const trusted = await this.prisma.listing.findMany({ where: { ...base, user: { OR: [{ phoneVerifiedAt: { not: null } }, { isBusiness: true }] } }, include: LISTING_INCLUDE, orderBy: order, take: n });
+    const rest = trusted.length < n ? await this.prisma.listing.findMany({ where: { ...base, id: { notIn: trusted.map((l) => l.id) } }, include: LISTING_INCLUDE, orderBy: order, take: n - trusted.length }) : [];
+    return [...trusted, ...rest].map((l) => this.search.toCard(l, now.getTime()));
   }
 
   @Get('listings/latest')
@@ -106,6 +116,8 @@ export class ListingsController {
   @Auth()
   @Post('listings/:id/favorite')
   async fav(@Param('id') id: string, @CurrentUser() u: AuthUser) {
+    const l = await this.prisma.listing.findUnique({ where: { id }, select: { status: true, userId: true } });
+    if (!l || !(['ACTIVE', 'RESERVED'].includes(l.status) || l.userId === u.id)) throw new NotFoundException('Inzerát neexistuje nebo už není aktivní.');
     await this.prisma.favorite.upsert({ where: { userId_listingId: { userId: u.id, listingId: id } }, create: { userId: u.id, listingId: id }, update: {} });
     return { ok: true };
   }
@@ -124,7 +136,7 @@ export class ListingsController {
   @Auth()
   @Get('me/favorites')
   async favorites(@CurrentUser() u: AuthUser) {
-    const favs = await this.prisma.favorite.findMany({ where: { userId: u.id, listing: { status: { not: 'DELETED' } } }, include: { listing: { include: { images: { orderBy: { position: 'asc' }, take: 1 }, category: { include: { parent: true } }, user: { select: { id: true, name: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true } } } } }, orderBy: { createdAt: 'desc' } });
+    const favs = await this.prisma.favorite.findMany({ where: { userId: u.id, listing: { OR: [{ status: { in: ['ACTIVE', 'RESERVED', 'SOLD', 'EXPIRED'] } }, { userId: u.id, status: { not: 'DELETED' } }] } }, include: { listing: { include: { images: { orderBy: { position: 'asc' }, take: 1 }, category: { include: { parent: true } }, user: { select: { id: true, name: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true } } } } }, orderBy: { createdAt: 'desc' } });
     return favs.map((f) => this.search.toCard(f.listing));
   }
 

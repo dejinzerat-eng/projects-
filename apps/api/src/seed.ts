@@ -1,6 +1,6 @@
 /* Výchozí data: kategorie, ceník, informační stránky, admin účet a ukázkové inzeráty. Spuštění: pnpm db:seed */
 import { PrismaClient, Prisma } from '@prisma/client';
-import { CATEGORIES, CITIES, slugify } from '@dej/shared';
+import { buildSearchText, CATEGORIES, CITIES, slugify } from '@dej/shared';
 import * as bcrypt from 'bcryptjs';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -225,7 +225,7 @@ async function main() {
         const l = await prisma.listing.create({ data: {
           slug: slugify(title), title, description, price: p, priceNegotiable: p == null || n % 6 === 0, condition: cond, offerType: cat.slug === 'reality' && (attrs.offerType === 'Pronájem') ? 'RENT' : 'SELL',
           categoryId: sub.id, userId: user.id, city: city.name, region: city.region, zip: city.zip, lat: city.lat + ((n % 7) - 3) * 0.01, lng: city.lng + ((n % 5) - 2) * 0.01,
-          attributes: attrs as Prisma.InputJsonValue, status: 'ACTIVE', createdAt: created, publishedAt: created, expiresAt: new Date(created.getTime() + 30 * 864e5),
+          attributes: attrs as Prisma.InputJsonValue, searchText: buildSearchText({ title, description, attributes: attrs, city: city.name }), status: 'ACTIVE', createdAt: created, publishedAt: created, expiresAt: new Date(created.getTime() + 30 * 864e5),
           views: (n * 37) % 900, topUntil: n % 11 === 0 ? new Date(Date.now() + 5 * 864e5) : null, highlightedUntil: n % 7 === 0 ? new Date(Date.now() + 5 * 864e5) : null,
         } });
         const imgs = 2 + (n % 3);

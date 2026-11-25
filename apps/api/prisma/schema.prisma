@@ -160,6 +160,9 @@ model Listing {
   topUntil         DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
+  /// Normalizovaný text pro hledání (malá písmena bez diakritiky: název + popis + parametry + město),
+  /// udržuje aplikace (buildSearchText v @dej/shared); GIN trigram index pro hledání v PostgreSQL
+  searchText       String        @default("")
 
   images        ListingImage[]
   favorites     Favorite[]
@@ -168,6 +171,9 @@ model Listing {
   @@index([status, categoryId])
   @@index([userId, status])
   @@index([expiresAt])
+  @@index([status, publishedAt])
+  @@index([lat, lng])
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 model ListingImage {
@@ -193,6 +199,7 @@ model Favorite {
   createdAt DateTime @default(now())
 
   @@id([userId, listingId])
+  @@index([listingId])
 }
 
 model FollowSeller {
@@ -215,6 +222,8 @@ model SavedSearch {
   notify         Boolean   @default(true)
   lastCheckedAt  DateTime  @default(now())
   createdAt      DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Conversation {
