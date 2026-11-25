@@ -120,6 +120,8 @@ model Category {
   active         Boolean    @default(true)
   seoTitle       String?
   seoDescription String?
+  /// Úvodní (SEO) text kategorie zobrazený na její stránce
+  intro          String?
   listings       Listing[]
 
   @@unique([parentId, slug])
@@ -344,10 +346,18 @@ model AuditLog {
 
 /// Informační stránky (Podmínky, GDPR, Nápověda…) – editovatelné v administraci
 model Page {
-  slug      String   @id
-  title     String
-  content   String
-  updatedAt DateTime @updatedAt
+  slug          String    @id
+  title         String
+  content       String
+  updatedAt     DateTime  @updatedAt
+  /// Meta popis pro vyhledávače
+  description   String?
+  /// Účinnost znění (u právních dokumentů)
+  effectiveFrom DateTime?
+  /// Datum kontroly právníkem (prázdné = text je jen návrh)
+  reviewedAt    DateTime?
+  /// Otisk obsahu vloženého seedem – seed smí text aktualizovat jen dokud ho nikdo neupravil
+  seededHash    String?
 }
 
 /// Ceník placených služeb (topování, zvýraznění…) – nastavitelný v administraci (fáze 2: platby)
@@ -358,4 +368,67 @@ model PriceItem {
   priceCzk     Int
   durationDays Int?
   active       Boolean @default(true)
+}
+
+/// Přesměrování starých adres (změněné slugy kategorií, staré URL) – spravuje se v administraci
+model Redirect {
+  from      String   @id
+  to        String
+  code      Int      @default(308)
+  hits      Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+enum NoticeStatus {
+  RECEIVED
+  ACTION_TAKEN
+  NO_ACTION
+}
+
+/// Oznámení nezákonného obsahu podle čl. 16 nařízení (EU) 2022/2065 (DSA) – lze podat i bez účtu
+model IllegalContentNotice {
+  id             String        @id @default(cuid())
+  /// Číslo oznámení pro oznamovatele (potvrzení o přijetí)
+  ref            String        @unique
+  category       String
+  targetUrl      String
+  targetType     ReportTarget?
+  targetId       String?
+  explanation    String
+  reporterName   String?
+  reporterEmail  String?
+  reporterUserId String?
+  goodFaith      Boolean
+  status         NoticeStatus  @default(RECEIVED)
+  /// Přijaté opatření (none | reject | delete) a odůvodnění rozhodnutí (čl. 17 DSA)
+  action         String?
+  decisionReason String?
+  decidedById    String?
+  decidedAt      DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@index([status, createdAt])
+}
+
+enum AppealStatus {
+  OPEN
+  UPHELD
+  REJECTED
+}
+
+/// Stížnost uživatele proti rozhodnutí moderace (vnitřní systém vyřizování stížností, čl. 20 DSA)
+model ModerationAppeal {
+  id             String       @id @default(cuid())
+  ref            String       @unique
+  listingId      String
+  userId         String
+  text           String
+  status         AppealStatus @default(OPEN)
+  decisionReason String?
+  decidedById    String?
+  decidedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([status, createdAt])
+  @@index([listingId])
 }
