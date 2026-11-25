@@ -22,7 +22,11 @@ const load = (id: string) => api<Profile>(`/users/${id}`).catch(() => notFound()
 
 const MONTHS_GEN = ['ledna', 'února', 'března', 'dubna', 'května', 'června', 'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
 /** „listopadu 2026“ – měsíc ve 2. pádě pro větu „Na Dejinzeratu od …“ */
-const since = (iso: string) => { const d = new Date(iso); return `${MONTHS_GEN[d.getMonth()]} ${d.getFullYear()}`; };
+const since = (iso: string) => {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Prague', month: 'numeric', year: 'numeric' }).formatToParts(new Date(iso));
+  const get = (t: string) => Number(parts.find((x) => x.type === t)?.value);
+  return `${MONTHS_GEN[get('month') - 1]} ${get('year')}`;
+};
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const p = await load((await params).id);

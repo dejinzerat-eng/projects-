@@ -23,7 +23,8 @@ export function SellerSettings({ refreshKey }: { refreshKey?: unknown }) {
 
   async function act(fn: () => Promise<unknown>, ok: string) {
     setBusy(true);
-    try { await fn(); toast(ok); await load(); router.refresh(); } catch (e) { toast((e as Error).message, 'error'); }
+    try { await fn(); toast(ok); router.refresh(); } catch (e) { toast((e as Error).message, 'error'); }
+    await load();
     setBusy(false);
   }
   if (!d) return null;
@@ -35,8 +36,8 @@ export function SellerSettings({ refreshKey }: { refreshKey?: unknown }) {
       <p className="mt-1 text-sm text-muted">E-mail nikdy nezveřejňujeme. Kupující vám mohou vždy napsat přes zprávy.</p>
       <div className="mt-5 space-y-4">
         <label className={`flex items-start gap-3 ${d.phoneVerified ? '' : 'opacity-60'}`}>
-          <input type="checkbox" className="mt-0.5 size-5 shrink-0 accent-[var(--brand)]" checked={d.showPhone} disabled={!d.phoneVerified || busy}
-            onChange={(e) => { const v = e.target.checked; void act(() => call('/me/phone-visibility', 'PATCH', { showPhone: v }), v ? 'Telefon se u inzerátů zobrazí' : 'Telefon je skrytý'); }} />
+          <input type="checkbox" className="mt-0.5 size-5 shrink-0 accent-[var(--brand)]" checked={d.showPhone && d.phoneVerified} disabled={!d.phoneVerified || busy}
+            onChange={(e) => { const v = e.target.checked; setD({ ...d, showPhone: v }); void act(() => call('/me/phone-visibility', 'PATCH', { showPhone: v }), v ? 'Telefon se u inzerátů zobrazí' : 'Telefon je skrytý'); }} />
           <span>
             <span className="font-semibold">Zobrazovat telefon u mých inzerátů</span>
             <span className="mt-0.5 block text-sm text-muted">
@@ -64,7 +65,7 @@ export function SellerSettings({ refreshKey }: { refreshKey?: unknown }) {
             )}
             {c.status === 'unverified' && (
               <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
-                <p className="flex-1 text-muted">IČO {c.ico} zatím není ověřené – registr ARES při uložení neodpověděl. Do ověření se odznak firmy nezobrazí.</p>
+                <p className="flex-1 text-muted">IČO {c.ico} zatím není ověřené v registru ARES (registr možná dočasně neodpovídal). Do ověření se odznak firmy nezobrazí.</p>
                 <button type="button" disabled={busy} onClick={() => void act(() => call('/me/company/verify', 'POST'), 'Firma ověřena v ARES')} className="btn btn-outline btn-sm">Ověřit znovu</button>
               </div>
             )}

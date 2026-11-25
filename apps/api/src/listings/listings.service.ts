@@ -8,7 +8,7 @@ import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { LISTING_INCLUDE, SearchService } from '../search/search.service';
 import { assessListing } from './moderation';
-import { canRevealPhone, sellerSharesPhone } from '../users/phone-privacy';
+import { canRevealPhone } from '../users/phone-privacy';
 
 export const ListingDto = z.object({
   title: z.string().trim().min(5, 'Název musí mít alespoň 5 znaků.').max(90, 'Název může mít nejvýše 90 znaků.'),
@@ -143,7 +143,7 @@ export class ListingsService {
       where: { id },
       include: {
         images: { orderBy: { position: 'asc' } }, category: { include: { parent: true } },
-        user: { select: { id: true, name: true, avatarUrl: true, city: true, createdAt: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, lastSeenAt: true, phone: true, showPhone: true } },
+        user: { select: { id: true, name: true, avatarUrl: true, city: true, createdAt: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, companyVerifiedAt: true, lastSeenAt: true, phone: true, showPhone: true } },
       },
     });
     const isOwner = viewer && (viewer.id === l?.userId || viewer.role !== 'USER');
@@ -157,10 +157,10 @@ export class ListingsService {
       this.prisma.favorite.count({ where: { listingId: id } }),
       viewer ? this.prisma.favorite.findUnique({ where: { userId_listingId: { userId: viewer.id, listingId: id } } }).then(Boolean) : false,
     ]);
-    const { phone, showPhone, ...seller } = l.user;
+    const { phone, showPhone, companyVerifiedAt, ...seller } = l.user;
     return {
       ...l, user: undefined,
-      seller: { ...seller, phoneVerified: !!l.user.phoneVerifiedAt, emailVerified: !!l.user.emailVerifiedAt, phoneVerifiedAt: undefined, emailVerifiedAt: undefined, rating: rating._avg.rating, reviewCount: rating._count, activeListings: activeCount, hasPhone: sellerSharesPhone({ phone, phoneVerifiedAt: l.user.phoneVerifiedAt, showPhone }) },
+      seller: { ...seller, companyName: companyVerifiedAt ? seller.companyName : null, phoneVerified: !!l.user.phoneVerifiedAt, emailVerified: !!l.user.emailVerifiedAt, phoneVerifiedAt: undefined, emailVerifiedAt: undefined, rating: rating._avg.rating, reviewCount: rating._count, activeListings: activeCount, hasPhone: canRevealPhone(l.status, { phone, phoneVerifiedAt: l.user.phoneVerifiedAt, showPhone }, false) },
       favorites: favCount, isFavorite, isOwner: !!isOwner, filters: filtersFor(l.category.parent?.slug ?? l.category.slug, l.category.slug),
     };
   }

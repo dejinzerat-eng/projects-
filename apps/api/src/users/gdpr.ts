@@ -48,6 +48,11 @@ export async function buildExport(db: Db, userId: string, now = new Date()) {
     db.verificationToken.findMany({ where: { userId }, select: { type: true, createdAt: true, expiresAt: true, usedAt: true }, orderBy: { createdAt: 'desc' } }),
     db.auditLog.findMany({ where: { actorId: userId }, select: { action: true, targetType: true, targetId: true, meta: true, createdAt: true }, orderBy: { createdAt: 'asc' } }),
   ]);
+  // Zásahy administrátorů do účtu a inzerátů uživatele (bez identity administrátora)
+  const auditAbout = await db.auditLog.findMany({
+    where: { OR: [{ targetType: 'user', targetId: userId }, { targetType: 'listing', targetId: { in: listings.map((l) => l.id) } }] },
+    select: { action: true, targetType: true, targetId: true, meta: true, createdAt: true }, orderBy: { createdAt: 'asc' },
+  });
   const { passwordHash, googleId, appleId, isBusiness, companyName, companyId, companyAddress, vatId, companyVerifiedAt, showPhone, ...account } = u;
   const signup = passwordHash ? 'registrace e-mailem a heslem' : googleId ? 'přihlášení přes Google' : appleId ? 'přihlášení přes Apple' : 'neznámý';
 
@@ -83,6 +88,7 @@ export async function buildExport(db: Db, userId: string, now = new Date()) {
     sessions,
     verificationCodes: codes,
     adminActions: audit,
+    moderationOfYourAccount: auditAbout,
   });
 }
 

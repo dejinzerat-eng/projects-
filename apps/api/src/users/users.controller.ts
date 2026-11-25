@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Header, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { Throttle } from '@nestjs/throttler';
 import { CITIES, findCity } from '@dej/shared';
 import { z } from 'zod';
 import { Auth, AuthUser, CurrentUser } from '../common/auth.guard';
@@ -80,21 +81,27 @@ export class UsersController {
     return this.historyPage(id, q.page);
   }
 
+  /** IČO smí mít ověřené jen jeden účet */
+  private icoTaken(userId: string) {
+    return async (ico: string) => !!(await this.prisma.user.findFirst({ where: { companyId: ico, companyVerifiedAt: { not: null }, status: 'ACTIVE', id: { not: userId } }, select: { id: true } }));
+  }
+
   private async historyPage(userId: string, page: number) {
     const where = { userId, status: { in: [...HISTORY_STATUSES] } } satisfies Prisma.ListingWhereInput;
     const [total, rows] = await Promise.all([
       this.prisma.listing.count({ where }),
-      this.prisma.listing.findMany({ where, include: LISTING_INCLUDE, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * HISTORY_PAGE, take: HISTORY_PAGE }),
+      this.prisma.listing.findMany({ where, include: LISTING_INCLUDE, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * HISTORY_PAGE, take: HISTORY_PAGE }),
     ]);
     return { items: rows.map((l) => this.search.toCard(l)), page, pages: Math.max(1, Math.ceil(total / HISTORY_PAGE)), total };
   }
 
   @Auth()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } }) // každé uložení s IČO může volat ARES
   @Patch('me')
   async updateMe(@CurrentUser() u: AuthUser, @Body(new ZodPipe(ProfileDto)) dto: z.infer<typeof ProfileDto>) {
     const cur = await this.prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { isBusiness: true, companyId: true, companyName: true, companyVerifiedAt: true } });
     const { isBusiness, companyName, companyId, ...rest } = dto;
-    const company = await resolveCompany(cur, { isBusiness, companyName, companyId });
+    const company = await resolveCompany(cur, { isBusiness, companyName, companyId }, undefined, undefined, this.icoTaken(u.id));
     const city = dto.city ? findCity(dto.city) : undefined;
     await this.prisma.user.update({ where: { id: u.id }, data: { ...rest, ...company.data, city: city?.name ?? dto.city, region: city?.region } });
     await this.auth.flushUser(u.id);
@@ -135,11 +142,12 @@ export class UsersController {
 
   /** Opakované ověření IČO v ARES (např. když registr při uložení neodpovídal) */
   @Auth()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('me/company/verify')
   async verifyCompany(@CurrentUser() u: AuthUser) {
     const cur = await this.prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { isBusiness: true, companyId: true, companyName: true, companyVerifiedAt: true } });
     if (!cur.isBusiness || !cur.companyId) throw new BadRequestException('Nejdřív v profilu vyplňte IČO.');
-    const company = await resolveCompany({ ...cur, companyVerifiedAt: null }, { companyId: cur.companyId });
+    const company = await resolveCompany({ ...cur, companyVerifiedAt: null }, { companyId: cur.companyId }, undefined, undefined, this.icoTaken(u.id));
     await this.prisma.user.update({ where: { id: u.id }, data: company.data });
     if (company.status !== 'verified') throw new BadRequestException('Registr ARES teď neodpovídá. Zkuste to prosím později.');
     return { ok: true, company: company.status };

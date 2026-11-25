@@ -29,6 +29,7 @@ describe('GDPR export', () => {
     assert.deepEqual(out.conversations[0].messages.map((m) => m.direction), ['odeslaná', 'přijatá']);
     assert.deepEqual(out.messageCounts, { sent: 1, received: 1 });
     assert.equal(out.followersCount, 3);
+    assert.deepEqual(out.moderationOfYourAccount, []);
   });
 
   it('retence maže jen staré záznamy', async () => {

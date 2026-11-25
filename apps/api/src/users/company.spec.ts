@@ -44,6 +44,11 @@ describe('resolveCompany', () => {
     assert.equal(r.data.companyId, '26168685');
     assert.equal(r.data.companyVerifiedAt, null);
   });
+  it('IČO ověřené u jiného účtu nejde převzít', async () => {
+    const a = ares(found);
+    await assert.rejects(resolveCompany(none, { isBusiness: true, companyId: '27082440' }, a.fn, now, async (ico) => ico === '27082440'), /jiný účet/);
+    assert.equal(a.calls.length, 0);
+  });
   it('soukromá osoba firemní údaje nemá', async () => {
     const r = await resolveCompany({ isBusiness: true, companyId: '27082440', companyName: 'X', companyVerifiedAt: now }, { isBusiness: false }, ares(found).fn);
     assert.equal(r.status, 'none');

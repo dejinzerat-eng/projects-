@@ -16,7 +16,11 @@ const CLEARED = { companyAddress: null, vatId: null, companyVerifiedAt: null };
  * a dotazem do ARES; obchodní jméno a sídlo se pak berou z ARES. Když ARES neodpoví, účet zůstane
  * firemní, ale neověřený (bez odznaku a bodů do skóre).
  */
-export async function resolveCompany(cur: CompanyState, dto: CompanyInput, lookup: (ico: string) => Promise<AresResult> = lookupAres, now = new Date()): Promise<CompanyUpdate> {
+export async function resolveCompany(
+  cur: CompanyState, dto: CompanyInput, lookup: (ico: string) => Promise<AresResult> = lookupAres, now = new Date(),
+  /** Má toto IČO už ověřené jiný účet? (jedno ověřené IČO = jeden účet, ochrana před vydáváním se za cizí firmu) */
+  isTaken: (ico: string) => Promise<boolean> = async () => false,
+): Promise<CompanyUpdate> {
   const isBusiness = dto.isBusiness ?? cur.isBusiness;
   if (!isBusiness) return { data: { isBusiness: false, companyId: null, companyName: null, ...CLEARED }, status: 'none' };
   const ico = dto.companyId === undefined ? cur.companyId : dto.companyId ? normalizeIco(dto.companyId) : null;
@@ -24,6 +28,8 @@ export async function resolveCompany(cur: CompanyState, dto: CompanyInput, looku
   if (!ico) return { data: { isBusiness: true, companyId: null, companyName: typedName, ...CLEARED }, status: 'none' };
   if (!isValidIco(ico)) throw new BadRequestException({ message: 'Neplatné IČO – nesedí kontrolní číslice. Zkontrolujte ho prosím.', field: 'companyId' });
   if (ico === cur.companyId && cur.companyVerifiedAt) return { data: { isBusiness: true }, status: 'verified' };
+
+  if (await isTaken(ico)) throw new BadRequestException({ message: `IČO ${ico} už má ověřené jiný účet. Pokud jde o vaši firmu, kontaktujte prosím podporu Dejinzerat.cz.`, field: 'companyId' });
 
   const r = await lookup(ico);
   if (r.status === 'found') return { data: { isBusiness: true, companyId: ico, companyName: r.name, companyAddress: r.address, vatId: r.vatId, companyVerifiedAt: now }, status: 'verified' };
