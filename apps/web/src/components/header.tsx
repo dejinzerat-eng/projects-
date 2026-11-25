@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Heart, MessageCircle, Plus, Shield, User } from 'lucide-react';
 import type { Me } from '@/lib/api';
 import { Logo } from './logo';
-import { SearchBox } from './search-box';
+import { HeaderSearch } from './header-search';
 import { UserMenu } from './user-menu';
 
 export function Header({ me }: { me: Me | null }) {
@@ -10,7 +10,7 @@ export function Header({ me }: { me: Me | null }) {
     <header className="sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
       <div className="container-x flex h-16 items-center gap-3 md:gap-6">
         <Logo />
-        <div className="hidden flex-1 md:block max-w-[640px]"><SearchBox /></div>
+        <HeaderSearch />
         <nav className="ml-auto flex items-center gap-1" aria-label="Hlavní">
           {me && me.role !== 'USER' && <Link href="/admin" className="btn btn-ghost btn-sm hidden lg:inline-flex"><Shield className="size-4" />Administrace</Link>}
           <Link href="/muj-ucet/oblibene" className="btn btn-ghost btn-sm hidden md:inline-flex" aria-label="Oblíbené"><Heart className="size-[18px]" /></Link>
@@ -22,7 +22,7 @@ export function Header({ me }: { me: Me | null }) {
           <Link href="/pridat" className="btn btn-primary btn-sm ml-1 hidden sm:inline-flex"><Plus className="size-4" strokeWidth={2.5} />Přidat inzerát</Link>
         </nav>
       </div>
-      <div className="container-x pb-3 md:hidden"><SearchBox /></div>
+      <HeaderSearch mobile />
     </header>
   );
 }
