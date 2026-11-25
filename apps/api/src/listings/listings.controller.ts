@@ -1,13 +1,18 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, PipeTransform, Post, Query, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { fromSearchString, parseNaturalQuery } from '@dej/shared';
+import { effectiveFilters, fromSearchString, parseNaturalQuery } from '@dej/shared';
 import type { Request } from 'express';
 import { z } from 'zod';
 import { Auth, AuthUser, CurrentUser } from '../common/auth.guard';
 import { PrismaService } from '../common/prisma.service';
 import { ZodPipe } from '../common/zod';
 import { SearchService } from '../search/search.service';
-import { ListingDto, ListingInput, ListingsService } from './listings.service';
+import { ListingInput, ListingsService, parseListingBody } from './listings.service';
+
+/** Koncept (publish: false) se ověřuje mírněji než zveřejnění. */
+class ListingBodyPipe implements PipeTransform {
+  transform(value: unknown) { return parseListingBody(value); }
+}
 
 @Controller()
 export class ListingsController {
@@ -19,7 +24,8 @@ export class ListingsController {
     const counts = await this.prisma.listing.groupBy({ by: ['categoryId'], where: { status: 'ACTIVE' }, _count: true });
     const cnt = new Map(counts.map((c) => [c.categoryId, c._count]));
     return all.filter((c) => !c.parentId).map((c) => {
-      const children = all.filter((s) => s.parentId === c.id).map((s) => ({ id: s.id, slug: s.slug, name: s.name, filters: s.filters, count: cnt.get(s.id) ?? 0, seoTitle: s.seoTitle, seoDescription: s.seoDescription }));
+      // `fields` = výsledné parametry podkategorie (rodič + vlastní), podle nich se vyplňuje a ověřuje inzerát
+      const children = all.filter((s) => s.parentId === c.id).map((s) => ({ id: s.id, slug: s.slug, name: s.name, filters: s.filters, fields: effectiveFilters(c.slug, c.filters, s.slug, s.filters), count: cnt.get(s.id) ?? 0, seoTitle: s.seoTitle, seoDescription: s.seoDescription }));
       return { id: c.id, slug: c.slug, name: c.name, icon: c.icon, filters: c.filters, seoTitle: c.seoTitle, seoDescription: c.seoDescription, count: children.reduce((a, s) => a + s.count, 0), children };
     });
   }
@@ -61,7 +67,7 @@ export class ListingsController {
   @Auth()
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('listings')
-  create(@CurrentUser() u: AuthUser, @Body(new ZodPipe(ListingDto)) dto: ListingInput) { return this.listings.create(u, dto); }
+  create(@CurrentUser() u: AuthUser, @Body(new ListingBodyPipe()) dto: ListingInput) { return this.listings.create(u, dto); }
 
   @Auth()
   @Get('listings/suggest-category')
@@ -87,7 +93,7 @@ export class ListingsController {
 
   @Auth()
   @Patch('listings/:id')
-  update(@Param('id') id: string, @CurrentUser() u: AuthUser, @Body(new ZodPipe(ListingDto)) dto: ListingInput) { return this.listings.update(id, u, dto); }
+  update(@Param('id') id: string, @CurrentUser() u: AuthUser, @Body(new ListingBodyPipe()) dto: ListingInput) { return this.listings.update(id, u, dto); }
 
   @Auth()
   @Post('listings/:id/status')

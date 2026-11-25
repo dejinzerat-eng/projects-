@@ -2,6 +2,7 @@ import { Body, Controller, Get, NotFoundException, Param, Patch, Post, Put, Quer
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AuthUser, CurrentUser, Roles } from '../common/auth.guard';
+import { config } from '../common/config';
 import { PrismaService } from '../common/prisma.service';
 import { ZodPipe } from '../common/zod';
 import { AuthService } from '../auth/auth.service';
@@ -38,7 +39,20 @@ export class AdminController {
       byCategory: byCat.map((c) => ({ name: c.name, count: Number(c.n) })),
       daily: daily.map((d) => ({ date: d.d.toISOString().slice(0, 10), listings: Number(d.listings), users: Number(d.users) })),
       searchEngine: this.search.usingMeili ? 'Meilisearch' : 'PostgreSQL (záložní)',
+      composeTime: await this.composeTime(month),
     };
+  }
+
+  /** Doba vložení inzerátu (od otevření průvodce po zveřejnění) za posledních 30 dní – cíl je do 60 s. */
+  private async composeTime(since: Date) {
+    const [r] = await this.prisma.$queryRaw<{ n: bigint; median: number | null; p90: number | null; under60: bigint }[]>`
+      SELECT COUNT(*)::bigint AS n,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY "composeSeconds")::float AS median,
+        percentile_cont(0.9) WITHIN GROUP (ORDER BY "composeSeconds")::float AS p90,
+        COUNT(*) FILTER (WHERE "composeSeconds" <= 60)::bigint AS under60
+      FROM "Listing" WHERE "composeSeconds" IS NOT NULL AND "createdAt" >= ${since}`;
+    const n = Number(r?.n ?? 0);
+    return { count: n, median: r?.median != null ? Math.round(r.median) : null, p90: r?.p90 != null ? Math.round(r.p90) : null, under60Share: n ? Number(r.under60) / n : null };
   }
 
   @Roles('MODERATOR')
@@ -49,7 +63,7 @@ export class AdminController {
       include: { ...LISTING_INCLUDE, user: { select: { id: true, name: true, email: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true } } },
       orderBy: [{ spamScore: 'desc' }, { createdAt: 'desc' }], take: 100,
     });
-    return rows.map((l) => ({ ...this.search.toCard(l), spamScore: l.spamScore, userEmail: l.user.email, userName: l.user.name, userId: l.userId, description: l.description.slice(0, 400), rejectReason: l.rejectReason }));
+    return rows.map((l) => ({ ...this.search.toCard(l), spamScore: l.spamScore, userEmail: l.user.email, userName: l.user.name, userId: l.userId, description: l.description.slice(0, 400), rejectReason: l.rejectReason, riskReasons: l.riskReasons }));
   }
 
   @Roles('MODERATOR')
@@ -58,7 +72,9 @@ export class AdminController {
     const l = await this.prisma.listing.findUnique({ where: { id } });
     if (!l) throw new NotFoundException();
     const status = dto.action === 'approve' ? 'ACTIVE' : dto.action === 'reject' ? 'REJECTED' : 'DELETED';
-    await this.prisma.listing.update({ where: { id }, data: { status, rejectReason: dto.action === 'approve' ? null : dto.reason, publishedAt: status === 'ACTIVE' ? (l.publishedAt ?? new Date()) : l.publishedAt } });
+    // Platnost běží od schválení, ne od vložení (inzerát mohl čekat na kontrolu)
+    const freshExpiry = status === 'ACTIVE' && (!l.publishedAt || !l.expiresAt || l.expiresAt < new Date()) ? { expiresAt: new Date(Date.now() + config.listingDays * 864e5), expiryNotifiedAt: null } : {};
+    await this.prisma.listing.update({ where: { id }, data: { status, rejectReason: dto.action === 'approve' ? null : dto.reason, publishedAt: status === 'ACTIVE' ? (l.publishedAt ?? new Date()) : l.publishedAt, ...freshExpiry } });
     await this.prisma.notification.create({ data: { userId: l.userId, type: 'moderation', title: dto.action === 'approve' ? `Inzerát „${l.title}“ byl schválen` : `Inzerát „${l.title}“ byl zamítnut`, body: dto.reason, link: '/muj-ucet/inzeraty' } });
     await this.audit(u, `listing.${dto.action}`, 'listing', id, { reason: dto.reason });
     await this.search.index(id);
