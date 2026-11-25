@@ -4,6 +4,7 @@ import { BadgeCheck, Building2, Check, MapPin, Star, X } from 'lucide-react';
 import { Avatar } from '@/components/avatar';
 import { FollowButton } from '@/components/follow-button';
 import { ListingGrid } from '@/components/listing-card';
+import { MessageUserButton } from '@/components/messages/message-user-button';
 import { ReportButton } from '@/components/report-button';
 import { api } from '@/lib/api';
 import { ago, plural } from '@/lib/format';
@@ -39,6 +40,7 @@ export default async function Page({ params }: Props) {
               <div className="rounded-xl bg-surface-2 p-2.5"><dt className="text-xs text-muted">Prodáno</dt><dd className="font-bold">{p.soldCount}</dd></div>
               <div className="rounded-xl bg-surface-2 p-2.5"><dt className="text-xs text-muted">Sledující</dt><dd className="font-bold">{p.followers}</dd></div>
             </dl>
+            <div className="mt-5"><MessageUserButton userId={p.id} name={name} /></div>
             <div className="mt-5 flex items-center justify-between gap-2"><FollowButton id={p.id} initial={p.isFollowing} /><ReportButton targetType="USER" targetId={p.id} label="Nahlásit" /></div>
             {p.lastSeenAt && <p className="mt-3 text-xs text-muted">Naposledy aktivní {ago(p.lastSeenAt)}</p>}
           </div>
