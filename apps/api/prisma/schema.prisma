@@ -86,6 +86,12 @@ model User {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
   lastSeenAt      DateTime?
+  /// Telefon se u inzerátů ukáže jen s výslovným souhlasem (a jen ověřený)
+  showPhone         Boolean   @default(false)
+  /// Firma ověřená v registru ARES (obchodní jméno a sídlo z ARES)
+  companyVerifiedAt DateTime?
+  companyAddress    String?
+  vatId             String? // DIČ
 
   listings        Listing[]
   favorites       Favorite[]

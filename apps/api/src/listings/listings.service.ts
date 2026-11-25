@@ -8,6 +8,7 @@ import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { LISTING_INCLUDE, SearchService } from '../search/search.service';
 import { assessListing } from './moderation';
+import { canRevealPhone, sellerSharesPhone } from '../users/phone-privacy';
 
 export const ListingDto = z.object({
   title: z.string().trim().min(5, 'Název musí mít alespoň 5 znaků.').max(90, 'Název může mít nejvýše 90 znaků.'),
@@ -142,7 +143,7 @@ export class ListingsService {
       where: { id },
       include: {
         images: { orderBy: { position: 'asc' } }, category: { include: { parent: true } },
-        user: { select: { id: true, name: true, avatarUrl: true, city: true, createdAt: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, lastSeenAt: true, phone: true } },
+        user: { select: { id: true, name: true, avatarUrl: true, city: true, createdAt: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, lastSeenAt: true, phone: true, showPhone: true } },
       },
     });
     const isOwner = viewer && (viewer.id === l?.userId || viewer.role !== 'USER');
@@ -156,17 +157,18 @@ export class ListingsService {
       this.prisma.favorite.count({ where: { listingId: id } }),
       viewer ? this.prisma.favorite.findUnique({ where: { userId_listingId: { userId: viewer.id, listingId: id } } }).then(Boolean) : false,
     ]);
-    const { phone, ...seller } = l.user;
+    const { phone, showPhone, ...seller } = l.user;
     return {
       ...l, user: undefined,
-      seller: { ...seller, phoneVerified: !!l.user.phoneVerifiedAt, emailVerified: !!l.user.emailVerifiedAt, phoneVerifiedAt: undefined, emailVerifiedAt: undefined, rating: rating._avg.rating, reviewCount: rating._count, activeListings: activeCount, hasPhone: !!phone },
+      seller: { ...seller, phoneVerified: !!l.user.phoneVerifiedAt, emailVerified: !!l.user.emailVerifiedAt, phoneVerifiedAt: undefined, emailVerifiedAt: undefined, rating: rating._avg.rating, reviewCount: rating._count, activeListings: activeCount, hasPhone: sellerSharesPhone({ phone, phoneVerifiedAt: l.user.phoneVerifiedAt, showPhone }) },
       favorites: favCount, isFavorite, isOwner: !!isOwner, filters: filtersFor(l.category.parent?.slug ?? l.category.slug, l.category.slug),
     };
   }
 
   async revealPhone(id: string, viewer: AuthUser) {
-    const l = await this.prisma.listing.findUnique({ where: { id }, include: { user: { select: { phone: true, phoneVerifiedAt: true } } } });
-    if (!l?.user.phone) throw new NotFoundException('Prodejce telefon nezveřejnil.');
+    const l = await this.prisma.listing.findUnique({ where: { id }, include: { user: { select: { phone: true, phoneVerifiedAt: true, showPhone: true, status: true } } } });
+    const blocked = !!l && l.userId !== viewer.id && (await this.prisma.block.count({ where: { OR: [{ blockerId: l.userId, blockedId: viewer.id }, { blockerId: viewer.id, blockedId: l.userId }] } })) > 0;
+    if (!l?.user.phone || !canRevealPhone(l.status, l.user, blocked)) throw new NotFoundException('Prodejce telefon nezveřejnil.');
     if ((await this.redis.incr(`phone:${viewer.id}`, 86400)) > 50) throw new BadRequestException('Denní limit zobrazení telefonu vyčerpán.');
     return { phone: l.user.phone };
   }
