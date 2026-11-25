@@ -141,6 +141,9 @@ describe('obce ČR', () => {
     assert.deepEqual([unknown.region, unknown.lat, unknown.matched], ['', null, 'none']);
     const byZip = resolveLocation('Chodov u Prahy', '14800');
     assert.deepEqual([byZip.city, byZip.region, byZip.matched], ['Chodov u Prahy', 'PHA', 'zip']);
+    // stejné jméno obce jinde v republice – rozhodne PSČ
+    assert.equal(resolveLocation('Chodov', '148 00').region, 'PHA');
+    assert.equal(resolveLocation('Chodov', '357 35').region, 'KVK');
   });
 
   it('našeptávač podle začátku názvu, slova i PSČ', () => {

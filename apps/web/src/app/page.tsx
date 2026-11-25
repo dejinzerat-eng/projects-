@@ -1,32 +1,26 @@
 import Link from 'next/link';
-import { ArrowRight, Plus } from 'lucide-react';
+import { Plus, Zap } from 'lucide-react';
+import { HomeSection as Section } from '@/components/home-section';
 import { CategoryTile } from '@/components/icons';
 import { ListingGrid } from '@/components/listing-card';
+import { NearbyListings } from '@/components/nearby-listings';
+import { RecommendedListings } from '@/components/recommended-listings';
 import { SearchBox } from '@/components/search-box';
 import { api, getMe } from '@/lib/api';
+import { getFavoriteIds } from '@/lib/favorites';
 import type { Category, ListingCard } from '@/lib/types';
 
 const POPULAR = ['iPhone 15', 'Byt 2+kk Praha', 'Kočárek', 'Horské kolo do 15 000 Kč', 'Škoda Octavia'];
 
-function Section({ id, title, href, children }: { id: string; title: string; href?: string; children: React.ReactNode }) {
-  return (
-    <section className="container-x pt-12 sm:pt-16" aria-labelledby={id}>
-      <div className="mb-5 flex items-baseline justify-between gap-4">
-        <h2 id={id} className="text-xl font-bold tracking-tight sm:text-2xl">{title}</h2>
-        {href && <Link href={href} className="inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-ink">Zobrazit vše<ArrowRight className="size-4" /></Link>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 export default async function Home({ searchParams }: { searchParams: Promise<{ ikony?: string }> }) {
   const variant = (await searchParams).ikony === 'b' ? 'solid' : 'soft';
-  const [cats, featured, latest, me] = await Promise.all([
+  const [cats, premium, featured, latest, me, favorites] = await Promise.all([
     api<Category[]>('/categories', { revalidate: 60, auth: false }).catch(() => [] as Category[]),
+    api<ListingCard[]>('/search/premium?limit=8', { auth: false }).catch(() => [] as ListingCard[]),
     api<ListingCard[]>('/listings/featured?limit=8', { auth: false }).catch(() => [] as ListingCard[]),
     api<ListingCard[]>('/listings/latest?limit=12', { auth: false }).catch(() => [] as ListingCard[]),
     getMe(),
+    getFavoriteIds(),
   ]);
   const popularCats = [...cats].sort((a, b) => b.count - a.count).slice(0, 6);
 
@@ -56,14 +50,24 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ i
         </div>
       </Section>
 
-      {featured.length > 0 && (
-        <Section id="dop" title="Doporučené nabídky" href="/hledat">
-          <ListingGrid items={featured} />
+      {premium.length > 0 && (
+        <Section id="premium" title="Prémiové a zvýrazněné nabídky" subtitle={<span className="inline-flex items-center gap-1"><Zap className="size-3.5 text-top" />Topované a zvýrazněné inzeráty</span>}>
+          <ListingGrid items={premium} favorites={favorites} />
         </Section>
       )}
 
+      {featured.length > 0 && (
+        <Section id="dop" title="Doporučené nabídky" subtitle="Čerstvé nabídky ověřených prodejců a firem" href="/hledat">
+          <ListingGrid items={featured} favorites={favorites} />
+        </Section>
+      )}
+
+      <NearbyListings profileCity={me?.city} loggedIn={!!me} />
+
+      <RecommendedListings loggedIn={!!me} />
+
       <Section id="nove" title="Nejnovější nabídky" href="/hledat?razeni=newest">
-        {latest.length ? <ListingGrid items={latest} /> : <p className="card p-8 text-center text-muted">Zatím tu nejsou žádné inzeráty. Buďte první.</p>}
+        {latest.length ? <ListingGrid items={latest} favorites={favorites} /> : <p className="card p-8 text-center text-muted">Zatím tu nejsou žádné inzeráty. Buďte první.</p>}
       </Section>
 
       {popularCats.length > 0 && (

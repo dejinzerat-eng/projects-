@@ -13,8 +13,8 @@ const SuggestQuery = z.object({
 });
 
 const NearestQuery = z.object({
-  lat: z.coerce.number().min(-90).max(90),
-  lng: z.coerce.number().min(-180).max(180),
+  lat: z.coerce.number({ error: 'Neplatná zeměpisná šířka.' }).min(-90).max(90),
+  lng: z.coerce.number({ error: 'Neplatná zeměpisná délka.' }).min(-180).max(180),
 });
 
 const slug = z.string().regex(/^[a-z0-9-]{1,60}$/);
@@ -98,7 +98,16 @@ export class DiscoveryController {
     const buckets = cats.map(([p, s]) => rows.filter((l) => l.category.slug === s && l.category.parent?.slug === p));
     const out: typeof rows = [];
     for (let i = 0; out.length < q.limit && buckets.some((b) => b.length > i); i++) for (const b of buckets) if (b[i] && out.length < q.limit) out.push(b[i]);
-    const basedOn = [...new Set(out.map((l) => l.category.name))];
+    // Málo nabídek v podkategoriích → doplníme z jejich hlavních kategorií
+    if (out.length < q.limit) {
+      const parents = [...new Set(cats.map(([p]) => p))];
+      const more = await this.prisma.listing.findMany({
+        where: { ...where, OR: parents.map((p) => ({ category: { parent: { slug: p } } })), id: { notIn: [...q.bez, ...favIds, ...out.map((l) => l.id)] } },
+        include: LISTING_INCLUDE, orderBy: [{ publishedAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }], take: q.limit - out.length,
+      });
+      out.push(...more);
+    }
+    const basedOn = [...new Set(out.map((l) => l.category.parent?.name ?? l.category.name))];
     return { hits: out.map((l) => this.search.toCard(l)), basedOn };
   }
 

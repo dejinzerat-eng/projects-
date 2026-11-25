@@ -40,6 +40,7 @@ export function ModerationList({ rows }: { rows: Row[] }) {
             <div className="flex shrink-0 gap-2 sm:flex-col">
               {r.status !== 'ACTIVE' && <button onClick={() => act(r.id, 'approve')} className="btn btn-sm bg-trust text-white">Schválit</button>}
               {r.status !== 'REJECTED' && <button onClick={() => act(r.id, 'reject')} className="btn btn-outline btn-sm">Zamítnout</button>}
+              {r.status === 'ACTIVE' && <button onClick={() => call(`/admin/listings/${r.id}/promote`, 'POST', { topDays: 7 }).then(() => toast('Topováno na 7 dní'), (e) => toast((e as Error).message, 'error'))} className="btn btn-outline btn-sm">Topovat 7 dní</button>}
               <button onClick={() => act(r.id, 'delete')} className="btn btn-danger btn-sm">Smazat</button>
             </div>
           </li>

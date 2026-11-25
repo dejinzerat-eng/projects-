@@ -125,7 +125,9 @@ export interface ResolvedLocation {
  */
 export function resolveLocation(city: string, zip?: string | null): ResolvedLocation {
   const z = cleanZip(zip) ?? null;
-  const byName = findMunicipality(city, z);
+  let byName = findMunicipality(city, z);
+  // Obec stejného jména jinde v republice než PSČ (např. „Chodov“ + 148 00 = Praha) → věříme PSČ
+  if (byName && z && byName.zip[0] !== z[0] && municipalityByZip(z)) byName = undefined;
   if (byName) return { city: byName.name, region: byName.region, zip: z ?? byName.zip, lat: byName.lat, lng: byName.lng, matched: 'name' };
   const byZip = z ? municipalityByZip(z) : undefined;
   if (byZip) return { city: city.trim(), region: byZip.region, zip: z, lat: byZip.lat, lng: byZip.lng, matched: 'zip' };

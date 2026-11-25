@@ -1,5 +1,5 @@
 'use client';
-import { CATEGORIES, CITIES, CONDITIONS, filtersFor, OFFER_TYPES } from '@dej/shared';
+import { CATEGORIES, CONDITIONS, filtersFor, OFFER_TYPES } from '@dej/shared';
 import { ArrowLeft, ArrowRight, Camera, Check, ChevronLeft, ChevronRight, ImagePlus, Lightbulb, Loader2, MapPin, Sparkles, Star, Trash2, Wand2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { shrinkImage } from '@/lib/image';
@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { call } from '@/lib/client';
 import { CONDITION_LABEL, price as fmtPrice } from '@/lib/format';
 import { CategoryIcon } from './icons';
+import { LocationFields } from './location-fields';
 import { useToast } from './toast';
 
 export interface WizardInitial {
@@ -284,16 +285,7 @@ function StepPrice({ d, up }: StepProps) {
           )}
         </div>
       )}
-      <div className="grid gap-4 sm:grid-cols-[1fr_160px]">
-        <div>
-          <label className="label" htmlFor="city">Lokalita</label>
-          <div className="relative"><MapPin className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-            <input id="city" list="cities" className="input pl-10" value={d.city} onChange={(e) => { const c = CITIES.find((x) => x.name === e.target.value); up({ city: e.target.value, zip: c && !d.zip ? c.zip : d.zip }); }} placeholder="Město nebo obec" />
-          </div>
-          <datalist id="cities">{CITIES.map((c) => <option key={c.name} value={c.name} />)}</datalist>
-        </div>
-        <div><label className="label" htmlFor="zip">PSČ</label><input id="zip" inputMode="numeric" className="input" maxLength={6} value={d.zip} onChange={(e) => up({ zip: e.target.value })} placeholder="110 00" /></div>
-      </div>
+      <LocationFields city={d.city} zip={d.zip} onChange={up} />
     </div>
   );
 }

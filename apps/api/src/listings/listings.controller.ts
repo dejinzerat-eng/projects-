@@ -46,7 +46,8 @@ export class ListingsController {
   suggest(@Query('q') q = '') { return this.search.suggest(q); }
 
   /**
-   * Doporučené: nejnovější nabídky ověřených prodejců a firem s fotkou, doplněné o další nabídky s fotkou.
+   * Doporučené: nejprohlíženější nabídky ověřených prodejců a firem s fotkou za posledních 30 dní,
+   * doplněné o další nabídky s fotkou.
    * Topované a zvýrazněné mají na hlavní stránce vlastní sekci (GET /search/premium), proto se tu neopakují.
    */
   @Get('listings/featured')
@@ -55,10 +56,11 @@ export class ListingsController {
     const now = new Date();
     const base: Prisma.ListingWhereInput = {
       status: 'ACTIVE', images: { some: {} },
-      NOT: { OR: [{ topUntil: { gt: now } }, { highlightedUntil: { gt: now } }] },
+      // (NOT s NULL hodnotami v SQL nefunguje, proto výslovně „bez data nebo vypršelo“)
+      AND: [{ OR: [{ topUntil: null }, { topUntil: { lte: now } }] }, { OR: [{ highlightedUntil: null }, { highlightedUntil: { lte: now } }] }],
     };
-    const order: Prisma.ListingOrderByWithRelationInput[] = [{ publishedAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }];
-    const trusted = await this.prisma.listing.findMany({ where: { ...base, user: { OR: [{ phoneVerifiedAt: { not: null } }, { isBusiness: true }] } }, include: LISTING_INCLUDE, orderBy: order, take: n });
+    const order: Prisma.ListingOrderByWithRelationInput[] = [{ views: 'desc' }, { publishedAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }];
+    const trusted = await this.prisma.listing.findMany({ where: { ...base, publishedAt: { gt: new Date(now.getTime() - 30 * 864e5) }, user: { OR: [{ phoneVerifiedAt: { not: null } }, { isBusiness: true }] } }, include: LISTING_INCLUDE, orderBy: order, take: n });
     const rest = trusted.length < n ? await this.prisma.listing.findMany({ where: { ...base, id: { notIn: trusted.map((l) => l.id) } }, include: LISTING_INCLUDE, orderBy: order, take: n - trusted.length }) : [];
     return [...trusted, ...rest].map((l) => this.search.toCard(l, now.getTime()));
   }
