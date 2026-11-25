@@ -20,6 +20,18 @@ cd apps/api && npx prisma migrate deploy && pnpm build && pnpm seed && cd ../..
 pnpm dev                        # web: http://localhost:3000, API: http://localhost:4000
 ```
 
+Skripty API (`dev`, `start`, `seed`, `smoke`) si samy načtou `apps/api/.env`, pokud existuje (Node 22 `--env-file-if-exists`).
+
+## Testy a kontrola na GitHubu
+
+```bash
+pnpm --filter @dej/shared build && pnpm --filter @dej/api build
+pnpm test                         # jednotkové testy (apps/api/src/**/*.spec.ts)
+pnpm --filter @dej/api smoke      # zkušební spuštění API nad databází s výchozími daty
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) spustí u každého pull requestu a pushe do `main`: instalaci, sestavení, testy, migrace a seed nad čistou databází, zkušební spuštění API, zabalení API pro Vercel a sestavení webu. Nepotřebuje žádné tajné klíče.
+
 Po seedu existují účty:
 - `admin@dejinzerat.cz` / `Admin12345` (administrátor – **v produkci změňte**, nebo nastavte `ADMIN_PASSWORD` před seedem)
 - `demo1@dejinzerat.cz` … `demo10@dejinzerat.cz` / `Heslo1234` (ukázkoví prodejci)
