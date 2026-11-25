@@ -42,3 +42,11 @@ Po prvním spuštění se v administraci (Přehled → nebo `POST /admin/reindex
 | `COOKIE_SECURE=1` | Zapnout na HTTPS |
 
 Web (`apps/web/.env.local`): `API_INTERNAL_URL`, `NEXT_PUBLIC_SITE_URL`, `NOINDEX=1` pro testovací prostředí.
+
+## Nasazení (dočasná verze)
+
+- Hosting: Vercel, tým `dejinzerat-5803`, projekt `dejinzerat` (Root Directory `apps/web`). Každý push do větve `main` se nasadí automaticky.
+- API (NestJS) běží na Vercelu uvnitř webu: `apps/web/src/pages/api/[...path].ts` načítá zabalené API z `apps/web/.api/server.js` (vytváří `pnpm --filter @dej/api vercel-build`).
+- Databáze: Supabase PostgreSQL, schéma `app`. Migrace a výchozí data se spouští při sestavení.
+- Fotky: Vercel Blob (`BLOB_READ_WRITE_TOKEN`). Hledání bez Meilisearch běží v PostgreSQL.
+- Proměnné prostředí jsou jen ve Vercelu (DATABASE_URL, DIRECT_URL, CRON_SECRET, ADMIN_PASSWORD, COOKIE_SECURE, DISABLE_JOBS, NOINDEX).
