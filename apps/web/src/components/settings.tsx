@@ -2,7 +2,7 @@
 import { BadgeCheck, Camera, Download, Laptop, Mail, Phone, Smartphone, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
-import { CITIES } from '@dej/shared';
+import { CITIES, isValidIco } from '@dej/shared';
 import type { Me } from '@/lib/api';
 import { call } from '@/lib/client';
 import { ago } from '@/lib/format';
@@ -23,6 +23,8 @@ export function Settings({ me, blocked, sessions, smsEnabled, welcome }: { me: A
   const router = useRouter(); const toast = useToast();
   const run = async (fn: () => Promise<unknown>, ok: string) => { try { await fn(); toast(ok); router.refresh(); return true; } catch (e) { toast((e as Error).message, 'error'); return false; } };
   const [p, setP] = useState({ name: me.name, bio: me.bio ?? '', city: me.city ?? '', isBusiness: me.isBusiness, companyName: me.companyName ?? '', companyId: me.companyId ?? '' });
+
+  const icoBad = p.isBusiness && p.companyId.length === 8 && !isValidIco(p.companyId);
 
   // telefon
   const [phoneEdit, setPhoneEdit] = useState(!me.phoneVerifiedAt);
@@ -75,7 +77,10 @@ export function Settings({ me, blocked, sessions, smsEnabled, welcome }: { me: A
           <label className="flex items-center gap-3 sm:col-span-2"><input type="checkbox" className="size-5 accent-[var(--brand)]" checked={p.isBusiness} onChange={(e) => setP({ ...p, isBusiness: e.target.checked })} />Prodávám jako firma / podnikatel</label>
           {p.isBusiness && <>
             <div><label className="label" htmlFor="cn">Název firmy</label><input id="cn" className="input" value={p.companyName} onChange={(e) => setP({ ...p, companyName: e.target.value })} /></div>
-            <div><label className="label" htmlFor="ci">IČO</label><input id="ci" className="input" inputMode="numeric" maxLength={8} value={p.companyId} onChange={(e) => setP({ ...p, companyId: e.target.value.replace(/\D/g, '') })} /></div>
+            <div><label className="label" htmlFor="ci">IČO</label><input id="ci" className="input" inputMode="numeric" required pattern="\d{8}" title="IČO má 8 číslic." maxLength={8} aria-invalid={icoBad || undefined} aria-describedby={icoBad ? 'ci-err' : undefined} value={p.companyId} onChange={(e) => setP({ ...p, companyId: e.target.value.replace(/\D/g, '') })} /></div>
+            {icoBad
+              ? <p id="ci-err" className="rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm text-danger sm:col-span-2">IČO {p.companyId} není platné – nesedí kontrolní číslice. Opravte ho podle výpisu v <a href="https://ares.gov.cz/ekonomicke-subjekty" target="_blank" rel="noopener noreferrer" className="font-semibold underline">registru ARES</a>, nebo zrušte volbu „Prodávám jako firma / podnikatel“ a profil uložte.</p>
+              : <p className="-mt-2 text-xs text-muted sm:col-span-2">Firemní účet musí mít IČO. Ověříme ho v registru ARES a obchodní jméno a sídlo doplníme odtud.</p>}
           </>}
           <div className="sm:col-span-2"><button className="btn btn-dark">Uložit profil</button></div>
         </form>

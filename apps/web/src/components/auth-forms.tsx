@@ -140,7 +140,7 @@ export function RegisterForm() {
   const sp = useSearchParams()!;
   const providers = useProviders();
   const { error, busy, run } = useSubmit();
-  const [f, setF] = useState({ name: '', email: '', password: '', terms: false });
+  const [f, setF] = useState({ name: '', email: '', password: '', terms: false, accountType: 'private' as 'private' | 'business', companyId: '', companyName: '' });
   const [captcha, setCaptcha] = useState('');
   const [reset, setReset] = useState(0);
   const zpet = safeBack(sp.get('zpet'));
@@ -153,11 +153,36 @@ export function RegisterForm() {
         e.preventDefault();
         run(async () => {
           if (siteKey && !captcha) throw new Error('Potvrďte prosím, že nejste robot.');
-          try { await call('/auth/register', 'POST', { ...f, ...(captcha ? { captcha } : {}) }); } catch (err) { if (siteKey) setReset((n) => n + 1); throw err; }
+          const { accountType, companyId, companyName, ...base } = f;
+          const company = accountType === 'business' ? { companyId, ...(companyName.trim() ? { companyName } : {}) } : {};
+          try { await call('/auth/register', 'POST', { ...base, accountType, ...company, ...(captcha ? { captcha } : {}) }); } catch (err) { if (siteKey) setReset((n) => n + 1); throw err; }
           location.href = zpet === '/' ? '/muj-ucet/nastaveni?vitejte=1' : zpet;
         });
       }}>
-        <div><label className="label" htmlFor="name">Jméno</label><input id="name" autoComplete="name" required className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
+        <fieldset>
+          <legend className="label">Typ účtu</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {([['private', 'Soukromá osoba'], ['business', 'Firma']] as const).map(([v, l]) => (
+              <label key={v} className="flex cursor-pointer items-center gap-3 rounded-xl border border-line p-3 has-[:checked]:border-ink">
+                <input type="radio" name="accountType" value={v} checked={f.accountType === v} onChange={() => setF({ ...f, accountType: v })} className="accent-[var(--brand)]" />{l}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        {f.accountType === 'business' && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label" htmlFor="ico">IČO</label>
+              <input id="ico" className="input" inputMode="numeric" autoComplete="off" required pattern="\d{8}" title="IČO má 8 číslic." maxLength={8} value={f.companyId} onChange={(e) => setF({ ...f, companyId: e.target.value.replace(/\D/g, '') })} />
+            </div>
+            <div>
+              <label className="label" htmlFor="cname">Název firmy <span className="font-normal text-muted">(nepovinné)</span></label>
+              <input id="cname" className="input" autoComplete="organization" maxLength={120} value={f.companyName} onChange={(e) => setF({ ...f, companyName: e.target.value })} />
+            </div>
+            <p className="-mt-2 text-xs text-muted sm:col-span-2">IČO ověříme v registru ARES a obchodní jméno a sídlo doplníme odtud.</p>
+          </div>
+        )}
+        <div><label className="label" htmlFor="name">{f.accountType === 'business' ? 'Jméno kontaktní osoby' : 'Jméno'}</label><input id="name" autoComplete="name" required className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
         <div><label className="label" htmlFor="email">E-mail</label><input id="email" type="email" autoComplete="email" required className="input" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
         <div><label className="label" htmlFor="pw">Heslo</label><input id="pw" type="password" autoComplete="new-password" minLength={8} required className="input" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /><p className="mt-1.5 text-xs text-muted">Alespoň 8 znaků.</p></div>
         <label className="flex items-start gap-3 text-sm text-ink-2">

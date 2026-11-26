@@ -25,11 +25,11 @@ export async function resolveCompany(
   if (!isBusiness) return { data: { isBusiness: false, companyId: null, companyName: null, ...CLEARED }, status: 'none' };
   const ico = dto.companyId === undefined ? cur.companyId : dto.companyId ? normalizeIco(dto.companyId) : null;
   const typedName = dto.companyName === undefined ? cur.companyName : dto.companyName || null;
-  if (!ico) throw new BadRequestException({ message: 'Pro firemní účet vyplňte IČO (8 číslic). Pokud neprodáváte jako firma nebo podnikatel, zvolte Soukromá osoba.', field: 'companyId' });
+  if (!ico) throw new BadRequestException({ message: 'Pro firemní účet vyplňte IČO (8 číslic). Pokud neprodáváte jako firma nebo podnikatel, zvolte soukromou osobu.', field: 'companyId' });
   if (!isValidIco(ico)) {
     throw new BadRequestException({
       message: ico === cur.companyId
-        ? `IČO ${ico} uložené u vašeho účtu není platné (nesedí kontrolní číslice). Opravte ho podle výpisu v ARES, nebo zvolte Soukromá osoba a profil uložte.`
+        ? `IČO ${ico} uložené u vašeho účtu není platné (nesedí kontrolní číslice). Opravte ho podle výpisu v ARES, nebo účet přepněte na soukromou osobu (zrušte volbu „Prodávám jako firma / podnikatel“) a profil uložte.`
         : 'Neplatné IČO – nesedí kontrolní číslice. Zkontrolujte ho prosím.',
       field: 'companyId',
     });

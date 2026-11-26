@@ -6,3 +6,4 @@ export * from './video';
 export * from './search-text';
 export * from './synonyms';
 export * from './permissions';
+export * from './ico';

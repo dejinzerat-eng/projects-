@@ -7,7 +7,7 @@ import { useToast } from './toast';
 
 interface SellerSettingsData {
   phone: string | null; phoneVerified: boolean; showPhone: boolean;
-  company: { ico: string | null; name: string | null; address: string | null; vatId: string | null; verifiedAt: string | null; status: 'verified' | 'unverified' | 'none' } | null;
+  company: { ico: string | null; name: string | null; address: string | null; vatId: string | null; verifiedAt: string | null; status: 'verified' | 'unverified' | 'invalid' | 'none' } | null;
 }
 
 /**
@@ -69,7 +69,8 @@ export function SellerSettings({ refreshKey }: { refreshKey?: unknown }) {
                 <button type="button" disabled={busy} onClick={() => void act(() => call('/me/company/verify', 'POST'), 'Firma ověřena v ARES')} className="btn btn-outline btn-sm">Ověřit znovu</button>
               </div>
             )}
-            {c.status === 'none' && <p className="mt-2 text-sm text-muted">Doplňte v profilu IČO. Ověříme ho v registru ARES a na profilu získáte odznak „Firma s IČO“.</p>}
+            {c.status === 'invalid' && <p className="mt-2 text-sm text-danger">IČO {c.ico} u vašeho účtu není platné, a proto ho nejde ověřit. V profilu výše ho opravte, nebo zrušte volbu „Prodávám jako firma / podnikatel“ a profil uložte.</p>}
+            {c.status === 'none' && <p className="mt-2 text-sm text-muted">Firemní účet musí mít IČO. Doplňte ho v profilu – ověříme ho v registru ARES a na profilu získáte odznak „Firma s IČO“.</p>}
           </div>
         )}
       </div>
