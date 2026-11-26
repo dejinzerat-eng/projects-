@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { GuestListingDto } from './guest-listing.controller';
-import { guestAccountDecision, guestName, guestOwner, listingIdFromTarget, listingTarget, validGuestToken } from './guest';
+import { guestAccountDecision, guestName, guestOwner, listingIdFromTarget, listingTarget, pendingFromTarget, pendingTarget, validGuestToken } from './guest';
 
 const account = { emailVerifiedAt: null, passwordHash: null, googleId: null, appleId: null, legacyId: null, status: 'ACTIVE' };
 
@@ -44,6 +44,14 @@ describe('cíl potvrzovacího odkazu', () => {
     assert.equal(listingIdFromTarget(null), null);
     assert.equal(listingIdFromTarget('novy@email.cz'), null);
     assert.equal(listingIdFromTarget('listing:'), null);
+  });
+  it('inzerát pro existující účet čeká v tokenu', () => {
+    const p = { listing: { title: 'Kolo' }, guestOwner: 'guest:abc' };
+    assert.deepEqual(pendingFromTarget(pendingTarget(p)), p);
+    assert.equal(listingIdFromTarget(pendingTarget(p)), null);
+    assert.equal(pendingFromTarget(listingTarget('x')), null);
+    assert.equal(pendingFromTarget('pending:{rozbité'), null);
+    assert.equal(pendingFromTarget('pending:null'), null);
   });
 });
 

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { call } from '@/lib/client';
 
-type Result = { listing: { id: string; slug: string | null; status: string }; publishError?: string; hasPassword: boolean };
+type Result = { listing: { id: string; slug: string | null; status: string } | null; publishError?: string; hasPassword: boolean };
 
 /**
  * Potvrzení inzerátu vloženého bez registrace. Až kliknutím (POST) – odkaz z e-mailu mohou otevřít
@@ -23,7 +23,7 @@ export function GuestListingConfirm() {
   if (res) return <Done res={res} />;
   return (
     <div className="space-y-4">
-      <p className="text-center text-ink-2">Kliknutím potvrdíte svůj e-mail. Inzerát zveřejníme a založíme vám účet, ve kterém ho najdete.</p>
+      <p className="text-center text-ink-2">Kliknutím potvrdíte svůj e-mail a inzerát zveřejníme. Najdete ho pak ve svém účtu v Mých inzerátech.</p>
       {error && (
         <div role="alert" className="rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm font-medium text-danger">
           {error} Pokud jste inzerát už potvrdili, najdete ho po <Link href="/prihlaseni?zpet=/muj-ucet/inzeraty" className="underline">přihlášení</Link> v Mých inzerátech.
@@ -44,19 +44,19 @@ function Done({ res }: { res: Result }) {
   const [pw, setPw] = useState('');
   const [pwState, setPwState] = useState<'idle' | 'busy' | 'done'>(res.hasPassword ? 'done' : 'idle');
   const [pwError, setPwError] = useState<string | null>(null);
-  const live = listing.status === 'ACTIVE';
+  const live = listing?.status === 'ACTIVE';
   return (
     <div className="space-y-6">
       <div className="flex flex-col items-center gap-3 text-center">
         {publishError ? <TriangleAlert className="size-12 text-danger" /> : live ? <CheckCircle2 className="size-12 text-trust" /> : <Clock className="size-12 text-brand" />}
         <p className="text-ink-2">
           {publishError
-            ? <>E-mail je ověřený a účet máte založený, ale inzerát se nepodařilo zveřejnit: <b>{publishError}</b> Najdete ho v Mých inzerátech mezi koncepty.</>
-            : live ? 'Hotovo! E-mail je ověřený a inzerát je zveřejněný.' : 'E-mail je ověřený. Inzerát teď zkontroluje moderátor a hned potom ho zveřejníme.'}
+            ? <>Jste přihlášení, ale inzerát se nepodařilo zveřejnit: <b>{publishError}</b> {listing ? 'Najdete ho v Mých inzerátech mezi koncepty.' : ''}</>
+            : live ? 'Hotovo! Jste přihlášení a inzerát je zveřejněný.' : 'E-mail je ověřený. Inzerát teď zkontroluje moderátor a hned potom ho zveřejníme.'}
         </p>
         <div className="flex flex-wrap justify-center gap-2">
-          {live && listing.slug && <Link href={`/inzerat/${listing.id}/${listing.slug}`} className="btn btn-primary">Zobrazit inzerát</Link>}
-          <Link href="/muj-ucet/inzeraty" className={`btn ${live && listing.slug ? 'btn-outline' : 'btn-primary'}`}>Moje inzeráty</Link>
+          {live && listing?.slug && <Link href={`/inzerat/${listing.id}/${listing.slug}`} className="btn btn-primary">Zobrazit inzerát</Link>}
+          <Link href="/muj-ucet/inzeraty" className={`btn ${live && listing?.slug ? 'btn-outline' : 'btn-primary'}`}>Moje inzeráty</Link>
         </div>
       </div>
       {pwState !== 'done' ? (

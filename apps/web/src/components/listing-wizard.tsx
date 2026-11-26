@@ -51,16 +51,20 @@ async function send<T>(path: string, method: string, body: unknown): Promise<T> 
  * Průvodce vložením a úpravou inzerátu. `guest` = návštěvník bez přihlášení: v náhledu vyplní e-mail,
  * po odeslání dostane odkaz, který e-mail ověří, založí účet a inzerát zveřejní (API /listings/guest).
  */
-export function ListingWizard({ initial, defaultCity, categories, userId, guest = false }: { initial?: WizardInitial; defaultCity?: string | null; categories: WizardCategory[]; userId?: string; guest?: boolean }) {
+export function ListingWizard({ initial, defaultCity, categories, userId, guest: guestProp = false }: { initial?: WizardInitial; defaultCity?: string | null; categories: WizardCategory[]; userId?: string; guest?: boolean }) {
+  // Po přihlášení heslem přímo ve formuláři (e-mail už měl účet) pokračuje průvodce jako u přihlášeného
+  const [guest, setGuest] = useState(guestProp);
   // Rozpracovaný inzerát v prohlížeči patří přihlášenému uživateli (sdílený počítač)
   const draftKey = userId ? `${DRAFT_KEY}:${userId}` : DRAFT_KEY;
   const [contact, setContact] = useState<GuestContact>({ email: '', name: '', terms: false });
   const [captcha, setCaptcha] = useState('');
   const [captchaReset, setCaptchaReset] = useState(0);
-  const [sentTo, setSentTo] = useState<{ email: string; devLink?: string } | null>(null);
+  const [sentTo, setSentTo] = useState<{ email: string; devLink?: string; existingAccount?: boolean } | null>(null);
   const [accountExists, setAccountExists] = useState(false);
   const providers = useProviders();
-  const siteKey = guest ? providers?.captchaSiteKey ?? null : null;
+  // Jiný e-mail → nabídka přihlášení k původnímu účtu už neplatí
+  useEffect(() => { setAccountExists(false); }, [contact.email]);
+  const siteKey = guestProp ? providers?.captchaSiteKey ?? null : null;
   const [d, setD] = useState<WizardInitial>(initial ?? { ...EMPTY, city: defaultCity ?? '' });
   const [step, setStep] = useState(0);
   const [err, setErr] = useState<string | null>(null);
@@ -147,6 +151,56 @@ export function ListingWizard({ initial, defaultCity, categories, userId, guest 
   function next() { const e = validate(step); setErr(e); if (!e) go(step + 1); }
   function back() { go(Math.max(0, step - 1)); }
 
+  function buildBody(publish: boolean) {
+    const free = d.offerType === 'GIVE';
+    return {
+      title: d.title, description: d.description, price: free ? null : d.price, priceNegotiable: free ? false : d.priceNegotiable, currency: d.currency,
+      categorySlug: d.categorySlug, subSlug: d.subSlug, condition: d.condition, offerType: d.offerType, city: d.city, zip: d.zip, attributes: d.attributes,
+      imageIds: d.images.map((i) => i.id), videoUrl: d.videoUrl.trim(), publish: live ? true : publish,
+      ...(publish && isDraft ? { composeMs: Date.now() - startedAt.current } : {}),
+    };
+  }
+
+  /** Odeslání bez přihlášení. `link` = e-mail už má účet a uživatel chce odkaz, který inzerát zveřejní v jeho účtu. */
+  async function sendGuest(body: ReturnType<typeof buildBody>, link = false) {
+    try {
+      const g = await send<{ email: string; devLink?: string; existingAccount?: boolean }>('/listings/guest', 'POST', {
+        ...body, publish: true, email: contact.email.trim(), name: contact.name.trim(), terms: true, ...(captcha ? { captcha } : {}), ...(link ? { existingAccount: 'link' } : {}),
+      });
+      try { localStorage.removeItem(draftKey); } catch { /* */ }
+      setSentTo(g); setBusy(null); window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+      if (siteKey) setCaptchaReset((n) => n + 1);
+      // E-mail už má účet: inzerát zůstává ve formuláři, nabídneme přihlášení heslem nebo odkaz e-mailem
+      if (e instanceof SendError && e.code === 'ACCOUNT_EXISTS') { setAccountExists(true); setBusy(null); return; }
+      throw e;
+    }
+  }
+
+  /** E-mail už má účet: přihlášení heslem přímo ve formuláři a hned zveřejnění (fotky převezme API podle cookie). */
+  async function loginAndPublish(password: string) {
+    await send('/auth/login', 'POST', { email: contact.email.trim(), password });
+    setGuest(false); setAccountExists(false);
+    const body = buildBody(true);
+    type Res = { id: string; slug: string; status: string };
+    let r: Res;
+    try { r = await send<Res>('/listings', 'POST', body); }
+    catch (e) {
+      // Souhlas s aktuálními podmínkami dal ve formuláři – uložíme ho a zkusíme to znovu
+      if (!(e instanceof SendError && e.code === 'TERMS_OUTDATED')) { setErr(e instanceof Error ? e.message : String(e)); router.refresh(); return; }
+      await send('/me/terms', 'POST', {});
+      r = await send<Res>('/listings', 'POST', body);
+    }
+    try { localStorage.removeItem(draftKey); } catch { /* */ }
+    toast(r.status === 'PENDING' ? 'Přihlášeno. Inzerát čeká na kontrolu moderátorem.' : 'Přihlášeno a inzerát je zveřejněný!');
+    router.push(`/muj-ucet/inzeraty?novy=${r.id}`); router.refresh();
+  }
+
+  async function sendLink() {
+    setErr(null); setBusy('publish');
+    try { await sendGuest(buildBody(true), true); } catch (e) { setErr((e as Error).message); setBusy(null); }
+  }
+
   async function submit(publish: boolean) {
     if (uploading) return;
     if (publish || live) {
@@ -162,26 +216,9 @@ export function ListingWizard({ initial, defaultCity, categories, userId, guest 
       if (e) { if (step === 4) setErr(e); else go(4); return; }
     }
     setBusy(publish ? 'publish' : 'draft'); setErr(null); setAccountExists(false);
-    const free = d.offerType === 'GIVE';
-    const body = {
-      title: d.title, description: d.description, price: free ? null : d.price, priceNegotiable: free ? false : d.priceNegotiable, currency: d.currency,
-      categorySlug: d.categorySlug, subSlug: d.subSlug, condition: d.condition, offerType: d.offerType, city: d.city, zip: d.zip, attributes: d.attributes,
-      imageIds: d.images.map((i) => i.id), videoUrl: d.videoUrl.trim(), publish: live ? true : publish,
-      ...(publish && isDraft ? { composeMs: Date.now() - startedAt.current } : {}),
-    };
+    const body = buildBody(publish);
     try {
-      if (guest) {
-        try {
-          const g = await send<{ email: string; devLink?: string }>('/listings/guest', 'POST', { ...body, publish: true, email: contact.email.trim(), name: contact.name.trim(), terms: true, ...(captcha ? { captcha } : {}) });
-          try { localStorage.removeItem(draftKey); } catch { /* */ }
-          setSentTo(g); setBusy(null); window.scrollTo({ top: 0, behavior: 'smooth' });
-        } catch (e) {
-          if (siteKey) setCaptchaReset((n) => n + 1);
-          if (e instanceof SendError && e.code === 'ACCOUNT_EXISTS') setAccountExists(true);
-          throw e;
-        }
-        return;
-      }
+      if (guest) { await sendGuest(body); return; }
       type Res = { id: string; slug: string; status: string };
       let r: Res;
       if (d.id) {
@@ -214,7 +251,7 @@ export function ListingWizard({ initial, defaultCity, categories, userId, guest 
   // Koncept na serveru potřebuje účet – bez přihlášení si rozepsaný inzerát pamatuje jen prohlížeč
   const showDraft = isDraft && d.title.trim().length > 0 && !guest;
 
-  if (sentTo) return <GuestSent email={sentTo.email} devLink={sentTo.devLink} title={d.title} />;
+  if (sentTo) return <GuestSent email={sentTo.email} devLink={sentTo.devLink} existing={!!sentTo.existingAccount} title={d.title} />;
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -256,14 +293,9 @@ export function ListingWizard({ initial, defaultCity, categories, userId, guest 
       {err && (
         <div role="alert" className="mt-6 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
           <p>{err}</p>
-          {accountExists && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link href="/prihlaseni?zpet=/pridat" className="btn btn-primary btn-sm">Přihlásit se</Link>
-              <Link href="/zapomenute-heslo" className="btn btn-outline btn-sm bg-surface">Nemám heslo / zapomněl jsem ho</Link>
-            </div>
-          )}
         </div>
       )}
+      {accountExists && guest && step === 4 && <ExistingAccountBox email={contact.email.trim()} busy={!!busy} onLogin={loginAndPublish} onLink={sendLink} />}
       {ready && isDraft && step < 4 && !err && (
         <p className="mt-6 flex items-center gap-2 text-sm text-muted"><Check className="size-4 text-brand" />Máte vyplněno vše potřebné – můžete zveřejnit hned, nebo pokračovat a inzerát doladit.</p>
       )}
@@ -556,17 +588,52 @@ function GuestContactForm({ contact, setContact, siteKey, onCaptcha, captchaRese
 }
 
 /** Po odeslání bez přihlášení: inzerát čeká na potvrzení e-mailu. */
-function GuestSent({ email, title, devLink }: { email: string; title: string; devLink?: string }) {
+function GuestSent({ email, title, devLink, existing }: { email: string; title: string; devLink?: string; existing: boolean }) {
   return (
     <div className="mx-auto max-w-xl">
       <div className="card flex flex-col items-center gap-4 p-8 text-center">
         <span className="grid size-16 place-items-center rounded-2xl bg-brand-soft text-brand"><MailCheck className="size-8" /></span>
         <h1 className="h-display text-2xl font-bold">Zkontrolujte svůj e-mail</h1>
-        <p className="text-ink-2">Inzerát <b>„{title}“</b> máme uložený. Na adresu <b>{email}</b> jsme poslali odkaz – klikněte na něj a inzerát zveřejníme. Tím se vám zároveň založí účet.</p>
+        <p className="text-ink-2">
+          Inzerát <b>„{title}“</b> máme uložený. Na adresu <b>{email}</b> jsme poslali odkaz – klikněte na něj a inzerát zveřejníme
+          {existing ? ' ve vašem účtu. Odkaz vás zároveň přihlásí.' : '. Tím se vám zároveň založí účet.'}
+        </p>
         <p className="text-sm text-muted">E-mail nepřišel? Podívejte se i do složky Spam nebo Hromadné. Odkaz platí 3 dny.</p>
         {devLink && <a href={devLink} className="text-sm font-semibold text-brand-ink underline">Vývoj: odkaz z e-mailu (e-maily se neodesílají)</a>}
         <Link href="/" className="btn btn-outline">Zpět na hlavní stranu</Link>
       </div>
     </div>
+  );
+}
+
+/**
+ * E-mail už má účet. Inzerát zůstává ve formuláři a nabídneme dvě cesty:
+ * přihlásit se heslem přímo tady (a hned zveřejnit), nebo poslat odkaz na e-mail, který ho zveřejní v účtu.
+ */
+function ExistingAccountBox({ email, busy, onLogin, onLink }: { email: string; busy: boolean; onLogin: (password: string) => Promise<void>; onLink: () => void }) {
+  const [pw, setPw] = useState('');
+  const [state, setState] = useState<'idle' | 'busy'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <section className="card mt-6 space-y-4 border-brand p-6" aria-labelledby="acc-exists" role="alert">
+      <div>
+        <h2 id="acc-exists" className="text-lg font-bold">S e-mailem {email} už u nás máte účet</h2>
+        <p className="mt-1 text-sm text-muted">Inzerát vám nezmizí. Stačí se přihlásit a hned ho zveřejníme.</p>
+      </div>
+      <form className="flex flex-col gap-2 sm:flex-row" onSubmit={async (e) => {
+        e.preventDefault(); setState('busy'); setError(null);
+        try { await onLogin(pw); } catch (err) { setError((err as Error).message); } finally { setState('idle'); }
+      }}>
+        <label className="sr-only" htmlFor="acc-pw">Heslo</label>
+        <input id="acc-pw" type="password" autoComplete="current-password" required className="input flex-1" placeholder="Vaše heslo" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus />
+        <button className="btn btn-primary shrink-0" disabled={state === 'busy' || busy}>{state === 'busy' ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}Přihlásit a zveřejnit</button>
+      </form>
+      {error && <p className="rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm font-medium text-danger">{error}</p>}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-4 text-sm">
+        <span className="text-muted">Nemáte heslo nebo ho nevíte?</span>
+        <button type="button" onClick={onLink} disabled={busy || state === 'busy'} className="btn btn-outline btn-sm">{busy ? <Loader2 className="size-4 animate-spin" /> : <MailCheck className="size-4" />}Poslat odkaz na e-mail</button>
+        <Link href="/prihlaseni?zpet=/pridat" className="font-semibold text-brand-ink hover:underline">Přihlásit se jinak</Link>
+      </div>
+    </section>
   );
 }

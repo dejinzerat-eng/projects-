@@ -1,8 +1,10 @@
-import { Body, ConflictException, Controller, HttpException, HttpStatus, Logger, Post, Req, Res } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, HttpException, HttpStatus, Logger, Post, Req, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { clientInfo } from '../auth/audit';
+import type { User } from '@prisma/client';
+import { ClientInfo, clientInfo } from '../auth/audit';
+import { termsOutdated } from '../users/terms';
 import { AuthService } from '../auth/auth.service';
 import { AuthUser, SESSION_COOKIE } from '../common/auth.guard';
 import { verifyCaptcha } from '../common/captcha';
@@ -11,7 +13,7 @@ import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { ZodPipe } from '../common/zod';
 import {
-  GUEST_COOKIE, GUEST_MAX_MAILS_PER_EMAIL_HOUR, GUEST_MAX_PER_IP_HOUR, guestAccountDecision, guestName, guestOwner, validGuestToken,
+  GUEST_COOKIE, GUEST_MAX_MAILS_PER_EMAIL_HOUR, type PendingListing, GUEST_MAX_PER_IP_HOUR, guestAccountDecision, guestName, guestOwner, validGuestToken,
 } from './guest';
 import { ListingDto, ListingsService } from './listings.service';
 
@@ -27,10 +29,12 @@ export const GuestListingDto = ListingDto.extend({
   name: z.string().trim().max(60).optional(),
   terms: z.literal(true, { error: 'Je potřeba souhlasit s podmínkami a pravidly inzerování.' }),
   captcha: z.string().max(4096).optional(),
+  /** E-mail už má účet a uživatel si místo přihlášení nechá poslat odkaz, který inzerát zveřejní v jeho účtu. */
+  existingAccount: z.literal('link').optional(),
 });
 type GuestListingInput = z.infer<typeof GuestListingDto>;
 
-export const ACCOUNT_EXISTS_MESSAGE = 'S tímto e-mailem už u nás máte účet. Přihlaste se a inzerát dokončíte – rozepsaný inzerát i fotky vám zůstanou.';
+export const ACCOUNT_EXISTS_MESSAGE = 'S tímto e-mailem už u nás máte účet. Inzerát vám zůstane – přihlaste se heslem, nebo si nechte poslat odkaz na e-mail.';
 
 @Controller('listings/guest')
 export class GuestListingController {
@@ -49,7 +53,8 @@ export class GuestListingController {
     const email = dto.email.toLowerCase().trim();
     const existing = await this.prisma.user.findUnique({ where: { email } });
     const decision = guestAccountDecision(existing);
-    if (decision === 'login') throw new ConflictException({ message: ACCOUNT_EXISTS_MESSAGE, code: 'ACCOUNT_EXISTS', field: 'email' });
+    if (decision === 'login' && dto.existingAccount !== 'link') throw new ConflictException({ message: ACCOUNT_EXISTS_MESSAGE, code: 'ACCOUNT_EXISTS', field: 'email' });
+    if (decision === 'login' && existing?.status === 'BLOCKED') throw new BadRequestException('Účet s tímto e-mailem je zablokován. Kontaktujte podporu.');
     if (existing && (await this.auth.recentVerificationMails(existing.id)) >= GUEST_MAX_MAILS_PER_EMAIL_HOUR) {
       throw new HttpException('Na tento e-mail jsme už poslali několik potvrzovacích odkazů. Zkontrolujte poštu (i složku Spam), nebo to zkuste za hodinu.', HttpStatus.TOO_MANY_REQUESTS);
     }
@@ -57,8 +62,14 @@ export class GuestListingController {
       throw new HttpException('Z tohoto připojení bylo bez přihlášení vloženo už hodně inzerátů. Zkuste to za hodinu, nebo se zaregistrujte.', HttpStatus.TOO_MANY_REQUESTS);
     }
 
-    const { email: _e, name: _n, terms: _t, captcha: _c, ...listing } = dto;
+    const { email: _e, name: _n, terms: _t, captcha: _c, existingAccount: _x, ...listing } = dto;
     await this.listings.precheck({ ...listing, publish: true });
+
+    // Existující účet: do účtu nic nezapíšeme, dokud majitel e-mailu neklikne na odkaz
+    if (decision === 'login' && existing) {
+      const dev = await this.auth.sendExistingAccountListingLink(existing, { listing: { ...listing, publish: true }, guestOwner: guestOwnerOf(req) }, listing.title);
+      return { ok: true, email, existingAccount: true, ...dev };
+    }
 
     const client = clientInfo(req);
     const name = guestName(dto.name, email);
@@ -93,10 +104,12 @@ export class GuestListingController {
   @Post('confirm')
   async confirm(@Body(new ZodPipe(z.object({ token: z.string().min(10).max(200) }))) dto: { token: string }, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const client = clientInfo(req);
-    const { user, listingId } = await this.auth.confirmGuestListing(dto.token, client);
+    const { user, listingId, pending } = await this.auth.confirmGuestListing(dto.token, client);
     const s = await this.auth.loginSession(user, client, 'email_link');
     res.cookie(SESSION_COOKIE, s.token, { httpOnly: true, sameSite: 'lax', secure: config.cookieSecure, expires: s.expiresAt, path: '/' });
     const authUser: AuthUser = { id: user.id, role: user.role, name: user.name, email: user.email, emailVerified: true, phoneVerified: !!user.phoneVerifiedAt };
+    if (pending) return this.publishPending(pending, user, authUser, client);
+    if (!listingId) throw new BadRequestException('Kód je neplatný nebo vypršel.');
     try {
       const r = await this.listings.publishDraft(listingId, authUser);
       return { ok: true, listing: { id: r.id, slug: r.slug, status: r.status }, hasPassword: !!user.passwordHash };
@@ -104,6 +117,31 @@ export class GuestListingController {
       const msg = e instanceof HttpException ? messageOf(e) : 'Inzerát se nepodařilo zveřejnit.';
       if (!(e instanceof HttpException)) this.log.error((e as Error).stack);
       return { ok: true, listing: { id: listingId, slug: null, status: 'DRAFT' }, publishError: msg, hasPassword: !!user.passwordHash };
+    }
+  }
+
+  /**
+   * Inzerát pro existující účet po kliknutí majitele: uloží a zveřejní ho stejně jako při přihlášení.
+   * Když zveřejnění neprojde (limit, omezený účet…), uloží ho aspoň jako koncept, aby se neztratil.
+   */
+  private async publishPending(pending: PendingListing, user: User, authUser: AuthUser, client: ClientInfo) {
+    const parsed = ListingDto.safeParse({ ...pending.listing, publish: true });
+    if (!parsed.success) return { ok: true, listing: null, publishError: 'Inzerát se nepodařilo načíst. Vložte ho prosím znovu.', hasPassword: !!user.passwordHash };
+    const dto = parsed.data;
+    // Souhlas s podmínkami dal ve formuláři a potvrdil ho kliknutím v e-mailu (text e-mailu to uvádí)
+    if (termsOutdated(user.termsVersion, config.termsVersion)) {
+      await this.prisma.user.update({ where: { id: user.id }, data: { termsAcceptedAt: new Date(), termsVersion: config.termsVersion } });
+      await this.auth.audit(user.id, 'account.terms_accept', client, { termsVersion: config.termsVersion, via: 'listing_link' });
+    }
+    await this.listings.claimGuestImages(pending.guestOwner, user.id, dto.imageIds);
+    try {
+      const r = await this.listings.create(authUser, dto);
+      return { ok: true, listing: { id: r.id, slug: r.slug, status: r.status }, hasPassword: !!user.passwordHash };
+    } catch (e) {
+      const msg = e instanceof HttpException ? messageOf(e) : 'Inzerát se nepodařilo zveřejnit.';
+      if (!(e instanceof HttpException)) this.log.error((e as Error).stack);
+      const draft = await this.listings.create(authUser, { ...dto, publish: false }).catch(() => null);
+      return { ok: true, listing: draft ? { id: draft.id, slug: null, status: 'DRAFT' } : null, publishError: msg, hasPassword: !!user.passwordHash };
     }
   }
 }

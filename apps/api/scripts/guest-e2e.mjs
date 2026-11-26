@@ -178,6 +178,35 @@ try {
     }
   });
 
+  await check('existující účet: odkaz e-mailem zveřejní inzerát v účtu až po kliknutí majitele', async () => {
+    const up = await upload();
+    const g = cookieOf(up.headers, 'dej_guest');
+    const u = await prisma.user.findUnique({ where: { email: mail(1) } });
+    const before = await prisma.listing.count({ where: { userId: u.id } });
+    const sent = mails.length;
+    const title = `Mikrofon Rode ${RUN}`;
+    const r = await call('/listings/guest', 'POST', { ...listing({ title, description: 'Mikrofon Rode NT1, kompletní balení.' }), imageIds: [up.body.id], email: mail(1), terms: true, existingAccount: 'link' }, { cookie: g });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    assert.equal(r.body.existingAccount, true);
+    // do účtu se zatím nic nezapsalo, fotka pořád patří prohlížeči
+    assert.equal(await prisma.listing.count({ where: { userId: u.id } }), before);
+    assert.match((await prisma.listingImage.findUnique({ where: { id: up.body.id } })).ownerId, /^guest:/);
+    const m = mails.slice(sent).filter((x) => x.to === mail(1));
+    assert.equal(m.length, 1);
+    assert.match(m[0].subject, /Zveřejnit inzerát ve vašem účtu/);
+    // majitel klikne v jiném prohlížeči (bez cookie) → inzerát v jeho účtu i s fotkou, přihlášený
+    const c = await call('/listings/guest/confirm', 'POST', { token: tokenFrom(m[0]) });
+    assert.equal(c.status, 201, JSON.stringify(c.body));
+    assert.equal(c.body.listing.status, 'ACTIVE');
+    assert.equal(c.body.hasPassword, true);
+    assert.ok(cookieOf(c.headers, 'dej_session'));
+    const l = await prisma.listing.findUnique({ where: { id: c.body.listing.id }, include: { images: true } });
+    assert.equal(l.userId, u.id);
+    assert.equal(l.title, title);
+    assert.deepEqual(l.images.map((i) => i.id), [up.body.id]);
+    assert.equal((await call('/listings/guest/confirm', 'POST', { token: tokenFrom(m[0]) })).status, 400);
+  });
+
   await check('fotky nahrané před přihlášením se po přihlášení převedou na účet', async () => {
     const up = await upload();
     const g = cookieOf(up.headers, 'dej_guest');
