@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Onest } from 'next/font/google';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Footer } from '@/components/footer';
 import { Header } from '@/components/header';
 import { MobileNav } from '@/components/mobile-nav';
@@ -36,6 +37,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Footer />
           <MobileNav unread={me ? { messages: me.unreadMessages, notifications: me.unreadNotifications } : undefined} loggedIn={!!me} />
         </ToastProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
