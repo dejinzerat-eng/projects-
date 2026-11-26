@@ -88,7 +88,8 @@ export default async function Page({ params }: Props) {
         </div>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
+      {/* minmax(0,…): sloupec se neroztáhne podle nejširšího obsahu (vodorovně posuvné řady fotek a rychlých zpráv) */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="min-w-0">
           <Gallery images={l.images} title={l.title} />
 
@@ -107,7 +108,7 @@ export default async function Page({ params }: Props) {
 
           <section className="mt-8">
             <h2 className="mb-3 text-xl font-bold">Popis</h2>
-            <div className="whitespace-pre-line text-[16px] leading-relaxed text-ink-2">{l.description}</div>
+            <div className="whitespace-pre-line break-words text-[16px] leading-relaxed text-ink-2">{l.description}</div>
           </section>
 
           {embed && (
@@ -126,7 +127,7 @@ export default async function Page({ params }: Props) {
           </div>
         </div>
 
-        <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+        <aside className="min-w-0 space-y-4 lg:sticky lg:top-24 lg:self-start">
           <div className="hidden lg:block"><Summary l={l} /></div>
           {!l.isOwner && ['ACTIVE', 'RESERVED'].includes(l.status) && (
             <div className="card p-5" id="kontakt">
@@ -168,7 +169,7 @@ function Summary({ l }: { l: Detail }) {
   return (
     <div className="card p-5">
       {l.status !== 'ACTIVE' && <div className="badge mb-2 bg-ink text-paper">{STATUS_LABEL[l.status]}</div>}
-      <h1 className="h-display text-2xl font-bold leading-tight sm:text-[28px]">{l.title}</h1>
+      <h1 className="h-display break-words text-2xl font-bold leading-tight sm:text-[28px]">{l.title}</h1>
       <div className="mt-3 flex items-baseline gap-2">
         <span className="text-3xl font-bold tracking-tight">{price(l.price, l.priceNegotiable, l.currency, l.offerType)}</span>
         {l.priceNegotiable && l.price != null && <span className="text-sm text-muted">· k jednání</span>}
@@ -187,5 +188,5 @@ function Summary({ l }: { l: Detail }) {
 }
 
 function Row({ k, v }: { k: string; v: string }) {
-  return <div className="flex justify-between gap-4 border-b border-line px-4 py-3 text-[15px] sm:odd:border-r"><dt className="text-muted">{k}</dt><dd className="text-right font-semibold">{v}</dd></div>;
+  return <div className="flex justify-between gap-4 border-b border-line px-4 py-3 text-[15px] sm:odd:border-r"><dt className="text-muted">{k}</dt><dd className="min-w-0 break-words text-right font-semibold">{v}</dd></div>;
 }
