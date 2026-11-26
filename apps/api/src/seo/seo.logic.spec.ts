@@ -43,6 +43,11 @@ describe('RedirectDto', () => {
     assert.equal(RedirectDto.safeParse({ from: '/a', to: 'http://evil.example' }).success, false);
     assert.equal(RedirectDto.safeParse({ from: '/a', to: 'https://partner.cz/x', code: 302 }).success, true);
   });
+  it('odmítne adresy, které prohlížeč vezme jako jinou doménu (//host, /\\host)', () => {
+    assert.equal(RedirectDto.safeParse({ from: '/a', to: '//evil.example/x' }).success, false);
+    assert.equal(RedirectDto.safeParse({ from: '/a', to: '/\\evil.example' }).success, false);
+    assert.equal(RedirectDto.safeParse({ from: '/a', to: 'https:///evil' }).success, false);
+  });
 });
 
 describe('PageMetaDto', () => {

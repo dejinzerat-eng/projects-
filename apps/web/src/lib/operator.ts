@@ -19,12 +19,18 @@ const pick = (o: Record<string, unknown> | undefined, ...keys: string[]) => {
  * Pořadí zdrojů: systémová nastavení z administrace (GET /settings/public, pokud existuje),
  * proměnné prostředí OPERATOR_* a nakonec zřetelné zástupné texty v hranatých závorkách.
  */
+// Next.js ukládá do datové cache jen odpovědi 200. Když nastavení (zatím) neexistují, nebudeme se na ně
+// ptát při každém vykreslení (na Vercelu by to byla další invokace funkce) – chybu si pamatujeme 5 minut.
+let settingsMissingUntil = 0;
+
 export async function getOperator(): Promise<Operator> {
   let s: Record<string, unknown> | undefined;
-  try {
-    const r = await api<Record<string, unknown>>('/settings/public', { revalidate: 300, auth: false });
-    s = (r.operator && typeof r.operator === 'object' ? r.operator : r.provozovatel && typeof r.provozovatel === 'object' ? r.provozovatel : r) as Record<string, unknown>;
-  } catch { /* nastavení zatím nejsou k dispozici */ }
+  if (Date.now() >= settingsMissingUntil) {
+    try {
+      const r = await api<Record<string, unknown>>('/settings/public', { revalidate: 300, auth: false });
+      s = (r.operator && typeof r.operator === 'object' ? r.operator : r.provozovatel && typeof r.provozovatel === 'object' ? r.provozovatel : r) as Record<string, unknown>;
+    } catch { settingsMissingUntil = Date.now() + 300_000; /* nastavení zatím nejsou k dispozici */ }
+  }
   const env = process.env;
   const email = pick(s, 'email', 'supportEmail', 'operatorEmail') ?? env.OPERATOR_EMAIL ?? OPERATOR_PLACEHOLDERS.email;
   return {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-/** Počet URL v jednom souboru sitemapy (Google povoluje až 50 000). */
-export const SITEMAP_CHUNK = 20_000;
+/** Počet URL v jednom souboru sitemapy (Google povoluje 50 000; menší soubory se vejdou do limitu odpovědi Vercelu 4,5 MB i do datové cache Next.js 2 MB). */
+export const SITEMAP_CHUNK = 10_000;
 
 const DAY = 864e5;
 /**
@@ -30,7 +30,8 @@ export function normalizePath(input: string): string | null {
 
 export const RedirectDto = z.object({
   from: z.string().trim().min(2).max(500),
-  to: z.string().trim().min(1).max(500).refine((v) => v.startsWith('/') || /^https:\/\//.test(v), 'Cíl musí být cesta začínající „/“ nebo adresa https://.'),
+  // „//host“ a „/\host“ by prohlížeč vzal jako jinou doménu – cesta musí být opravdu relativní
+  to: z.string().trim().min(1).max(500).refine((v) => /^\/(?![/\\])/.test(v) || /^https:\/\/[^/\\]/.test(v), 'Cíl musí být cesta začínající „/“ nebo adresa https://.'),
   code: z.union([z.literal(301), z.literal(302), z.literal(307), z.literal(308)]).default(308),
 }).transform((v, ctx) => {
   const from = normalizePath(v.from);

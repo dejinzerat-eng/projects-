@@ -42,7 +42,7 @@ export async function SearchView({ searchParams, category, sub, basePath, headin
     <div className="container-x py-6 sm:py-8">
       <nav className="mb-3 flex flex-wrap items-center gap-1.5 text-sm text-muted" aria-label="Drobečková navigace">
         <Link href="/" className="hover:text-ink">Domů</Link><span>/</span>
-        {cat ? <Link href={`/kategorie/${cat.slug}`} className="hover:text-ink">{cat.name}</Link> : <span>Hledání</span>}
+        {cat ? <Link href={`/kategorie/${cat.slug}`} className="hover:text-ink">{cat.name}</Link> : <span>{heading ?? 'Hledání'}</span>}
         {subCat && <><span>/</span><Link href={`/kategorie/${cat!.slug}/${subCat.slug}`} className="hover:text-ink">{subCat.name}</Link></>}
       </nav>
       <div className="flex flex-wrap items-end justify-between gap-3">

@@ -48,6 +48,9 @@ const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
 const EMPLOYMENT: Record<string, string> = { 'Plný úvazek': 'FULL_TIME', 'Částečný úvazek': 'PART_TIME', Brigáda: 'TEMPORARY', 'DPP/DPČ': 'PART_TIME', IČO: 'CONTRACTOR' };
 const employment = (v: unknown) => [...new Set((Array.isArray(v) ? v : [v]).map((x) => EMPLOYMENT[String(x)]).filter(Boolean))];
 
+/** Mzda se zadává za měsíc, ale brigády ji často uvádějí za hodinu (např. 190 Kč) – částky pod 1 000 bereme jako hodinovou. */
+export const salaryUnit = (v: number) => (v < 1000 ? 'HOUR' : 'MONTH');
+
 /** Typ strukturovaných dat podle hlavní kategorie inzerátu. */
 export function listingKind(parentSlug: string, subSlug: string): 'job' | 'realestate' | 'vehicle' | 'service' | 'product' {
   if (parentSlug === 'prace' || parentSlug.startsWith('prace-')) return subSlug === 'hledam-praci' ? 'service' : 'job';
@@ -77,12 +80,13 @@ export function listingJsonLd(l: ListingLd): Json[] {
   let main: Json;
 
   if (kind === 'job') {
+    const salary = num(a.salary) ?? l.price;
     main = {
       '@type': 'JobPosting', title: l.title, description, datePosted: l.publishedAt ?? l.createdAt, validThrough: l.expiresAt, url,
       hiringOrganization: { '@type': l.seller.isBusiness ? 'Organization' : 'Person', name: sellerName, sameAs: abs(`/uzivatel/${l.seller.id}`) },
       jobLocation: place, directApply: true,
       ...(employment(a.jobType).length ? { employmentType: employment(a.jobType) } : {}),
-      ...((num(a.salary) ?? l.price) != null ? { baseSalary: { '@type': 'MonetaryAmount', currency: l.currency, value: { '@type': 'QuantitativeValue', value: num(a.salary) ?? l.price, unitText: 'MONTH' } } } : {}),
+      ...(salary != null ? { baseSalary: { '@type': 'MonetaryAmount', currency: l.currency, value: { '@type': 'QuantitativeValue', value: salary, unitText: salaryUnit(salary) } } } : {}),
     };
   } else if (kind === 'realestate') {
     const area = num(a.area);

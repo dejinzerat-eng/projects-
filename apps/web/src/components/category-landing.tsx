@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { Info } from 'lucide-react';
 import type { City } from '@dej/shared';
 import { api } from '@/lib/api';
+import { plural } from '@/lib/format';
 import { breadcrumbs, itemList } from '@/lib/jsonld';
 import { redirectOrNotFound } from '@/lib/redirects';
 import { cityBySlug, citySlug, hasFilters, listCanonical, social, TOP_CITIES } from '@/lib/seo';
@@ -55,16 +56,18 @@ export async function landingMetadata(l: Landing, sp: SP): Promise<Metadata> {
   let title: string, description: string;
   if (city && name) {
     title = `${name} ${city.name} – inzeráty a bazar | Dejinzerat.cz`;
-    description = `${name} v lokalitě ${city.name}: ${count} aktuálních nabídek od soukromých prodejců i firem. Inzerujte zdarma na Dejinzerat.cz.`;
+    description = `${name} v lokalitě ${city.name}: ${plural(count, 'aktuální nabídka', 'aktuální nabídky', 'aktuálních nabídek')} od soukromých inzerentů i firem. Inzerujte zdarma na Dejinzerat.cz.`;
   } else if (city) {
     title = `Inzeráty ${city.name} – bazar a inzerce zdarma | Dejinzerat.cz`;
-    description = `Aktuální inzeráty z lokality ${city.name}: ${count} nabídek – auta, reality, elektronika, nábytek, práce a služby. Inzerce zdarma.`;
+    description = `Aktuální inzeráty z lokality ${city.name}: ${plural(count, 'nabídka', 'nabídky', 'nabídek')} – auta, reality, elektronika, nábytek, práce a služby. Inzerce zdarma.`;
   } else {
     const s = sub ?? cat!;
     title = s.seoTitle ?? (sub ? `${sub.name} – ${cat!.name} | Dejinzerat.cz` : `${cat!.name} – inzeráty z celé ČR | Dejinzerat.cz`);
-    description = s.seoDescription ?? `Inzeráty v kategorii ${name} z celé ČR – ${count} nabídek. Nové i použité zboží od soukromých prodejců i firem, rychlé hledání a bezpečná komunikace.`;
+    description = s.seoDescription ?? `Inzeráty v kategorii ${name} z celé ČR – ${plural(count, 'nabídka', 'nabídky', 'nabídek')} od soukromých inzerentů i firem. Rychlé hledání, bezpečná komunikace a inzerce zdarma.`;
   }
-  if (n > 1) title = title.replace(/ \| Dejinzerat\.cz$/, ` – strana ${n} | Dejinzerat.cz`);
+  // Vlastní SEO titulek z administrace nemusí končit značkou – číslo strany doplníme vždy (jinak duplicitní titulky)
+  if (n > 1) title = / \| Dejinzerat\.cz$/.test(title) ? title.replace(/ \| Dejinzerat\.cz$/, ` – strana ${n} | Dejinzerat.cz`) : `${title} – strana ${n}`;
+  if (n > 1) description = `Strana ${n}. ${description}`;
   const canonical = listCanonical(l.path, sp.strana);
   // Kombinace filtrů a prázdné lokality neindexujeme (odkazy ale sledujeme)
   const noindex = hasFilters(sp, city ? ['odstraneno', 'mesto'] : ['odstraneno']) || (city && count === 0) || (res && n > 1 && n > res.pages);

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound, permanentRedirect } from 'next/navigation';
+import { notFound, permanentRedirect, redirect } from 'next/navigation';
 import { BadgeCheck, Building2, CalendarDays, Eye, Heart, MapPin, Pencil, Star } from 'lucide-react';
 import { Avatar } from '@/components/avatar';
 import { CompareBar, CompareToggle } from '@/components/compare';
@@ -37,8 +37,9 @@ async function load(id: string) {
 
 /** Smazaný / dávno neaktivní inzerát: trvalé přesměrování (308) do jeho kategorie, jinak 404. */
 async function gone(id: string, orNotFound = true) {
-  const g = await api<{ path: string | null }>(`/seo/gone/${id}`, { auth: false }).catch(() => null);
-  if (g?.path) permanentRedirect(`${g.path}?odstraneno=1`);
+  const g = await api<{ path: string | null; status: string }>(`/seo/gone/${id}`, { auth: false }).catch(() => null);
+  // Zamítnutý inzerát se po námitce může vrátit – trvalé (prohlížečem cachované) přesměrování jen u ostatních
+  if (g?.path) (g.status === 'REJECTED' ? redirect : permanentRedirect)(`${g.path}?odstraneno=1`);
   if (orNotFound) notFound();
 }
 

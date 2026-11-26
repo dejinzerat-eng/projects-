@@ -72,7 +72,7 @@ export class SeoController {
     return { gone: true, status: l.status, path };
   }
 
-  /** Přesměrování z tabulky (cache 10 min, i negativní). */
+  /** Přesměrování z tabulky (cache 10 min, negativní 2 min). */
   @Get('redirect')
   async redirect(@Query('path') path = '') {
     const p = normalizePath(path);
@@ -84,7 +84,9 @@ export class SeoController {
     else {
       const r = await this.prisma.redirect.findUnique({ where: { from: p } });
       hit = r ? { to: r.to, code: r.code } : null;
-      await this.redis.set(key, hit ? JSON.stringify(hit) : '-', 600);
+      // Bez Redisu (produkce) má každá instance vlastní cache – „nenalezeno“ proto držíme jen krátce,
+      // aby nově přidané přesměrování začalo platit do dvou minut
+      await this.redis.set(key, hit ? JSON.stringify(hit) : '-', hit ? 600 : 120);
     }
     if (!hit) throw new NotFoundException();
     void this.prisma.redirect.update({ where: { from: p }, data: { hits: { increment: 1 } } }).catch(() => undefined);

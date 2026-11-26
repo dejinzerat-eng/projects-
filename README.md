@@ -69,7 +69,7 @@ Web (`apps/web/.env.local`): `API_INTERNAL_URL`, `NEXT_PUBLIC_SITE_URL`, `NOINDE
 - Každá veřejná stránka má titulek, popis, kanonickou adresu, Open Graph a Twitter kartu; výchozí obrázek pro sdílení kreslí `apps/web/src/app/opengraph-image.tsx`.
 - Stránkování výpisů (`?strana=N`) má vlastní kanonickou adresu; kombinace filtrů, prázdné lokality a soukromé části (účet, zprávy, administrace, přidání inzerátu, přihlášení, hledání) mají `noindex`.
 - Strukturovaná data podle typu obsahu (`apps/web/src/lib/jsonld.ts`): Product, Car/Vehicle/Motorcycle (auto-moto), RealEstateListing (reality), JobPosting (práce), Service (služby), BreadcrumbList, ItemList (výpisy), WebSite + SearchAction a Organization (úvod), Person/Organization s hodnocením (profil).
-- Sitemapa: index `/sitemap.xml` → `/sitemap/static.xml` (úvod, kategorie z databáze, lokality, informační stránky), `/sitemap/inzeraty-N.xml` (všechny aktivní inzeráty po 20 000) a `/sitemap/profily-N.xml`. Data dává API `GET /seo/sitemap*`.
+- Sitemapa: index `/sitemap.xml` → `/sitemap/static.xml` (úvod, kategorie z databáze, lokality, informační stránky), `/sitemap/inzeraty-N.xml` (všechny aktivní inzeráty po 10 000) a `/sitemap/profily-N.xml`. Data dává API `GET /seo/sitemap*`.
 - Lokální vstupní stránky: `/lokalita/praha`, `/kategorie/elektronika/mesto/brno`, `/kategorie/reality/byty/mesto/ostrava`.
 - Smazané, zamítnuté a dávno neaktivní inzeráty se trvale (308) přesměrují do své kategorie (`?odstraneno=1` zobrazí vysvětlení). Neznámé adresy kategorií a stránek se dohledají v tabulce přesměrování (Administrace → SEO).
 
