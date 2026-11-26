@@ -149,8 +149,9 @@ export function toSearchString(p: SearchParams): string {
 export function savedSearchKey(p: SearchParams): string {
   const { page: _p, sort: _s, ...rest } = p;
   const sorted = <T,>(v: T): T => (Array.isArray(v) ? ([...v].map(String).sort() as T) : v);
-  const attrs = rest.attrs ? Object.fromEntries(Object.entries(rest.attrs).map(([k, v]) => [k, sorted(v)])) : undefined;
-  const q = rest.q?.replace(/\s+/g, ' ').trim().toLowerCase() || undefined;
+  // Uložený JSON nemusí mít přesný tvar (starší záznamy, ruční volání API) – text bereme jen jako řetězec
+  const q = typeof rest.q === 'string' ? rest.q.replace(/\s+/g, ' ').trim().toLowerCase() || undefined : undefined;
+  const attrs = rest.attrs && typeof rest.attrs === 'object' ? Object.fromEntries(Object.entries(rest.attrs).map(([k, v]) => [k, sorted(v)])) : undefined;
   const u = new URLSearchParams(toSearchString({ ...rest, q, condition: sorted(rest.condition), attrs }));
   u.sort();
   return u.toString();

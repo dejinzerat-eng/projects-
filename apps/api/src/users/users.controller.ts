@@ -212,7 +212,8 @@ export class UsersController {
     const mine = await this.prisma.savedSearch.findMany({ where: { userId: u.id } });
     const key = savedSearchKey(dto.query as SearchParams);
     const existing = mine.find((s) => savedSearchKey(s.query as SearchParams) === key);
-    if (existing) return existing;
+    // Už uložené, ale s vypnutými upozorněními: „Hlídat“ je znovu zapne
+    if (existing) return existing.notify || !dto.notify ? existing : this.prisma.savedSearch.update({ where: { id: existing.id }, data: { notify: true } });
     if (mine.length >= 50) throw new BadRequestException('Nejvýše 50 uložených hledání.');
     return this.prisma.savedSearch.create({ data: { userId: u.id, name: dto.name, query: dto.query as Prisma.InputJsonValue, notify: dto.notify } });
   }

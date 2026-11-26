@@ -240,6 +240,12 @@ describe('klíč uloženého hledání', () => {
     assert.notEqual(savedSearchKey({ q: 'kolo', sellerType: 'private' }), savedSearchKey({ q: 'kolo', sellerType: 'business' }));
   });
 
+  it('nespadne na uloženém JSON v nečekaném tvaru', () => {
+    const odd = { q: 123, attrs: 'x', condition: 'NEW' } as unknown as Parameters<typeof savedSearchKey>[0];
+    assert.doesNotThrow(() => savedSearchKey(odd));
+    assert.equal(savedSearchKey(odd), savedSearchKey({ condition: ['NEW'] }));
+  });
+
   it('stejný klíč z URL i z uloženého JSON', () => {
     const fromUrl = fromSearchString(new URLSearchParams('mesto=Praha&q=Kolo&cena_do=5000&strana=2'));
     assert.equal(savedSearchKey(fromUrl), savedSearchKey({ priceMax: 5000, city: 'Praha', q: 'kolo' }));

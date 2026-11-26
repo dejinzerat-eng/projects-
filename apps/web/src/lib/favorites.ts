@@ -17,5 +17,6 @@ export { savedSearchKey };
 export const getSavedSearches = cache(async (): Promise<Map<string, string>> => {
   const c = await cookies();
   if (!c.get('dej_session')) return new Map();
-  try { return new Map((await api<{ id: string; query: SearchParams }[]>('/me/saved-searches')).map((s) => [savedSearchKey(s.query), s.id])); } catch { return new Map(); }
+  // Jen hledání se zapnutými upozorněními – u vypnutých tlačítko nabídne „Hlídat“ (API upozornění znovu zapne)
+  try { return new Map((await api<{ id: string; query: SearchParams; notify: boolean }[]>('/me/saved-searches')).filter((s) => s.notify).map((s) => [savedSearchKey(s.query), s.id])); } catch { return new Map(); }
 });
