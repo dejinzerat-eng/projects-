@@ -30,7 +30,7 @@ Workflow `.github/workflows/db-backup.yml` každý den ve 02:17 UTC spustí `pg_
 |---|---|---|
 | `DATABASE_BACKUP_URL` | secret | **přímé** připojení (session mode, port 5432, ne PgBouncer 6543), ideálně role jen pro čtení, např. `postgresql://postgres.<ref>:<heslo>@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require` |
 | `BACKUP_PASSPHRASE` | secret | dlouhé náhodné heslo; záloha se zašifruje (gpg AES-256). Bez něj se uloží nešifrovaně a workflow vypíše varování. |
-| `BACKUP_SCHEMA` | variable | výchozí `app`; `*` = celá databáze |
+| `BACKUP_SCHEMA` | variable | výchozí schéma z `?schema=` v URL, jinak `app`; `*` = celá databáze. Parametry Prismy (`schema`, `pgbouncer`, `connection_limit`) workflow z URL samo odstraní. Prázdná záloha (0 tabulek) skončí chybou. |
 | `BACKUP_RETENTION_DAYS` | variable | výchozí 30 (GitHub povoluje max. 90) |
 
 Heslo `BACKUP_PASSPHRASE` uložte i mimo GitHub (správce hesel) – bez něj zálohu nerozšifrujete.
@@ -55,7 +55,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA app GRANT SELECT ON TABLES TO dej_backup;
    ```bash
    scripts/db-restore.sh dejinzerat-2026-11-25T0217Z.dump.gpg "postgresql://uzivatel:heslo@host:5432/postgres"
    ```
-   Skript zálohu rozšifruje (zeptá se na `BACKUP_PASSPHRASE`), ověří a nahraje v jedné transakci (při chybě se nic nezmění).
+   Skript zálohu rozšifruje (zeptá se na `BACKUP_PASSPHRASE`), ověří a nahraje v jedné transakci (při chybě se nic nezmění). Schéma, které v cíli už existuje (např. `public`), nezakládá znovu. Postup je vyzkoušený na lokálním Postgresu (záloha → nová databáze → stejné počty inzerátů).
 4. Ověřit data (počty uživatelů a inzerátů, poslední inzeráty) a teprve potom přepnout `DATABASE_URL` / `DIRECT_URL` ve Vercelu na obnovenou databázi a znovu nasadit.
 5. Pokud je záloha starší než poslední migrace, `prisma migrate deploy` při nasazení chybějící migrace doplní.
 

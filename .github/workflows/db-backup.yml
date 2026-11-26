@@ -5,7 +5,7 @@
 #   secrets.DATABASE_BACKUP_URL   přímé připojení k Postgresu (ne přes PgBouncer), např.
 #                                 postgresql://postgres.<ref>:<heslo>@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require
 #   secrets.BACKUP_PASSPHRASE     (doporučeno) heslo pro zašifrování zálohy (gpg, AES-256) – záloha obsahuje osobní údaje
-#   vars.BACKUP_SCHEMA            schéma k záloze (výchozí „app“; prázdná hodnota „*“ = celá databáze)
+#   vars.BACKUP_SCHEMA            schéma k záloze (výchozí ?schema= z URL, jinak „app“; „*“ = celá databáze)
 #   vars.BACKUP_RETENTION_DAYS    jak dlouho artefakt uchovat (výchozí 30 dní, max. 90)
 # Obnova: viz docs/ZALOHY.md
 name: Záloha databáze
@@ -30,7 +30,7 @@ jobs:
     env:
       DATABASE_BACKUP_URL: ${{ secrets.DATABASE_BACKUP_URL }}
       BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
-      BACKUP_SCHEMA: ${{ vars.BACKUP_SCHEMA || 'app' }}
+      BACKUP_SCHEMA: ${{ vars.BACKUP_SCHEMA }}
     steps:
       - name: Kontrola nastavení
         id: cfg
@@ -48,14 +48,31 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p backup
+          # Parametry Prismy (?schema=app&pgbouncer=true&connection_limit=1) libpq nezná a pg_dump by s nimi skončil chybou.
+          # Odstraníme je; schéma z ?schema= použijeme, pokud není nastavená proměnná BACKUP_SCHEMA.
+          eval "$(python3 - <<'PY'
+          import os, shlex, urllib.parse as u
+          p = u.urlsplit(os.environ["DATABASE_BACKUP_URL"])
+          q = u.parse_qsl(p.query, keep_blank_values=True)
+          schema = dict(q).get("schema", "")
+          q = [(k, v) for k, v in q if k not in ("schema", "pgbouncer", "connection_limit", "pool_timeout", "statement_cache_size")]
+          print("PG_URL=" + shlex.quote(u.urlunsplit(p._replace(query=u.urlencode(q)))))
+          print("URL_SCHEMA=" + shlex.quote(schema))
+          PY
+          )"
+          echo "::add-mask::$PG_URL"
+          SCHEMA="${BACKUP_SCHEMA:-${URL_SCHEMA:-app}}"
           SCHEMA_ARGS=""
-          if [ "$BACKUP_SCHEMA" != "*" ]; then SCHEMA_ARGS="--schema=$BACKUP_SCHEMA"; fi
-          docker run --rm -e PGCONNECT_TIMEOUT=30 -v "$PWD/backup:/backup" postgres:17 \
-            pg_dump "$DATABASE_BACKUP_URL" --format=custom --compress=9 --no-owner --no-privileges $SCHEMA_ARGS \
+          if [ "$SCHEMA" != "*" ]; then SCHEMA_ARGS="--schema=$SCHEMA"; fi
+          echo "Zálohuji schéma: $SCHEMA"
+          docker run --rm -e PGCONNECT_TIMEOUT=30 -e PG_URL="$PG_URL" -v "$PWD/backup:/backup" postgres:17 \
+            sh -c 'pg_dump "$PG_URL" "$@"' sh --format=custom --compress=9 --no-owner --no-privileges $SCHEMA_ARGS \
             --file "/backup/dejinzerat-${{ steps.cfg.outputs.stamp }}.dump"
-          # Kontrola, že archiv jde přečíst
+          # Kontrola, že archiv jde přečíst a není prázdný (např. špatně zvolené schéma)
           docker run --rm -v "$PWD/backup:/backup" postgres:17 pg_restore --list "/backup/dejinzerat-${{ steps.cfg.outputs.stamp }}.dump" > backup/obsah.txt
-          echo "Tabulky v záloze: $(grep -c 'TABLE DATA' backup/obsah.txt)"
+          TABLES=$(grep -c 'TABLE DATA' backup/obsah.txt || true)
+          echo "Tabulky v záloze: $TABLES"
+          if [ "${TABLES:-0}" -eq 0 ]; then echo "::error title=Prázdná záloha::Záloha neobsahuje žádné tabulky – zkontrolujte BACKUP_SCHEMA a oprávnění role."; exit 1; fi
           ls -lh backup
 
       - name: Zašifrování
