@@ -6,8 +6,8 @@ import type { SearchParams } from '@dej/shared';
 import { call } from '@/lib/client';
 import { useToast } from './toast';
 
-export function SaveSearch({ params, label }: { params: SearchParams; label: string }) {
-  const [saved, setSaved] = useState(false);
+export function SaveSearch({ params, label, initialSaved = false }: { params: SearchParams; label: string; initialSaved?: boolean }) {
+  const [saved, setSaved] = useState(initialSaved);
   const toast = useToast(); const router = useRouter();
   async function save() {
     try {

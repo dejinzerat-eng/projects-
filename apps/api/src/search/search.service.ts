@@ -1,8 +1,15 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { CATEGORIES, CITIES, findCity, SearchParams } from '@dej/shared';
+import { CATEGORIES, haversine, normalizeSearchText, queryWords, SearchParams, synonymMap } from '@dej/shared';
+import { findMunicipality, suggestMunicipalities } from '@dej/shared/dist/municipalities';
 import { config } from '../common/config';
 import { PrismaService } from '../common/prisma.service';
+import {
+  backfillSearchTextSql, buildTerms, distanceSql, filterSql, FROM_SQL, FUZZY_THRESHOLD, fuzzyScoreSql, Geo, MAX_RADIUS_KM, NORM_TITLE, orderSql,
+  SEARCH_TEXT, termsFuzzy, termsMatch, tierSql, wordPrefix,
+} from './search-query';
+
+export { haversine };
 
 export const LISTING_INCLUDE = {
   images: { orderBy: { position: 'asc' as const }, take: 1 },
@@ -17,13 +24,30 @@ const PAGE = 24;
 export interface ListingCard {
   id: string; slug: string; title: string; price: number | null; priceNegotiable: boolean; currency: string;
   city: string; region: string; condition: string | null; offerType: string; image: string | null; createdAt: number;
-  categorySlug: string; parentCategorySlug: string; categoryName: string; verified: boolean; isTop: boolean; highlighted: boolean;
+  categorySlug: string; parentCategorySlug: string; categoryName: string; verified: boolean; isBusiness: boolean; isTop: boolean; highlighted: boolean;
   status: string; distanceKm?: number;
 }
 
+export interface SearchOptions {
+  /** Jen inzeráty zveřejněné po tomto okamžiku (upozornění na uložená hledání) */
+  publishedAfter?: Date;
+  limit?: number;
+  /** Když přesná shoda nic nenajde, zkusit podobná slova (výchozí ano, u upozornění ne) */
+  fuzzy?: boolean;
+}
+
+export interface SearchResponse {
+  hits: ListingCard[]; total: number; page: number; pages: number; facets: Record<string, Record<string, number>>; engine: string;
+  /** Přesná shoda nebyla, výsledky jsou s opravou překlepů */
+  fuzzy?: boolean;
+  /** Bod, od kterého se počítá vzdálenost (pro „Nejblíže“ a „v okolí“) */
+  origin?: { lat: number; lng: number; name?: string };
+}
+
 /**
- * Vyhledávání přes Meilisearch (překlepy, našeptávání, geo filtr, fasety).
- * Když Meilisearch není dostupný, použije se záložní hledání v PostgreSQL.
+ * Vyhledávání. S MEILI_URL přes Meilisearch, jinak (produkce) v PostgreSQL:
+ * normalizovaný text bez diakritiky s trigram indexem, synonyma, oprava překlepů,
+ * skutečný okruh v km (haversine) a řazení podle relevance → topování → data zveřejnění.
  */
 @Injectable()
 export class SearchService implements OnModuleInit {
@@ -47,16 +71,12 @@ export class SearchService implements OnModuleInit {
       await this.meili('/health');
       await this.meili('/indexes', 'POST', { uid: 'listings', primaryKey: 'id' }).catch(() => undefined);
       await this.meili('/indexes/listings/settings', 'PATCH', {
-        searchableAttributes: ['title', 'categoryName', 'attrText', 'description'],
-        filterableAttributes: ['categorySlug', 'parentCategorySlug', 'price', 'city', 'region', 'condition', 'offerType', 'verified', 'createdAt', '_geo', 'status', 'userId', ...ATTR_KEYS.map((k) => `attr_${k}`)],
+        searchableAttributes: ['title', 'categoryName', 'attrText', 'description', 'city'],
+        filterableAttributes: ['categorySlug', 'parentCategorySlug', 'price', 'city', 'region', 'condition', 'offerType', 'verified', 'isBusiness', 'createdAt', '_geo', 'status', 'userId', ...ATTR_KEYS.map((k) => `attr_${k}`)],
         sortableAttributes: ['price', 'createdAt', 'rankAt', '_geo'],
         rankingRules: ['words', 'typo', 'proximity', 'attribute', 'sort', 'exactness', 'rankAt:desc'],
         typoTolerance: { enabled: true, minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 } },
-        synonyms: {
-          iphone: ['ajfoun', 'ifon'], notebook: ['laptop', 'ntb'], laptop: ['notebook'], kolo: ['bicykl', 'jízdní kolo'], bicykl: ['kolo'],
-          auto: ['automobil', 'vůz'], televize: ['tv', 'televizor'], tv: ['televize'], mobil: ['telefon', 'smartphone'], telefon: ['mobil'],
-          gauč: ['pohovka', 'sedačka'], pohovka: ['gauč', 'sedačka'], sedačka: ['gauč', 'pohovka'], ps5: ['playstation 5'], playstation: ['ps4', 'ps5'],
-        },
+        synonyms: synonymMap(),
         pagination: { maxTotalHits: 5000 },
       });
       this.enabled = true;
@@ -76,7 +96,8 @@ export class SearchService implements OnModuleInit {
       id: l.id, slug: l.slug, title: l.title, price: l.price, priceNegotiable: l.priceNegotiable, currency: l.currency,
       city: l.city, region: l.region, condition: l.condition, offerType: l.offerType, image: l.images[0]?.thumbUrl ?? null,
       createdAt: (l.publishedAt ?? l.createdAt).getTime(), categorySlug: l.category.slug, parentCategorySlug: parent.slug, categoryName: l.category.name,
-      verified: !!l.user.phoneVerifiedAt, isTop: !!l.topUntil && l.topUntil.getTime() > now, highlighted: !!l.highlightedUntil && l.highlightedUntil.getTime() > now,
+      verified: !!l.user.phoneVerifiedAt, isBusiness: !!l.user.isBusiness,
+      isTop: !!l.topUntil && l.topUntil.getTime() > now, highlighted: !!l.highlightedUntil && l.highlightedUntil.getTime() > now,
       status: l.status,
     };
   }
@@ -116,22 +137,30 @@ export class SearchService implements OnModuleInit {
     return n;
   }
 
-  private geoOf(p: SearchParams) {
+  /** Doplní searchText u inzerátů, kde chybí (např. po seedu). Vrací počet upravených řádků. */
+  backfillSearchText(all = false) {
+    return this.prisma.$executeRaw(backfillSearchTextSql(!all));
+  }
+
+  /** Bod pro vzdálenost: poloha uživatele, nebo obec z filtru (kterákoli obec ČR). */
+  private geoOf(p: SearchParams): (Geo & { name?: string; region?: string }) | undefined {
+    if (p.lat != null && p.lng != null) return { lat: Number(p.lat), lng: Number(p.lng) };
     if (!p.city) return undefined;
-    const c = findCity(p.city);
-    return c ? { lat: c.lat, lng: c.lng } : undefined;
+    const m = findMunicipality(p.city);
+    return m ? { lat: m.lat, lng: m.lng, name: m.name, region: m.region } : undefined;
   }
 
-  async search(p: SearchParams, opts: { createdAfter?: Date; limit?: number } = {}) {
-    const page = Math.max(1, p.page ?? 1);
-    const limit = opts.limit ?? PAGE;
+  async search(p: SearchParams, opts: SearchOptions = {}): Promise<SearchResponse> {
+    const page = Math.max(1, Math.min(200, Math.floor(Number(p.page) || 1)));
+    const limit = Math.max(1, Math.min(60, opts.limit ?? PAGE));
     if (this.enabled) {
-      try { return await this.searchMeili(p, page, limit, opts.createdAfter); } catch (e) { this.log.error((e as Error).message); }
+      try { return await this.searchMeili(p, page, limit, opts.publishedAfter); } catch (e) { this.log.error((e as Error).message); }
     }
-    return this.searchDb(p, page, limit, opts.createdAfter);
+    // Upozornění na uložená hledání posílají jen přesné shody, ne „podobné výsledky“
+    return this.searchDb(p, page, limit, opts.publishedAfter, opts.fuzzy ?? !opts.publishedAfter);
   }
 
-  private async searchMeili(p: SearchParams, page: number, limit: number, createdAfter?: Date) {
+  private async searchMeili(p: SearchParams, page: number, limit: number, publishedAfter?: Date): Promise<SearchResponse> {
     const f: string[] = [];
     const esc = (s: string) => JSON.stringify(s);
     if (p.sub) f.push(`categorySlug = ${esc(p.sub)}`);
@@ -139,13 +168,14 @@ export class SearchService implements OnModuleInit {
     if (p.priceMin != null) f.push(`price >= ${Number(p.priceMin)}`);
     if (p.priceMax != null) f.push(`price <= ${Number(p.priceMax)}`);
     const geo = this.geoOf(p);
-    if (geo && p.radius) f.push(`_geoRadius(${geo.lat}, ${geo.lng}, ${Math.min(500, Number(p.radius)) * 1000})`);
-    else if (p.city) f.push(`city = ${esc(p.city)}`);
+    if (geo && p.radius) f.push(`_geoRadius(${geo.lat}, ${geo.lng}, ${Math.min(MAX_RADIUS_KM, Number(p.radius)) * 1000})`);
+    else if (p.city) f.push(`city = ${esc(geo?.name ?? p.city)}`);
     if (p.region) f.push(`region = ${esc(p.region)}`);
     if (p.condition?.length) f.push(`condition IN [${p.condition.map(esc).join(',')}]`);
     if (p.offerType) f.push(`offerType = ${esc(p.offerType)}`);
     if (p.verified) f.push('verified = true');
-    const since = createdAfter?.getTime() ?? (p.since ? Date.now() - { '24h': 864e5, '7d': 7 * 864e5, '30d': 30 * 864e5 }[p.since] : undefined);
+    if (p.sellerType) f.push(`isBusiness = ${p.sellerType === 'business'}`);
+    const since = publishedAfter?.getTime() ?? (p.since ? Date.now() - { '24h': 864e5, '7d': 7 * 864e5, '30d': 30 * 864e5 }[p.since] : undefined);
     if (since) f.push(`createdAt > ${since}`);
     for (const [k, v] of Object.entries(p.attrs ?? {})) {
       if (!ATTR_KEYS.includes(k)) continue;
@@ -164,74 +194,106 @@ export class SearchService implements OnModuleInit {
     const r = await this.meili('/indexes/listings/search', 'POST', {
       q: p.q ?? '', filter: f, sort, hitsPerPage: limit, page,
       facets: ['parentCategorySlug', 'categorySlug', 'condition'],
-      attributesToRetrieve: ['id', 'slug', 'title', 'price', 'priceNegotiable', 'currency', 'city', 'region', 'condition', 'offerType', 'image', 'createdAt', 'categorySlug', 'parentCategorySlug', 'categoryName', 'verified', 'isTop', 'highlighted', 'status', '_geo'],
+      attributesToRetrieve: ['id', 'slug', 'title', 'price', 'priceNegotiable', 'currency', 'city', 'region', 'condition', 'offerType', 'image', 'createdAt', 'categorySlug', 'parentCategorySlug', 'categoryName', 'verified', 'isBusiness', 'isTop', 'highlighted', 'status', '_geo'],
     });
     const hits = (r.hits as (ListingCard & { _geo?: { lat: number; lng: number }; _geoDistance?: number })[]).map(({ _geo, _geoDistance, ...h }) => ({
       ...h, ...(geo && _geo ? { distanceKm: Math.round(haversine(geo, _geo)) } : {}),
     }));
-    return { hits, total: r.totalHits as number, page, pages: r.totalPages as number, facets: r.facetDistribution as Record<string, Record<string, number>>, engine: 'meilisearch' };
+    return { hits, total: r.totalHits as number, page, pages: r.totalPages as number, facets: r.facetDistribution as Record<string, Record<string, number>>, engine: 'meilisearch', ...(geo ? { origin: geo } : {}) };
   }
 
-  private async searchDb(p: SearchParams, page: number, limit: number, createdAfter?: Date) {
-    const where: Prisma.ListingWhereInput = { status: { in: ['ACTIVE', 'RESERVED'] } };
-    const and: Prisma.ListingWhereInput[] = [];
-    if (p.q) for (const w of p.q.split(/\s+/).filter(Boolean)) and.push({ OR: [{ title: { contains: w, mode: 'insensitive' } }, { description: { contains: w, mode: 'insensitive' } }] });
-    if (p.sub) and.push({ category: { slug: p.sub, parent: p.category ? { slug: p.category } : undefined } });
-    else if (p.category) and.push({ OR: [{ category: { slug: p.category, parentId: null } }, { category: { parent: { slug: p.category } } }] });
-    if (p.priceMin != null || p.priceMax != null) and.push({ price: { gte: p.priceMin, lte: p.priceMax } });
+  private async searchDb(p: SearchParams, page: number, limit: number, publishedAfter?: Date, allowFuzzy = true): Promise<SearchResponse> {
+    const now = new Date();
     const geo = this.geoOf(p);
-    if (geo && p.radius) {
-      const d = p.radius / 111;
-      and.push({ lat: { gte: geo.lat - d, lte: geo.lat + d }, lng: { gte: geo.lng - d * 1.5, lte: geo.lng + d * 1.5 } });
-    } else if (p.city) and.push({ city: p.city });
-    if (p.region) and.push({ region: p.region });
-    if (p.condition?.length) and.push({ condition: { in: p.condition as any } });
-    if (p.offerType) and.push({ offerType: p.offerType as any });
-    if (p.verified) and.push({ user: { phoneVerifiedAt: { not: null } } });
-    const since = createdAfter ?? (p.since ? new Date(Date.now() - { '24h': 864e5, '7d': 7 * 864e5, '30d': 30 * 864e5 }[p.since]) : undefined);
-    if (since) and.push({ createdAt: { gt: since } });
-    for (const [k, v] of Object.entries(p.attrs ?? {})) {
-      if (!ATTR_KEYS.includes(k)) continue;
-      if (Array.isArray(v)) and.push({ OR: v.map((x) => ({ attributes: { path: [k], equals: x } })) });
-      else if (typeof v === 'object' && v) { if (v.min != null) and.push({ attributes: { path: [k], gte: v.min } }); if (v.max != null) and.push({ attributes: { path: [k], lte: v.max } }); }
-      else and.push({ attributes: { path: [k], equals: v as any } });
+    const cityKey = p.city && !(p.lat != null && p.lng != null) ? normalizeSearchText(geo?.name ?? p.city) : undefined;
+    const where = filterSql(p, { geo, cityKey, cityRegion: geo?.region, publishedAfter, attrKeys: ATTR_KEYS, now });
+    const terms = p.q ? buildTerms(p.q) : [];
+    const phrase = p.q ? queryWords(p.q).join(' ') : '';
+    const sort = p.sort === 'distance' && !geo ? undefined : p.sort;
+    const select = geo ? Prisma.sql`l."id", COUNT(*) OVER() AS total, ${distanceSql(geo)} AS dist` : Prisma.sql`l."id", COUNT(*) OVER() AS total`;
+    const offset = (page - 1) * limit;
+    type Row = { id: string; total: bigint };
+
+    /** Jedna stránka výsledků a celkový počet (COUNT(*) OVER(); za poslední stránkou zvlášť). */
+    const fetchPage = async (conds: Prisma.Sql[], order: Prisma.Sql, fuzzyThreshold = false): Promise<{ rows: Row[]; total: number }> => {
+      const cond = Prisma.join(conds, ' AND ');
+      const pageSql = Prisma.sql`SELECT ${select} ${FROM_SQL} WHERE ${cond} ORDER BY ${order} LIMIT ${limit} OFFSET ${offset}`;
+      const countSql = Prisma.sql`SELECT COUNT(*) AS n ${FROM_SQL} WHERE ${cond}`;
+      let rows: Row[];
+      let counted: { n: bigint }[] | undefined;
+      if (fuzzyThreshold) {
+        // Oprava překlepů: nižší práh podobnosti jen pro tuto transakci (funguje i přes PgBouncer)
+        const setThreshold = this.prisma.$queryRaw`SELECT set_config('pg_trgm.word_similarity_threshold', ${String(FUZZY_THRESHOLD)}, true)`;
+        const [, r] = await this.prisma.$transaction([setThreshold, this.prisma.$queryRaw<Row[]>(pageSql)]);
+        rows = r as Row[];
+        if (!rows.length && page > 1) {
+          const [, c] = await this.prisma.$transaction([this.prisma.$queryRaw`SELECT set_config('pg_trgm.word_similarity_threshold', ${String(FUZZY_THRESHOLD)}, true)`, this.prisma.$queryRaw<{ n: bigint }[]>(countSql)]);
+          counted = c as { n: bigint }[];
+        }
+      } else {
+        rows = await this.prisma.$queryRaw<Row[]>(pageSql);
+        if (!rows.length && page > 1) counted = await this.prisma.$queryRaw<{ n: bigint }[]>(countSql);
+      }
+      return { rows, total: rows.length ? Number(rows[0].total) : Number(counted?.[0]?.n ?? 0) };
+    };
+
+    let res: { rows: Row[]; total: number };
+    let fuzzy = false;
+    if (!terms.length) {
+      res = await fetchPage(where, orderSql(sort, { now, geo }));
+    } else {
+      res = await fetchPage([...where, termsMatch(SEARCH_TEXT, terms, true)], orderSql(sort, { now, geo, quality: tierSql(terms, phrase) }));
+      const fz = allowFuzzy ? termsFuzzy(SEARCH_TEXT, terms) : undefined;
+      if (res.total === 0 && fz) {
+        const f = await fetchPage([...where, fz], orderSql(sort, { now, geo, quality: fuzzyScoreSql(terms, phrase) }), true);
+        if (f.total > 0) { res = f; fuzzy = true; }
+      }
     }
-    where.AND = and;
-    const orderBy: Prisma.ListingOrderByWithRelationInput[] =
-      p.sort === 'price_asc' ? [{ price: 'asc' }] : p.sort === 'price_desc' ? [{ price: 'desc' }] : p.sort === 'newest' ? [{ createdAt: 'desc' }] : [{ topUntil: { sort: 'desc', nulls: 'last' } }, { bumpedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }];
-    const [rows, total] = await Promise.all([
-      this.prisma.listing.findMany({ where, include: LISTING_INCLUDE, orderBy, skip: (page - 1) * limit, take: limit }),
-      this.prisma.listing.count({ where }),
-    ]);
-    const hits = rows.map((l) => ({ ...this.toCard(l), ...(geo && l.lat != null && l.lng != null ? { distanceKm: Math.round(haversine(geo, { lat: l.lat, lng: l.lng })) } : {}) }));
-    return { hits, total, page, pages: Math.ceil(total / limit), facets: {}, engine: 'postgres' };
+    const { rows, total } = res;
+
+    const ids = rows.map((r) => r.id);
+    const list = ids.length ? await this.prisma.listing.findMany({ where: { id: { in: ids } }, include: LISTING_INCLUDE }) : [];
+    const byId = new Map(list.map((l) => [l.id, l]));
+    const hits = ids.map((id) => byId.get(id)).filter((l): l is ListingWith => !!l).map((l) => ({
+      ...this.toCard(l, now.getTime()),
+      ...(geo && l.lat != null && l.lng != null ? { distanceKm: Math.round(haversine(geo, { lat: l.lat, lng: l.lng })) } : {}),
+    }));
+    return { hits, total, page, pages: Math.ceil(total / limit), facets: {}, engine: 'postgres', ...(fuzzy ? { fuzzy } : {}), ...(geo ? { origin: geo } : {}) };
   }
 
-  /** Našeptávač: názvy inzerátů + kategorie + města. */
+  /** Našeptávač: názvy inzerátů + kategorie + obce. Nezáleží na diakritice, snese i překlep. */
   async suggest(q: string) {
-    const nq = q.trim();
+    const raw = q.trim().slice(0, 80);
+    const nq = normalizeSearchText(raw);
     if (nq.length < 2) return { queries: [], categories: [], cities: [] };
-    const low = nq.toLowerCase();
+    const words = nq.split(' ');
+    const matches = (name: string) => { const n = normalizeSearchText(name); return words.every((w) => n.includes(w)); };
     const categories = CATEGORIES.flatMap((c) => [{ slug: c.slug, name: c.name, parent: null as string | null, parentName: null as string | null }, ...c.children.map((s) => ({ slug: s.slug, name: s.name, parent: c.slug, parentName: c.name }))])
-      .filter((c) => c.name.toLowerCase().includes(low)).slice(0, 4);
-    const cities = CITIES.filter((c) => c.name.toLowerCase().startsWith(low)).slice(0, 3).map((c) => c.name);
+      .filter((c) => matches(c.name)).slice(0, 4);
+    const cities = [...new Set(suggestMunicipalities(raw, 3).map((c) => c.name))];
     let titles: string[] = [];
     if (this.enabled) {
       try {
-        const r = await this.meili('/indexes/listings/search', 'POST', { q: nq, limit: 8, attributesToRetrieve: ['title'], filter: [] });
+        const r = await this.meili('/indexes/listings/search', 'POST', { q: raw, limit: 8, attributesToRetrieve: ['title'], filter: [] });
         titles = r.hits.map((h: { title: string }) => h.title);
       } catch { /* ignore */ }
     } else {
-      titles = (await this.prisma.listing.findMany({ where: { status: 'ACTIVE', title: { contains: nq, mode: 'insensitive' } }, select: { title: true }, take: 8 })).map((x) => x.title);
+      titles = await this.suggestTitles(nq);
     }
     const queries = [...new Set(titles.map((t) => t.length > 48 ? t.slice(0, 48).replace(/\s\S*$/, '') : t))].slice(0, 6);
     return { queries, categories, cities };
   }
-}
 
-export function haversine(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
-  const R = 6371, toRad = (x: number) => (x * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
+  private async suggestTitles(nq: string): Promise<string[]> {
+    type R = { title: string };
+    const status = Prisma.sql`l."status" IN ('ACTIVE', 'RESERVED')`;
+    const rank = Prisma.sql`(CASE WHEN ${NORM_TITLE} LIKE ${`${nq}%`} THEN 0 WHEN ${wordPrefix(NORM_TITLE, nq)} THEN 1 ELSE 2 END), word_similarity(${nq}::text, ${NORM_TITLE}) DESC, l."publishedAt" DESC NULLS LAST`;
+    const exact = await this.prisma.$queryRaw<R[]>(Prisma.sql`SELECT l."title" FROM "Listing" l WHERE ${status} AND ${wordPrefix(SEARCH_TEXT, nq)} AND ${wordPrefix(NORM_TITLE, nq)} ORDER BY ${rank} LIMIT 8`);
+    if (exact.length >= 3 || nq.length < 4) return exact.map((r) => r.title);
+    const [, fz] = await this.prisma.$transaction([
+      this.prisma.$queryRaw`SELECT set_config('pg_trgm.word_similarity_threshold', ${String(FUZZY_THRESHOLD)}, true)`,
+      this.prisma.$queryRaw<R[]>(Prisma.sql`SELECT l."title" FROM "Listing" l WHERE ${status} AND ${nq}::text <% l."searchText" AND ${nq}::text <% ${NORM_TITLE} ORDER BY word_similarity(${nq}::text, ${NORM_TITLE}) DESC, l."publishedAt" DESC NULLS LAST LIMIT 8`),
+    ]);
+    return [...new Set([...exact, ...(fz as R[])].map((r) => r.title))];
+  }
 }

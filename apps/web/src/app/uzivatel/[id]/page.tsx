@@ -6,6 +6,7 @@ import { FollowButton } from '@/components/follow-button';
 import { ListingGrid } from '@/components/listing-card';
 import { ReportButton } from '@/components/report-button';
 import { api } from '@/lib/api';
+import { getFavoriteIds } from '@/lib/favorites';
 import { ago, plural } from '@/lib/format';
 import type { ListingCard } from '@/lib/types';
 import { OfferHistory, type HistoryPage } from './offer-history';
@@ -99,7 +100,7 @@ export default async function Page({ params }: Props) {
         <div className="min-w-0 space-y-10">
           <section>
             <h2 className="h-display mb-4 text-2xl font-bold">{plural(p.listings.length, 'aktivní inzerát', 'aktivní inzeráty', 'aktivních inzerátů')}</h2>
-            {p.listings.length ? <ListingGrid items={p.listings} /> : <p className="text-muted">Žádné aktivní inzeráty.</p>}
+            {p.listings.length ? <ListingGrid items={p.listings} favorites={await getFavoriteIds()} /> : <p className="text-muted">Žádné aktivní inzeráty.</p>}
           </section>
           <section>
             <h2 className="h-display text-2xl font-bold">Historie nabídek{p.history.total > 0 && <span className="text-muted"> ({p.history.total})</span>}</h2>

@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ChevronLeft, ChevronRight, SearchX, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SearchX, Sparkles, SpellCheck } from 'lucide-react';
 import { filtersFor, toSearchString, type SearchParams } from '@dej/shared';
 import { api } from '@/lib/api';
+import { getFavoriteIds, getSavedSearchKeys, savedSearchKey } from '@/lib/favorites';
 import { plural } from '@/lib/format';
 import type { Category, SearchResult } from '@/lib/types';
 import { CompareBar } from './compare';
@@ -18,9 +19,11 @@ export async function SearchView({ searchParams, category, sub, basePath }: { se
   for (const [k, v] of Object.entries(searchParams)) if (typeof v === 'string') qs.set(k, v);
   if (category) qs.set('kategorie', category);
   if (sub) qs.set('pod', sub);
-  const [cats, res] = await Promise.all([
+  const [cats, res, favorites, savedKeys] = await Promise.all([
     api<Category[]>('/categories', { revalidate: 60, auth: false }),
     api<SearchResult & { params: SearchParams }>(`/search?${qs}`, { auth: false }),
+    getFavoriteIds(),
+    getSavedSearchKeys(),
   ]);
   const p = res.params;
   // Chytré hledání: přesměrujeme na URL s rozpoznanými filtry, ať je panel filtrů vyplněný a odkaz sdílitelný
@@ -31,6 +34,7 @@ export async function SearchView({ searchParams, category, sub, basePath }: { se
   const cat = cats.find((c) => c.slug === p.category);
   const subCat = cat?.children.find((s) => s.slug === p.sub);
   const filters = p.category ? filtersFor(p.category, p.sub) : [];
+  const hasGeo = !!res.origin;
   const title = p.q ? `„${p.q}“` : subCat?.name ?? cat?.name ?? 'Všechny inzeráty';
   const pageHref = (n: number) => {
     const { category: _c, sub: _s, ...rest } = p;
@@ -50,7 +54,7 @@ export async function SearchView({ searchParams, category, sub, basePath }: { se
           <h1 className="h-display text-3xl font-bold sm:text-4xl">{title}</h1>
           <p className="mt-1 text-muted">{plural(res.total, 'inzerát', 'inzeráty', 'inzerátů')}</p>
         </div>
-        <SaveSearch params={p} label={[p.q, subCat?.name ?? cat?.name, p.city, p.priceMax ? `do ${p.priceMax} Kč` : ''].filter(Boolean).join(', ') || 'Všechny inzeráty'} />
+        <SaveSearch key={savedSearchKey(p)} params={p} initialSaved={savedKeys.has(savedSearchKey(p))} label={[p.q, subCat?.name ?? cat?.name, p.city ?? (p.lat != null ? 'v okolí mé polohy' : ''), p.priceMax ? `do ${p.priceMax} Kč` : ''].filter(Boolean).join(', ') || 'Všechny inzeráty'} />
       </div>
       {recognized.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-brand-soft bg-brand-soft/50 px-4 py-3 text-sm">
@@ -66,13 +70,18 @@ export async function SearchView({ searchParams, category, sub, basePath }: { se
       <div className="mt-6 grid gap-8 lg:grid-cols-[280px_1fr]">
         <div className="flex items-center justify-between gap-3 lg:block">
           <Filters categories={cats} filters={filters} fixedCategory={basePath !== '/hledat'} />
-          <div className="lg:hidden"><SortSelect hasGeo={!!p.city} /></div>
+          <div className="lg:hidden"><SortSelect hasGeo={hasGeo} /></div>
         </div>
         <section aria-label="Výsledky" className="-mt-4 lg:mt-0">
           <div className="mb-4 hidden items-center justify-end gap-3 lg:flex">
-            <SortSelect hasGeo={!!p.city} />
+            <SortSelect hasGeo={hasGeo} />
           </div>
-          {res.hits.length ? <ListingGrid items={res.hits} /> : (
+          {res.fuzzy && (
+            <p className="mb-4 flex items-start gap-2 rounded-2xl border border-line bg-surface px-4 py-3 text-sm text-ink-2">
+              <SpellCheck className="mt-0.5 size-4 shrink-0 text-brand" />Přesnou shodu jsme nenašli, zobrazujeme podobné výsledky.
+            </p>
+          )}
+          {res.hits.length ? <ListingGrid items={res.hits} favorites={favorites} /> : (
             <div className="card flex flex-col items-center gap-3 px-6 py-16 text-center">
               <SearchX className="size-10 text-muted" strokeWidth={1.5} />
               <h2 className="text-lg font-bold">Nic jsme nenašli</h2>

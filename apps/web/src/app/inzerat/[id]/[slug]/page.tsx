@@ -11,7 +11,9 @@ import { ListingGrid } from '@/components/listing-card';
 import { ReportButton } from '@/components/report-button';
 import { ShareButton } from '@/components/share-button';
 import { parseVideoUrl } from '@dej/shared';
+import { TrackView } from '@/components/track-view';
 import { api, ApiError, getMe } from '@/lib/api';
+import { getFavoriteIds } from '@/lib/favorites';
 import { ago, CONDITION_LABEL, OFFER_LABEL, plural, price, STATUS_LABEL } from '@/lib/format';
 import type { FilterDef, ListingCard } from '@/lib/types';
 
@@ -60,6 +62,7 @@ export default async function Page({ params }: Props) {
   return (
     <div className="container-x py-4 sm:py-8">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
+      {l.category.parent && <TrackView id={l.id} cat={l.category.parent.slug} sub={l.category.slug} />}
       <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm text-muted" aria-label="Drobečková navigace">
         <Link href="/" className="hover:text-ink">Domů</Link><span>/</span>
         <Link href={`/kategorie/${parent.slug}`} className="hover:text-ink">{parent.name}</Link><span>/</span>
@@ -140,7 +143,7 @@ export default async function Page({ params }: Props) {
       {similar.length > 0 && (
         <section className="mt-14">
           <h2 className="h-display mb-5 text-2xl font-bold">Podobné nabídky</h2>
-          <ListingGrid items={similar.slice(0, 8)} />
+          <ListingGrid items={similar.slice(0, 8)} favorites={await getFavoriteIds()} />
         </section>
       )}
       <CompareBar />

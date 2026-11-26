@@ -1,5 +1,5 @@
 'use client';
-import { CITIES, cleanParams, CONDITIONS, type FilterDef, OFFER_TYPES, parseVideoUrl, VIDEO_URL_ERROR } from '@dej/shared';
+import { cleanParams, CONDITIONS, type FilterDef, OFFER_TYPES, parseVideoUrl, VIDEO_URL_ERROR } from '@dej/shared';
 import { ArrowLeft, ArrowRight, Camera, Check, ChevronLeft, ChevronRight, ImagePlus, Lightbulb, Loader2, MapPin, Save, Sparkles, Star, Trash2, Wand2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { isImageFile, MAX_UPLOAD_BYTES, shrinkImage } from '@/lib/image';
@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { call } from '@/lib/client';
 import { CONDITION_LABEL, price as fmtPrice } from '@/lib/format';
 import { CategoryIcon } from './icons';
+import { LocationFields } from './location-fields';
 import { useToast } from './toast';
 
 export interface WizardInitial {
@@ -426,16 +427,7 @@ function PriceFields({ d, up }: StepProps) {
 function StepPrice({ d, up }: StepProps) {
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-[1fr_160px]">
-        <div>
-          <label className="label" htmlFor="city">Lokalita</label>
-          <div className="relative"><MapPin className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-            <input id="city" list="cities" className="input pl-10" value={d.city} onChange={(e) => { const c = CITIES.find((x) => x.name === e.target.value); up({ city: e.target.value, zip: c && !d.zip ? c.zip : d.zip }); }} placeholder="Město nebo obec" />
-          </div>
-          <datalist id="cities">{CITIES.map((c) => <option key={c.name} value={c.name} />)}</datalist>
-        </div>
-        <div><label className="label" htmlFor="zip">PSČ</label><input id="zip" inputMode="numeric" className="input" maxLength={6} value={d.zip} onChange={(e) => up({ zip: e.target.value })} placeholder="110 00" /></div>
-      </div>
+      <LocationFields city={d.city} zip={d.zip} onChange={up} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListingStatus, Prisma } from '@prisma/client';
-import { cleanParams, effectiveFilters, type FilterDef, findCity, parseVideoUrl, slugify, VIDEO_URL_ERROR } from '@dej/shared';
+import { buildSearchText, cleanParams, effectiveFilters, type FilterDef, findCity, parseVideoUrl, slugify, VIDEO_URL_ERROR } from '@dej/shared';
+import { resolveLocation } from '@dej/shared/dist/municipalities';
 import { z } from 'zod';
 import { AuthUser } from '../common/auth.guard';
 import { config } from '../common/config';
@@ -154,7 +155,7 @@ export class ListingsService {
     await this.checkSpam(user.id);
     const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
     const attributes = this.cleanAttributes(cat.defs, dto.attributes, dto.publish);
-    const city = dto.city ? findCity(dto.city) : undefined;
+    const loc = resolveLocation(dto.city, dto.zip);
     const risk = await this.assess(user.id, null, dto, dto.publish);
     const status = nextStatus({ publish: dto.publish, premoderation: config.premoderation, score: risk.score });
     const now = new Date();
@@ -162,8 +163,8 @@ export class ListingsService {
       data: {
         slug: slugify(dto.title) || 'inzerat', title: dto.title, description: dto.description, ...this.priceFields(dto),
         currency: dto.currency, categoryId: cat.id, userId: user.id, condition: dto.condition ?? null, offerType: dto.offerType,
-        city: city?.name ?? dto.city, region: city?.region ?? '', zip: dto.zip?.replace(/\s/g, '') || city?.zip, lat: city?.lat, lng: city?.lng,
-        attributes: attributes as Prisma.InputJsonValue,
+        city: loc.city, region: loc.region, zip: loc.zip, lat: loc.lat, lng: loc.lng,
+        attributes: attributes as Prisma.InputJsonValue, searchText: buildSearchText({ ...dto, attributes, city: loc.city }),
         videoUrl: dto.videoUrl || null, status, spamScore: risk.score, riskReasons: risk.reasons, contentHash: risk.hash,
         composeSeconds: status === 'DRAFT' ? null : this.composeSeconds(dto),
         publishedAt: status === 'ACTIVE' ? now : null,
@@ -194,7 +195,8 @@ export class ListingsService {
     const dto = publishing ? this.requireComplete(input) : input;
     const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
     const attributes = this.cleanAttributes(cat.defs, dto.attributes, publishing);
-    const city = dto.city ? findCity(dto.city) : undefined;
+    // Lokalita se určí vždy znovu – neznámá obec smaže kraj i souřadnice, nezůstanou ty staré
+    const loc = resolveLocation(dto.city, dto.zip);
     const risk = await this.assess(l.userId, l, dto, publishing);
     const status = nextStatus({ current: l.status, publish: dto.publish, premoderation: config.premoderation, score: risk.score });
     const now = new Date();
@@ -204,8 +206,8 @@ export class ListingsService {
       data: {
         slug: slugify(dto.title) || 'inzerat', title: dto.title, description: dto.description, ...this.priceFields(dto), currency: dto.currency,
         categoryId: cat.id, condition: dto.condition ?? null, offerType: dto.offerType,
-        city: city?.name ?? dto.city, region: city?.region ?? l.region, zip: dto.zip?.replace(/\s/g, '') || city?.zip, lat: city?.lat ?? l.lat, lng: city?.lng ?? l.lng,
-        attributes: attributes as Prisma.InputJsonValue,
+        city: loc.city, region: loc.region, zip: loc.zip, lat: loc.lat, lng: loc.lng,
+        attributes: attributes as Prisma.InputJsonValue, searchText: buildSearchText({ ...dto, attributes, city: loc.city }),
         videoUrl: dto.videoUrl || null, status, spamScore: risk.score, riskReasons: risk.reasons, contentHash: risk.hash,
         publishedAt: status === 'ACTIVE' && !l.publishedAt ? now : l.publishedAt,
         // Oprava zamítnutého inzerátu: starý důvod zamítnutí už neplatí

@@ -3,3 +3,5 @@ export * from './locations';
 export * from './query';
 export * from './params';
 export * from './video';
+export * from './search-text';
+export * from './synonyms';

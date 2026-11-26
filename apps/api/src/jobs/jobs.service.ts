@@ -28,7 +28,7 @@ export class JobsService implements OnApplicationBootstrap, OnModuleDestroy {
 
   async tick() {
     if (!(await this.redis.lock('jobs:tick', 240))) return;
-    try { await this.expiry(); await this.savedSearchAlerts(); } catch (e) { this.log.error((e as Error).stack); }
+    try { await this.search.backfillSearchText(); await this.expiry(); await this.savedSearchAlerts(); } catch (e) { this.log.error((e as Error).stack); }
     if (await this.redis.lock('jobs:retention', 86_400)) await runRetention(this.prisma).catch((e) => this.log.error((e as Error).stack));
   }
 
@@ -51,7 +51,7 @@ export class JobsService implements OnApplicationBootstrap, OnModuleDestroy {
     const searches = await this.prisma.savedSearch.findMany({ where: { notify: true, lastCheckedAt: { lte: new Date(Date.now() - 4 * 60_000) } }, include: { user: true }, take: 2000 });
     for (const s of searches) {
       const since = s.lastCheckedAt;
-      const r = await this.search.search(s.query as SearchParams, { createdAfter: since, limit: 10 });
+      const r = await this.search.search(s.query as SearchParams, { publishedAfter: since, limit: 10 });
       await this.prisma.savedSearch.update({ where: { id: s.id }, data: { lastCheckedAt: new Date() } });
       const fresh = r.hits.filter((h) => h.createdAt > since.getTime());
       if (!fresh.length) continue;

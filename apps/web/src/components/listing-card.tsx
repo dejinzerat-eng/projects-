@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { BadgeCheck, MapPin, Zap } from 'lucide-react';
+import { BadgeCheck, Building2, MapPin, Zap } from 'lucide-react';
 import { ago, CONDITION_LABEL, listingUrl, price } from '@/lib/format';
 import type { ListingCard as L } from '@/lib/types';
 import { FavoriteButton } from './favorite-button';
@@ -19,7 +19,7 @@ export function ListingCard({ l, priority, favorite }: { l: L; priority?: boolea
           {l.status === 'SOLD' && <span className="badge bg-ink text-paper">Prodáno</span>}
           {l.status === 'EXPIRED' && <span className="badge bg-ink text-paper">Ukončeno</span>}
         </div>
-        <FavoriteButton id={l.id} initial={favorite} className="absolute right-2 top-2 z-20" />
+        <FavoriteButton id={l.id} initial={favorite} category={{ cat: l.parentCategorySlug, sub: l.categorySlug }} className="absolute right-2 top-2 z-20" />
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
         <div className="text-[16px] font-bold tracking-tight">{price(l.price, l.priceNegotiable, l.currency, l.offerType)}</div>
@@ -30,9 +30,10 @@ export function ListingCard({ l, priority, favorite }: { l: L; priority?: boolea
           <span aria-hidden>·</span>
           <span className="shrink-0">{ago(l.createdAt)}</span>
         </div>
-        {(l.verified || l.condition) && (
+        {(l.verified || l.condition || l.isBusiness) && (
           <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
             {l.condition && <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-ink-2">{CONDITION_LABEL[l.condition]}</span>}
+            {l.isBusiness && <span className="inline-flex items-center gap-1 font-medium text-ink-2"><Building2 className="size-3.5" />Firma</span>}
             {l.verified && <span className="inline-flex items-center gap-1 text-trust font-medium"><BadgeCheck className="size-3.5" />Ověřený</span>}
           </div>
         )}
@@ -41,6 +42,7 @@ export function ListingCard({ l, priority, favorite }: { l: L; priority?: boolea
   );
 }
 
+/** Mřížka inzerátů. `favorites` = ID oblíbených přihlášeného uživatele (srdíčka svítí správně). */
 export function ListingGrid({ items, favorites }: { items: L[]; favorites?: Set<string> }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">

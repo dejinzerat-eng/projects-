@@ -11,6 +11,11 @@ export interface SearchParams {
   city?: string;
   region?: string;
   radius?: number;
+  /** Poloha uživatele (tlačítko „Moje poloha“) – má přednost před městem */
+  lat?: number;
+  lng?: number;
+  /** Typ prodejce: soukromá osoba / firma */
+  sellerType?: 'private' | 'business';
   condition?: string[];
   offerType?: string;
   verified?: boolean;
@@ -122,6 +127,8 @@ export function toSearchString(p: SearchParams): string {
   set('q', p.q); set('kategorie', p.category); set('pod', p.sub);
   set('cena_od', p.priceMin); set('cena_do', p.priceMax);
   set('mesto', p.city); set('kraj', p.region); set('okruh', p.radius);
+  if (p.lat != null && p.lng != null) { set('lat', Number(p.lat).toFixed(4)); set('lng', Number(p.lng).toFixed(4)); }
+  set('prodejce', p.sellerType === 'private' ? 'soukromy' : p.sellerType === 'business' ? 'firma' : undefined);
   set('stav', p.condition); set('typ', p.offerType); set('overeny', p.verified ? '1' : undefined);
   set('od', p.since); set('razeni', p.sort && p.sort !== 'relevance' ? p.sort : undefined);
   if (p.attrs) {
@@ -133,6 +140,12 @@ export function toSearchString(p: SearchParams): string {
   }
   set('strana', p.page && p.page > 1 ? p.page : undefined);
   return u.toString();
+}
+
+/** Souřadnice z URL jen tehdy, když jsou obě platné. */
+function geoParams(lat?: number, lng?: number): Pick<SearchParams, 'lat' | 'lng'> {
+  if (lat == null || lng == null || Math.abs(lat) > 90 || Math.abs(lng) > 180) return {};
+  return { lat, lng };
 }
 
 export function fromSearchString(input: URLSearchParams | Record<string, string | string[] | undefined>): SearchParams {
@@ -149,6 +162,8 @@ export function fromSearchString(input: URLSearchParams | Record<string, string 
     sub: get('pod') || undefined,
     priceMin: n('cena_od'), priceMax: n('cena_do'),
     city: get('mesto') || undefined, region: get('kraj') || undefined, radius: n('okruh'),
+    ...geoParams(n('lat'), n('lng')),
+    sellerType: get('prodejce') === 'firma' ? 'business' : get('prodejce') === 'soukromy' ? 'private' : undefined,
     condition: get('stav')?.split(',').filter(Boolean),
     offerType: get('typ') || undefined,
     verified: get('overeny') === '1' || undefined,

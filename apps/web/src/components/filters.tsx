@@ -1,9 +1,12 @@
 'use client';
-import { CITIES, CONDITIONS, OFFER_TYPES, REGIONS } from '@dej/shared';
-import { SlidersHorizontal, X } from 'lucide-react';
+import { CONDITIONS, OFFER_TYPES, REGIONS } from '@dej/shared';
+import { Loader2, LocateFixed, MapPin, SlidersHorizontal, X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { currentPosition, nearestName, saveMyLocation } from '@/lib/my-location';
 import type { Category, FilterDef } from '@/lib/types';
+import { LocationInput } from './location-input';
+import { useToast } from './toast';
 
 /** Panel filtrů. Mění parametry v URL → stránka se znovu vykreslí na serveru (sdílitelné a indexovatelné odkazy). */
 export function Filters({ categories, filters, fixedCategory }: { categories: Category[]; filters: FilterDef[]; fixedCategory?: boolean }) {
@@ -23,7 +26,7 @@ export function Filters({ categories, filters, fixedCategory }: { categories: Ca
   const toggle = (k: string, v: string) => { const cur = new Set(list(k)); cur.has(v) ? cur.delete(v) : cur.add(v); set({ [k]: [...cur].join(',') }); };
 
   const cat = categories.find((c) => c.slug === get('kategorie'));
-  const activeCount = [...sp.keys()].filter((k) => !['q', 'razeni', 'strana', 'chytre'].includes(k) && !(fixedCategory && ['kategorie', 'pod'].includes(k))).length;
+  const activeCount = [...sp.keys()].filter((k) => !['q', 'razeni', 'strana', 'chytre', 'rozpoznano', 'lng'].includes(k) && !(fixedCategory && ['kategorie', 'pod'].includes(k))).length;
 
   const panel = (
     <div className="space-y-6">
@@ -49,22 +52,7 @@ export function Filters({ categories, filters, fixedCategory }: { categories: Ca
         </div>
       </Field>
       <Field label="Lokalita">
-        <select className="input" value={get('mesto')} onChange={(e) => set({ mesto: e.target.value, okruh: e.target.value ? get('okruh') || '20' : undefined })}>
-          <option value="">Celá ČR</option>
-          {CITIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-        </select>
-        {get('mesto') ? (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {['0', '10', '20', '50', '100'].map((r) => (
-              <button key={r} onClick={() => set({ okruh: r === '0' ? undefined : r })} className={`chip h-7 text-[13px] ${(get('okruh') || '0') === r ? 'chip-active' : ''}`}>{r === '0' ? 'jen město' : `+${r} km`}</button>
-            ))}
-          </div>
-        ) : (
-          <select className="input mt-2" value={get('kraj')} onChange={(e) => set({ kraj: e.target.value })}>
-            <option value="">Všechny kraje</option>
-            {REGIONS.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
-          </select>
-        )}
+        <LocationFilter get={get} set={set} />
       </Field>
       <Field label="Stav">
         <div className="flex flex-wrap gap-1.5">
@@ -79,6 +67,11 @@ export function Filters({ categories, filters, fixedCategory }: { categories: Ca
       <Field label="Přidáno">
         <div className="flex flex-wrap gap-1.5">
           {[['', 'Kdykoli'], ['24h', '24 hodin'], ['7d', '7 dní'], ['30d', '30 dní']].map(([v, l]) => <button key={v} onClick={() => set({ od: v })} className={`chip ${get('od') === v ? 'chip-active' : ''}`}>{l}</button>)}
+        </div>
+      </Field>
+      <Field label="Prodejce">
+        <div className="flex flex-wrap gap-1.5">
+          {[['soukromy', 'Soukromá osoba'], ['firma', 'Firma']].map(([v, l]) => <button key={v} onClick={() => set({ prodejce: get('prodejce') === v ? undefined : v })} className={`chip ${get('prodejce') === v ? 'chip-active' : ''}`} aria-pressed={get('prodejce') === v}>{l}</button>)}
         </div>
       </Field>
       <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface p-3">
@@ -112,6 +105,56 @@ export function Filters({ categories, filters, fixedCategory }: { categories: Ca
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+/** Obec (našeptávač ze všech obcí ČR) nebo poloha z prohlížeče + okruh v km; bez lokality výběr kraje. */
+function LocationFilter({ get, set }: { get: (k: string) => string; set: (u: Record<string, string | undefined>) => void }) {
+  const toast = useToast();
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const city = get('mesto');
+  const gps = !!get('lat') && !!get('lng');
+  const radius = get('okruh') || '0';
+
+  async function locate() {
+    setBusy(true);
+    try {
+      const pos = await currentPosition();
+      set({ lat: String(pos.lat), lng: String(pos.lng), okruh: get('okruh') || '20', mesto: undefined, kraj: undefined });
+      nearestName(pos.lat, pos.lng).then((name) => saveMyLocation({ name, ...pos, radius: 30, source: 'gps' }));
+    } catch (e) { toast((e as Error).message, 'error'); } finally { setBusy(false); }
+  }
+
+  if (city || gps) return (
+    <>
+      <div className="flex h-11 items-center gap-2 rounded-xl border border-line bg-surface pl-3.5 pr-1.5">
+        {gps ? <LocateFixed className="size-4 shrink-0 text-brand" /> : <MapPin className="size-4 shrink-0 text-muted" />}
+        <span className="min-w-0 flex-1 truncate text-[15px] font-medium">{gps ? 'Moje poloha' : city}</span>
+        <button onClick={() => { setText(''); set({ mesto: undefined, lat: undefined, lng: undefined, okruh: undefined, razeni: get('razeni') === 'distance' ? undefined : get('razeni') || undefined }); }} className="grid size-8 place-items-center rounded-full text-muted hover:bg-surface-2" aria-label="Zrušit lokalitu"><X className="size-4" /></button>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {(gps ? ['5', '10', '20', '50', '100'] : ['0', '10', '20', '50', '100']).map((r) => (
+          <button key={r} onClick={() => set({ okruh: r === '0' ? undefined : r })} className={`chip h-7 text-[13px] ${radius === r ? 'chip-active' : ''}`} aria-pressed={radius === r}>{r === '0' ? 'jen obec' : `+${r} km`}</button>
+        ))}
+      </div>
+    </>
+  );
+  return (
+    <>
+      <LocationInput value={text} onChange={setText} ariaLabel="Lokalita" onSelect={(o) => {
+        setText('');
+        set({ mesto: o.label, okruh: get('okruh') || '20', kraj: undefined, lat: undefined, lng: undefined });
+        saveMyLocation({ name: o.name, lat: o.lat, lng: o.lng, radius: 30, source: 'city' });
+      }} />
+      <button onClick={locate} disabled={busy} className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-brand-ink hover:underline disabled:opacity-60">
+        {busy ? <Loader2 className="size-4 animate-spin" /> : <LocateFixed className="size-4" />}Použít moji polohu
+      </button>
+      <select className="input mt-2" value={get('kraj')} onChange={(e) => set({ kraj: e.target.value })} aria-label="Kraj">
+        <option value="">Všechny kraje</option>
+        {REGIONS.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
+      </select>
     </>
   );
 }
