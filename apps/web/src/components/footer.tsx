@@ -4,7 +4,7 @@ import { api } from '@/lib/api';
 import { getOperator, isPlaceholder } from '@/lib/operator';
 import { citySlug } from '@/lib/seo';
 import type { Category } from '@/lib/types';
-import { LogoMark } from './logo';
+import { Wordmark } from './logo';
 import { ThemeToggle } from './theme-toggle';
 
 const CITIES = ['Praha', 'Brno', 'Ostrava', 'Plzeň', 'Liberec', 'Olomouc', 'České Budějovice', 'Hradec Králové'];
@@ -37,7 +37,7 @@ export async function Footer() {
     <footer className="mt-20 border-t border-line bg-surface pb-24 md:pb-0">
       <div className="container-x grid gap-10 py-12 lg:grid-cols-[1fr_2.4fr]">
         <div>
-          <div className="flex items-center gap-2"><LogoMark className="size-7" /><span className="h-display text-lg font-bold"><span className="text-brand">dej</span>inzerat.cz</span></div>
+          <Wordmark className="h-7 w-auto" title="Dejinzerat.cz" />
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted">Jednoduchá a bezpečná inzerce pro celou Českou republiku.</p>
           <address className="mt-5 space-y-1 text-sm not-italic text-muted">
             <div className="font-semibold text-ink-2">Provozovatel</div>
