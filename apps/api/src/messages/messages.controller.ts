@@ -27,12 +27,12 @@ type ReportIn = z.infer<typeof ReportDto>;
 const PrefDto = z.object({ emailOnMessage: z.boolean() });
 
 const MAX_IMAGE = 8 * 1024 * 1024; // na Vercelu je strop požadavku 4,5 MB, klient fotku předem zmenší
-const LISTING_SELECT = { id: true, title: true, slug: true, price: true, priceNegotiable: true, status: true, userId: true, images: { take: 1, orderBy: { position: 'asc' as const } } };
+const LISTING_SELECT = { id: true, title: true, slug: true, price: true, priceNegotiable: true, offerType: true, currency: true, status: true, userId: true, images: { take: 1, orderBy: { position: 'asc' as const } } };
 // Kontaktní údaje (e-mail, telefon) se do konverzace nikdy automaticky neposílají
 const PERSON_SELECT = { id: true, name: true, avatarUrl: true, phoneVerifiedAt: true };
 
-type ListingRow = { id: string; title: string; slug: string; price: number | null; priceNegotiable: boolean; status: string; images: { thumbUrl: string }[] } | null;
-const listingOut = (l: ListingRow) => (l ? { id: l.id, title: l.title, slug: l.slug, price: l.price, priceNegotiable: l.priceNegotiable, status: l.status, image: l.images[0]?.thumbUrl ?? null } : null);
+type ListingRow = { id: string; title: string; slug: string; price: number | null; priceNegotiable: boolean; offerType: string; currency: string; status: string; images: { thumbUrl: string }[] } | null;
+const listingOut = (l: ListingRow) => (l ? { id: l.id, title: l.title, slug: l.slug, price: l.price, priceNegotiable: l.priceNegotiable, offerType: l.offerType, currency: l.currency, status: l.status, image: l.images[0]?.thumbUrl ?? null } : null);
 
 @Auth()
 @Controller()

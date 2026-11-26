@@ -4,20 +4,23 @@ import { config } from '../common/config';
 import { MailerService } from '../common/mailer.service';
 import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
+import { StorageService } from '../media/storage.service';
+import { cleanupUnsentAttachments } from '../messages/attachments-cleanup';
 import { SearchService } from '../search/search.service';
 import { runRetention } from '../users/gdpr';
 
 /**
  * Pravidelné úlohy (každých 5 minut, zámek v Redisu → běží jen na jedné instanci):
  * - upozornění na brzy končící inzeráty (3 dny předem) a jejich expirace,
- * - chytrá upozornění na nové inzeráty odpovídající uloženému hledání.
+ * - chytrá upozornění na nové inzeráty odpovídající uloženému hledání,
+ * - jednou za hodinu úklid neodeslaných fotek ve zprávách (starších 24 h), jednou denně retence dat.
  */
 @Injectable()
 export class JobsService implements OnApplicationBootstrap, OnModuleDestroy {
   private log = new Logger('Jobs');
   private timer?: NodeJS.Timeout;
 
-  constructor(private prisma: PrismaService, private redis: RedisService, private search: SearchService, private mail: MailerService) {}
+  constructor(private prisma: PrismaService, private redis: RedisService, private search: SearchService, private mail: MailerService, private storage: StorageService) {}
 
   onApplicationBootstrap() {
     if (process.env.DISABLE_JOBS === '1') return;
@@ -29,7 +32,19 @@ export class JobsService implements OnApplicationBootstrap, OnModuleDestroy {
   async tick() {
     if (!(await this.redis.lock('jobs:tick', 240))) return;
     try { await this.search.backfillSearchText(); await this.expiry(); await this.savedSearchAlerts(); } catch (e) { this.log.error((e as Error).stack); }
+    if (await this.redis.lock('jobs:attachments', 3600)) await this.unsentAttachments().catch((e) => this.log.error((e as Error).stack));
     if (await this.redis.lock('jobs:retention', 86_400)) await runRetention(this.prisma).catch((e) => this.log.error((e as Error).stack));
+  }
+
+  /** Neodeslané fotky ve zprávách starší 24 h (na Vercelu běží cron jen jednou denně → až 5 dávek po 500) */
+  async unsentAttachments() {
+    let records = 0, files = 0;
+    for (let i = 0; i < 5; i++) {
+      const r = await cleanupUnsentAttachments(this.prisma, this.storage);
+      records += r.records; files += r.files;
+      if (r.records < 500) break;
+    }
+    if (records) this.log.log(`Smazáno ${records} neodeslaných fotek ve zprávách (${files} souborů)`);
   }
 
   async expiry() {

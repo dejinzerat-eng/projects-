@@ -2,14 +2,18 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Heart, Home, MessageCircle, Plus, User } from 'lucide-react';
+import { useUnread, type Unread } from '@/lib/unread';
 
-export function MobileNav({ unread = 0, loggedIn }: { unread?: number; loggedIn: boolean }) {
+const NONE: Unread = { messages: 0, notifications: 0 };
+
+export function MobileNav({ unread = NONE, loggedIn }: { unread?: Unread; loggedIn: boolean }) {
   const path = usePathname()!;
+  const { messages } = useUnread(unread, loggedIn);
   const items = [
     { href: '/', label: 'Domů', icon: Home },
     { href: '/muj-ucet/oblibene', label: 'Oblíbené', icon: Heart },
     { href: '/pridat', label: 'Přidat', icon: Plus, primary: true },
-    { href: '/zpravy', label: 'Zprávy', icon: MessageCircle, badge: unread },
+    { href: '/zpravy', label: 'Zprávy', icon: MessageCircle, badge: messages },
     { href: loggedIn ? '/muj-ucet/inzeraty' : '/prihlaseni', label: 'Účet', icon: User },
   ];
   if (path.startsWith('/zpravy/') || path.startsWith('/pridat') || path.includes('/upravit')) return null;

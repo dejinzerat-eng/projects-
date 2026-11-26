@@ -36,34 +36,38 @@ const RESULT_TEXT: Record<'RESOLVED' | 'DISMISSED', string> = {
 export class ReportsService {
   constructor(private prisma: PrismaService, private trust: TrustService) {}
 
-  /** Komu cíl nahlášení patří (pro automatické omezení a kontrolu nahlášení sebe sama). */
-  private async ownerOf(type: ReportTarget, id: string, reporterId: string): Promise<string> {
+  /**
+   * Komu cíl nahlášení patří (pro automatické omezení a kontrolu nahlášení sebe sama).
+   * U zprávy navíc konverzace – moderátor ji pak smí zobrazit jen ke čtení (stejně jako u nahlášení přímo ze zpráv).
+   */
+  private async ownerOf(type: ReportTarget, id: string, reporterId: string): Promise<{ ownerId: string; conversationId?: string }> {
     if (type === 'USER') {
       const u = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
       if (!u) throw new NotFoundException('Uživatel neexistuje.');
-      return u.id;
+      return { ownerId: u.id };
     }
     if (type === 'LISTING') {
       const l = await this.prisma.listing.findUnique({ where: { id }, select: { userId: true, status: true } });
       if (!l || l.status === 'DELETED') throw new NotFoundException('Inzerát neexistuje.');
-      return l.userId;
+      return { ownerId: l.userId };
     }
-    const m = await this.prisma.message.findUnique({ where: { id }, select: { senderId: true, conversation: { select: { buyerId: true, sellerId: true } } } });
+    if (type !== 'MESSAGE') throw new BadRequestException('Konverzaci nahlaste přímo ve Zprávách.');
+    const m = await this.prisma.message.findUnique({ where: { id }, select: { senderId: true, conversationId: true, conversation: { select: { buyerId: true, sellerId: true } } } });
     // Zprávu může nahlásit jen účastník konverzace
     if (!m || (m.conversation.buyerId !== reporterId && m.conversation.sellerId !== reporterId)) throw new NotFoundException('Zpráva neexistuje.');
-    return m.senderId;
+    return { ownerId: m.senderId, conversationId: m.conversationId };
   }
 
   /** Nové nahlášení: bez nahlášení sebe sama, bez duplicit od stejného uživatele, s vyhodnocením automatického omezení. */
   async file(u: AuthUser, dto: ReportInput) {
-    const ownerId = await this.ownerOf(dto.targetType, dto.targetId, u.id);
+    const { ownerId, conversationId } = await this.ownerOf(dto.targetType, dto.targetId, u.id);
     if (ownerId === u.id) throw new BadRequestException('Nemůžete nahlásit sami sebe.');
     const dup = await this.prisma.report.findFirst({ where: { reporterId: u.id, targetType: dto.targetType, targetId: dto.targetId, status: 'OPEN' } });
     if (dup) {
       if (dto.note && dto.note !== dup.note) await this.prisma.report.update({ where: { id: dup.id }, data: { note: [dup.note, dto.note].filter(Boolean).join('\n').slice(0, 2000) } });
       return { ok: true, duplicate: true };
     }
-    await this.prisma.report.create({ data: { ...dto, reporterId: u.id } });
+    await this.prisma.report.create({ data: { ...dto, conversationId, reporterId: u.id } });
     await this.trust.afterReport(ownerId).catch(() => false);
     return { ok: true };
   }

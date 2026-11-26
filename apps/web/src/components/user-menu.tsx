@@ -3,11 +3,13 @@ import Link from 'next/link';
 import { Bell, ChevronDown, Heart, LayoutList, LogOut, Search, Settings, Shield, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Me } from '@/lib/api';
+import { useUnread } from '@/lib/unread';
 import { Avatar } from './avatar';
 
 export function UserMenu({ me }: { me: Me }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const unread = useUnread({ messages: me.unreadMessages, notifications: me.unreadNotifications });
   useEffect(() => {
     const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);
@@ -18,7 +20,7 @@ export function UserMenu({ me }: { me: Me }) {
     { href: '/muj-ucet/oblibene', label: 'Oblíbené', icon: Heart },
     { href: '/muj-ucet/hledani', label: 'Uložená hledání', icon: Search },
     { href: '/muj-ucet/sledovani', label: 'Sledovaní prodejci', icon: Users },
-    { href: '/muj-ucet/upozorneni', label: 'Upozornění', icon: Bell, badge: me.unreadNotifications },
+    { href: '/muj-ucet/upozorneni', label: 'Upozornění', icon: Bell, badge: unread.notifications },
     { href: '/muj-ucet/nastaveni', label: 'Nastavení účtu', icon: Settings },
     ...(me.role !== 'USER' ? [{ href: '/admin', label: 'Administrace', icon: Shield }] : []),
   ];
@@ -28,7 +30,7 @@ export function UserMenu({ me }: { me: Me }) {
         <Avatar name={me.name} url={me.avatarUrl} size={28} />
         <span className="hidden max-w-28 truncate lg:inline">{me.name.split(' ')[0]}</span>
         <ChevronDown className="size-4 text-muted" />
-        {!!me.unreadNotifications && <span className="absolute left-6 top-1 size-2.5 rounded-full bg-brand ring-2 ring-paper" />}
+        {!!unread.notifications && <span className="absolute left-6 top-1 size-2.5 rounded-full bg-brand ring-2 ring-paper" />}
       </button>
       {open && (
         <div role="menu" className="animate-fade-up absolute right-0 top-full mt-2 w-64 overflow-hidden rounded-2xl border border-line bg-surface py-1.5 shadow-pop">
