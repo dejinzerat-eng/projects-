@@ -18,9 +18,9 @@ export class ListingPolicyService {
   /** Limit nových inzerátů za hodinu (anti-spam). */
   maxPerHour() { return this.settings.get('maxListingsPerHour'); }
 
-  /** Před zveřejněním: omezený účet nesmí zveřejňovat; soukromá osoba a neověřená firma mají limit aktivních inzerátů zdarma. */
+  /** Před zveřejněním: omezený účet ani účet bez souhlasu s aktuálními podmínkami nesmí zveřejňovat; soukromá osoba a neověřená firma mají limit aktivních inzerátů zdarma. */
   async beforePublish(userId: string, exceptListingId?: string, checkLimit = true) {
-    await this.trust.assertNotRestricted(userId);
+    await this.trust.assertMayPost(userId);
     const limit = await this.settings.get('freeActiveListings');
     if (!limit || !checkLimit) return;
     const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { isBusiness: true, companyVerifiedAt: true, role: true } });

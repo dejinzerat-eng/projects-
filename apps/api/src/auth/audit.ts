@@ -9,7 +9,7 @@ export type SecurityAction =
   | 'auth.password_change' | 'auth.password_reset'
   | 'auth.sessions_revoke_all' | 'auth.session_revoke'
   | 'auth.oauth_link' | 'auth.email_change' | 'auth.phone_verify'
-  | 'account.delete' | 'account.gdpr_export';
+  | 'account.delete' | 'account.gdpr_export' | 'account.terms_accept';
 
 export interface ClientInfo { ip?: string; userAgent?: string }
 

@@ -1,6 +1,8 @@
 import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { config } from '../common/config';
 import { PrismaService } from '../common/prisma.service';
+import { TERMS_OUTDATED_MESSAGE, termsOutdated } from '../users/terms';
 import { assessMessageRisk, HIGH_RISK_SCORE } from '../listings/moderation';
 
 export const RESTRICT_REPORTERS = 3;
@@ -32,9 +34,11 @@ export class TrustService {
     return u?.status === 'RESTRICTED';
   }
 
-  /** Volá se před zveřejněním inzerátu a odesláním zprávy. */
-  async assertNotRestricted(userId: string) {
-    if (await this.isRestricted(userId)) throw new ForbiddenException(RESTRICTED_MESSAGE);
+  /** Volá se před zveřejněním inzerátu a odesláním zprávy: účet nesmí být omezený a musí mít odsouhlasené aktuální podmínky. */
+  async assertMayPost(userId: string) {
+    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { status: true, termsVersion: true } });
+    if (u?.status === 'RESTRICTED') throw new ForbiddenException(RESTRICTED_MESSAGE);
+    if (u && termsOutdated(u.termsVersion, config.termsVersion)) throw new ForbiddenException({ message: TERMS_OUTDATED_MESSAGE, code: 'TERMS_OUTDATED' });
   }
 
   /** Počet různých oznamovatelů účtu (uživatel, jeho inzeráty a zprávy) za 7 dní, od posledního zrušení omezení. */

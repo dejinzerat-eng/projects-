@@ -120,7 +120,7 @@ export class MessagesController {
     const l = await this.prisma.listing.findUnique({ where: { id: listingId } });
     if (!l || !['ACTIVE', 'RESERVED'].includes(l.status)) throw new NotFoundException('Inzerát není aktivní.');
     if (l.userId === u.id) throw new BadRequestException('Nemůžete psát sami sobě.');
-    await this.trust.assertNotRestricted(u.id); // WP6: omezený účet nesmí psát
+    await this.trust.assertMayPost(u.id); // omezený účet ani účet bez souhlasu s aktuálními podmínkami nesmí psát
     if (await this.blocked(u.id, l.userId)) throw new ForbiddenException('Komunikace s tímto uživatelem není možná.');
     await this.newConvAllowed(u);
     const conv = await this.prisma.conversation.upsert({ where: { listingId_buyerId: { listingId, buyerId: u.id } }, create: { listingId, buyerId: u.id, sellerId: l.userId }, update: {} });
@@ -180,7 +180,7 @@ export class MessagesController {
   @Post('conversations/:id/messages')
   async send(@Param('id') id: string, @CurrentUser() u: AuthUser, @Body(new ZodPipe(MsgDto)) dto: Msg) {
     const c = await this.participantConv(id, u);
-    await this.trust.assertNotRestricted(u.id); // WP6: omezený účet nesmí psát
+    await this.trust.assertMayPost(u.id); // omezený účet ani účet bez souhlasu s aktuálními podmínkami nesmí psát
     const otherId = c.buyerId === u.id ? c.sellerId : c.buyerId;
     if (await this.blocked(u.id, otherId)) throw new ForbiddenException('Komunikace s tímto uživatelem byla zablokována.');
 

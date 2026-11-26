@@ -14,17 +14,26 @@ import { ZodPipe } from '../common/zod';
 import { StorageService } from '../media/storage.service';
 import { clientInfo } from './audit';
 import { AuthService, OAuthError } from './auth.service';
+import { icoTakenCheck, resolveCompany } from '../users/company';
+import { termsOutdated } from '../users/terms';
 import { packOAuthState, safeBack, sameState, unpackOAuthState } from './oauth-state';
 
 const password = z.string().min(8, 'Heslo musí mít alespoň 8 znaků.').max(200);
 const email = z.email('Zadejte platný e-mail.').max(200);
-const RegisterDto = z.object({ email, password, name: z.string().trim().min(2, 'Zadejte jméno.').max(60), captcha: z.string().max(4096).optional(), terms: z.literal(true, { error: 'Je potřeba souhlasit s podmínkami.' }) });
+const RegisterDto = z.object({
+  email, password, name: z.string().trim().min(2, 'Zadejte jméno.').max(60), captcha: z.string().max(4096).optional(), terms: z.literal(true, { error: 'Je potřeba souhlasit s podmínkami.' }),
+  /** Typ účtu: soukromá osoba (výchozí), nebo firma s IČO ověřeným v ARES */
+  accountType: z.enum(['private', 'business'], { error: 'Zvolte typ účtu.' }).default('private'),
+  companyId: z.string().trim().regex(/^\d{8}$/, 'IČO má 8 číslic.').optional().or(z.literal('')),
+  companyName: z.string().trim().max(120).optional(),
+});
 const LoginDto = z.object({ email, password: z.string().min(1, 'Zadejte heslo.').max(200) });
 const ForgotDto = z.object({ email, captcha: z.string().max(4096).optional() });
 const EmailChangeDto = z.object({ email, password: z.string().max(200).optional() });
 const PhoneDto = z.object({ phone: z.string().regex(/^\+?(420|421)?\s?\d{3}\s?\d{3}\s?\d{3}$/, 'Zadejte platné české nebo slovenské číslo.') });
 const CodeDto = z.object({ code: z.string().regex(/^\d{6}$/, 'Kód má 6 číslic.') });
 
+const NO_COMPANY = { isBusiness: false, companyId: null, companyName: null, companyVerifiedAt: null };
 const OAUTH_COOKIE = 'dej_oauth';
 const APPLE_COOKIE = 'dej_oauth_apple';
 
@@ -56,10 +65,14 @@ export class AuthController {
   async register(@Body(new ZodPipe(RegisterDto)) dto: z.infer<typeof RegisterDto>, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     await verifyCaptcha(dto.captcha, req.ip);
     const client = clientInfo(req);
-    const user = await this.auth.register(dto.email, dto.password, dto.name, client);
+    // Firma: IČO projde kontrolním součtem a ARES ještě před založením účtu (obchodní jméno se vezme z ARES)
+    const company = dto.accountType === 'business'
+      ? await resolveCompany(NO_COMPANY, { isBusiness: true, companyId: dto.companyId, companyName: dto.companyName }, undefined, undefined, icoTakenCheck(this.prisma))
+      : null;
+    const user = await this.auth.register(dto.email, dto.password, dto.name, client, company?.data);
     const s = await this.auth.createSession(user.id, client);
     this.setCookie(res, s.token, s.expiresAt);
-    return { ok: true };
+    return { ok: true, company: company?.status ?? 'none' };
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
@@ -86,15 +99,15 @@ export class AuthController {
     if (!u) return { user: null };
     const user = await this.prisma.user.findUnique({
       where: { id: u.id },
-      select: { id: true, email: true, name: true, role: true, phone: true, avatarUrl: true, city: true, region: true, bio: true, isBusiness: true, companyName: true, companyId: true, emailVerifiedAt: true, phoneVerifiedAt: true, createdAt: true, passwordHash: true, googleId: true, appleId: true },
+      select: { id: true, email: true, name: true, role: true, phone: true, avatarUrl: true, city: true, region: true, bio: true, isBusiness: true, companyName: true, companyId: true, emailVerifiedAt: true, phoneVerifiedAt: true, createdAt: true, passwordHash: true, googleId: true, appleId: true, termsVersion: true },
     });
     if (!user) return { user: null };
     const [unreadMessages, unreadNotifications] = await Promise.all([
       this.prisma.message.count({ where: { readAt: null, senderId: { not: u.id }, conversation: { OR: [{ buyerId: u.id }, { sellerId: u.id }] } } }),
       this.prisma.notification.count({ where: { userId: u.id, readAt: null } }),
     ]);
-    const { passwordHash, googleId, appleId, ...rest } = user;
-    return { user: { ...rest, hasPassword: !!passwordHash, hasGoogle: !!googleId, hasApple: !!appleId, unreadMessages, unreadNotifications } };
+    const { passwordHash, googleId, appleId, termsVersion, ...rest } = user;
+    return { user: { ...rest, hasPassword: !!passwordHash, hasGoogle: !!googleId, hasApple: !!appleId, termsOutdated: termsOutdated(termsVersion, config.termsVersion), unreadMessages, unreadNotifications } };
   }
 
   @Get('verify-email')

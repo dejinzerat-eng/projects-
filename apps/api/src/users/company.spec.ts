@@ -55,4 +55,17 @@ describe('resolveCompany', () => {
     assert.equal(r.data.companyId, null);
     assert.equal(r.data.companyVerifiedAt, null);
   });
+  it('firemní účet bez IČO uložit nejde', async () => {
+    await assert.rejects(resolveCompany(none, { isBusiness: true, companyName: 'Moje firma' }, ares(found).fn), /vyplňte IČO/);
+    await assert.rejects(resolveCompany({ ...none, isBusiness: true }, { companyId: '' }, ares(found).fn), /vyplňte IČO/);
+  });
+  it('neplatné IČO uložené u účtu (např. ukázková data) poradí, jak ho opravit nebo odebrat', async () => {
+    const bad = { isBusiness: true, companyId: '27008888', companyName: 'Autobazar', companyVerifiedAt: null };
+    await assert.rejects(resolveCompany(bad, { isBusiness: true, companyId: '27008888' }, ares(found).fn), /uložené u vašeho účtu.*Soukromá osoba/);
+    const r = await resolveCompany(bad, { isBusiness: false, companyId: '27008888' }, ares(found).fn);
+    assert.equal(r.status, 'none');
+    assert.equal(r.data.companyId, null);
+    const fixed = await resolveCompany(bad, { isBusiness: true, companyId: '27082440' }, ares(found).fn, now);
+    assert.equal(fixed.status, 'verified');
+  });
 });

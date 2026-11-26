@@ -10,6 +10,8 @@ import { RedisService } from '../common/redis.service';
 import { ClientInfo, SecurityAction, writeAudit } from './audit';
 import { describeDevice } from './device';
 import { escapeHtml } from './html';
+import type { CompanyUpdate } from '../users/company';
+import { keepsPhoneConsent } from '../users/phone-consent';
 import { checkIdTokenClaims, verifyRs256 } from './jwt';
 import { attemptsLeft, LOCK_MINUTES, LOCK_THRESHOLD, LOCK_WINDOW_MIN, lockedMessage, PHONE_MAX_ATTEMPTS } from './lockout';
 
@@ -38,11 +40,12 @@ export class AuthService {
     return this.mail.send(to, `${subject} – Dejinzerat.cz`, `${body}<p style="color:#667085;font-size:13px">Tým Dejinzerat.cz</p>`);
   }
 
-  async register(email: string, password: string, name: string, client: ClientInfo = {}) {
+  /** `company` = firemní údaje z resolveCompany (firma s IČO), u soukromé osoby se nevyplňuje. */
+  async register(email: string, password: string, name: string, client: ClientInfo = {}, company?: CompanyUpdate['data']) {
     email = email.toLowerCase().trim();
     if (await this.prisma.user.findUnique({ where: { email } })) throw new BadRequestException('Účet s tímto e-mailem už existuje.');
     const user = await this.prisma.user.create({
-      data: { email, name, passwordHash: await bcrypt.hash(password, 12), termsAcceptedAt: new Date(), termsVersion: config.termsVersion },
+      data: { email, name, passwordHash: await bcrypt.hash(password, 12), termsAcceptedAt: new Date(), termsVersion: config.termsVersion, ...company },
     });
     await this.audit(user.id, 'auth.register', client, { termsVersion: config.termsVersion });
     await this.sendEmailVerification(user);
@@ -239,7 +242,8 @@ export class AuthService {
     const phone = t.target ?? user.phone;
     if (!phone) throw new BadRequestException('Kód už neplatí. Pošlete si prosím nový.');
     if (await this.prisma.user.findFirst({ where: { phone, phoneVerifiedAt: { not: null }, id: { not: userId } } })) throw new BadRequestException('Toto číslo už je ověřené u jiného účtu.');
-    await this.prisma.user.update({ where: { id: userId }, data: { phone, phoneVerifiedAt: new Date() } });
+    // souhlas se zobrazením telefonu u inzerátů platí jen pro číslo, ke kterému byl dán
+    await this.prisma.user.update({ where: { id: userId }, data: { phone, phoneVerifiedAt: new Date(), ...(keepsPhoneConsent(user.phone, phone) ? {} : { showPhone: false }) } });
     await this.flushUser(userId);
     await this.audit(userId, 'auth.phone_verify', client, { phone: `…${phone.slice(-3)}` });
   }

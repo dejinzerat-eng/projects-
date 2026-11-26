@@ -5,14 +5,15 @@ import { Throttle } from '@nestjs/throttler';
 import { CITIES, findCity } from '@dej/shared';
 import { z } from 'zod';
 import { Auth, AuthUser, CurrentUser } from '../common/auth.guard';
+import { config } from '../common/config';
 import { PrismaService } from '../common/prisma.service';
 import { ZodPipe } from '../common/zod';
 import { clientInfo } from '../auth/audit';
 import { AuthService } from '../auth/auth.service';
 import { LISTING_INCLUDE, SearchService } from '../search/search.service';
-import { resolveCompany } from './company';
+import { icoTakenCheck, resolveCompany } from './company';
 import { anonymizeOps, buildExport } from './gdpr';
-import { aresWebUrl } from './ico';
+import { aresWebUrl, isValidIco } from './ico';
 import { trustScore } from './trust';
 
 const ProfileDto = z.object({
@@ -84,9 +85,7 @@ export class UsersController {
   }
 
   /** IČO smí mít ověřené jen jeden účet */
-  private icoTaken(userId: string) {
-    return async (ico: string) => !!(await this.prisma.user.findFirst({ where: { companyId: ico, companyVerifiedAt: { not: null }, status: 'ACTIVE', id: { not: userId } }, select: { id: true } }));
-  }
+  private icoTaken(userId: string) { return icoTakenCheck(this.prisma, userId); }
 
   private async historyPage(userId: string, page: number) {
     const where = { userId, status: { in: [...HISTORY_STATUSES] } } satisfies Prisma.ListingWhereInput;
@@ -118,7 +117,7 @@ export class UsersController {
     const verified = !!x.phoneVerifiedAt && !!x.phone;
     return {
       phone: verified ? x.phone : null, phoneVerified: verified, showPhone: x.showPhone,
-      company: x.isBusiness ? { ico: x.companyId, name: x.companyName, address: x.companyAddress, vatId: x.vatId, verifiedAt: x.companyVerifiedAt, status: x.companyVerifiedAt ? 'verified' : x.companyId ? 'unverified' : 'none' } : null,
+      company: x.isBusiness ? { ico: x.companyId, name: x.companyName, address: x.companyAddress, vatId: x.vatId, verifiedAt: x.companyVerifiedAt, status: x.companyVerifiedAt ? 'verified' : !x.companyId ? 'none' : isValidIco(x.companyId) ? 'unverified' : 'invalid' } : null,
     };
   }
 
@@ -153,6 +152,15 @@ export class UsersController {
     await this.prisma.user.update({ where: { id: u.id }, data: company.data });
     if (company.status !== 'verified') throw new BadRequestException('Registr ARES teď neodpovídá. Zkuste to prosím později.');
     return { ok: true, company: company.status };
+  }
+
+  /** Souhlas s aktuální verzí podmínek používání (po jejich změně) */
+  @Auth()
+  @Post('me/terms')
+  async acceptTerms(@CurrentUser() u: AuthUser, @Req() req: Request) {
+    await this.prisma.user.update({ where: { id: u.id }, data: { termsAcceptedAt: new Date(), termsVersion: config.termsVersion } });
+    await this.auth.audit(u.id, 'account.terms_accept', clientInfo(req), { termsVersion: config.termsVersion });
+    return { ok: true, termsVersion: config.termsVersion };
   }
 
   /** GDPR: export všech osobních údajů */
