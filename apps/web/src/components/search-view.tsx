@@ -14,7 +14,7 @@ import { SortSelect } from './sort-select';
 
 type SP = Record<string, string | string[] | undefined>;
 
-export async function SearchView({ searchParams, category, sub, basePath }: { searchParams: SP; category?: string; sub?: string; basePath: string }) {
+export async function SearchView({ searchParams, category, sub, basePath, heading }: { searchParams: SP; category?: string; sub?: string; basePath: string; heading?: string }) {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(searchParams)) if (typeof v === 'string') qs.set(k, v);
   if (category) qs.set('kategorie', category);
@@ -35,7 +35,7 @@ export async function SearchView({ searchParams, category, sub, basePath }: { se
   const subCat = cat?.children.find((s) => s.slug === p.sub);
   const filters = p.category ? filtersFor(p.category, p.sub) : [];
   const hasGeo = !!res.origin;
-  const title = p.q ? `„${p.q}“` : subCat?.name ?? cat?.name ?? 'Všechny inzeráty';
+  const title = p.q ? `„${p.q}“` : heading ?? subCat?.name ?? cat?.name ?? 'Všechny inzeráty';
   const pageHref = (n: number) => {
     const { category: _c, sub: _s, ...rest } = p;
     const s = toSearchString({ ...(basePath === '/hledat' ? p : rest), page: n });
@@ -46,7 +46,7 @@ export async function SearchView({ searchParams, category, sub, basePath }: { se
     <div className="container-x py-6 sm:py-8">
       <nav className="mb-3 flex flex-wrap items-center gap-1.5 text-sm text-muted" aria-label="Drobečková navigace">
         <Link href="/" className="hover:text-ink">Domů</Link><span>/</span>
-        {cat ? <Link href={`/kategorie/${cat.slug}`} className="hover:text-ink">{cat.name}</Link> : <span>Hledání</span>}
+        {cat ? <Link href={`/kategorie/${cat.slug}`} className="hover:text-ink">{cat.name}</Link> : <span>{heading ?? 'Hledání'}</span>}
         {subCat && <><span>/</span><Link href={`/kategorie/${cat!.slug}/${subCat.slug}`} className="hover:text-ink">{subCat.name}</Link></>}
       </nav>
       <div className="flex flex-wrap items-end justify-between gap-3">

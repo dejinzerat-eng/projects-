@@ -9,23 +9,36 @@ import { SearchBox } from '@/components/search-box';
 import { api, getMe } from '@/lib/api';
 import { getFavoriteIds } from '@/lib/favorites';
 import type { Category, ListingCard } from '@/lib/types';
+import type { Metadata } from 'next';
+import { JsonLd } from '@/components/json-ld';
+import { organization, website } from '@/lib/jsonld';
+import { getOperator } from '@/lib/operator';
+import { social } from '@/lib/seo';
+
+// Kanonická adresa bez parametrů (varianta ?ikony=b je jen náhled)
+export const metadata: Metadata = {
+  alternates: { canonical: '/' },
+  ...social({ title: 'Dejinzerat.cz – moderní inzerce a bazar zdarma', description: 'Inzeráty zdarma z celé České republiky. Prodávejte a nakupujte rychle a bezpečně.', path: '/' }),
+};
 
 const POPULAR = ['iPhone 15', 'Byt 2+kk Praha', 'Kočárek', 'Horské kolo do 15 000 Kč', 'Škoda Octavia'];
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ ikony?: string }> }) {
   const variant = (await searchParams).ikony === 'b' ? 'solid' : 'soft';
-  const [cats, premium, featured, latest, me, favorites] = await Promise.all([
+  const [cats, premium, featured, latest, me, favorites, operator] = await Promise.all([
     api<Category[]>('/categories', { revalidate: 60, auth: false }).catch(() => [] as Category[]),
     api<ListingCard[]>('/search/premium?limit=8', { auth: false }).catch(() => [] as ListingCard[]),
     api<ListingCard[]>('/listings/featured?limit=8', { auth: false }).catch(() => [] as ListingCard[]),
     api<ListingCard[]>('/listings/latest?limit=12', { auth: false }).catch(() => [] as ListingCard[]),
     getMe(),
     getFavoriteIds(),
+    getOperator(),
   ]);
   const popularCats = [...cats].sort((a, b) => b.count - a.count).slice(0, 6);
 
   return (
     <>
+      <JsonLd data={[website(), organization(operator)]} />
       <section className="border-b border-line bg-surface">
         <div className="container-x py-12 sm:py-20">
           <div className="mx-auto max-w-2xl text-center">

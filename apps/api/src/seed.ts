@@ -6,6 +6,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import sharp from 'sharp';
 import { StorageService } from './media/storage.service';
+import { hashContent, pagePlan, SEED_PAGES } from './seed-pages';
 
 const prisma = new PrismaClient();
 const storage = new StorageService();
@@ -181,13 +182,19 @@ async function main() {
   ] as const;
   for (const [code, name, description, priceCzk, durationDays] of prices) await prisma.priceItem.upsert({ where: { code }, update: {}, create: { code, name, description, priceCzk, durationDays } });
   const pages = [
-    ['podminky', 'Podmínky používání', 'Používáním portálu Dejinzerat.cz souhlasíte s těmito podmínkami…\n\n(Text doplní provozovatel v administraci.)'],
-    ['ochrana-udaju', 'Ochrana osobních údajů (GDPR)', 'Osobní údaje zpracováváme v souladu s nařízením GDPR. Máte právo na přístup, opravu, výmaz a přenositelnost údajů – export i smazání účtu najdete v Nastavení účtu.\n\n(Podrobný text doplní provozovatel.)'],
     ['bezpecny-nakup', 'Jak nakupovat bezpečně', 'Nikdy neplaťte předem neznámým prodejcům mimo ověřené platební kanály. Neposílejte údaje z platební karty ani kódy z SMS. Zboží si pokud možno prohlédněte osobně. Podezřelý inzerát nebo zprávu nahlaste tlačítkem „Nahlásit“.'],
-    ['napoveda', 'Nápověda', 'Jak vložit inzerát, jak funguje topování, jak si uložit hledání… (text doplní provozovatel).'],
-    ['kontakt', 'Kontakt', 'Dejinzerat.cz – podpora: podpora@dejinzerat.cz'],
   ];
   for (const [slug, title, content] of pages) await prisma.page.upsert({ where: { slug }, update: {}, create: { slug, title, content } });
+  // Právní a informační stránky: nové se vytvoří, přepíše se jen původní zástupný text nebo neupravené znění ze seedu
+  for (const def of SEED_PAGES) {
+    const existing = await prisma.page.findUnique({ where: { slug: def.slug } });
+    const plan = pagePlan(existing, def);
+    const data = { title: def.title, content: def.content, description: def.description, seededHash: hashContent(def.content) };
+    if (plan === 'create') await prisma.page.create({ data: { slug: def.slug, ...data } });
+    else if (plan === 'update') await prisma.page.update({ where: { slug: def.slug }, data });
+    else if (existing && !existing.description) await prisma.page.update({ where: { slug: def.slug }, data: { description: def.description, updatedAt: existing.updatedAt } });
+    if (plan !== 'skip') console.log(`  stránka ${def.slug}: ${plan === 'create' ? 'vytvořena' : 'aktualizována'}`);
+  }
 
   // Seedovaný admin je hlavní administrátor (i v existující databázi), dokud žádný hlavní administrátor není.
   if (!(await prisma.user.count({ where: { role: 'SUPERADMIN' } }))) {

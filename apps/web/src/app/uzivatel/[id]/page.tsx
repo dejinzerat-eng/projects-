@@ -6,8 +6,11 @@ import { FollowButton } from '@/components/follow-button';
 import { ListingGrid } from '@/components/listing-card';
 import { MessageUserButton } from '@/components/messages/message-user-button';
 import { ReportButton } from '@/components/report-button';
+import { JsonLd } from '@/components/json-ld';
 import { api } from '@/lib/api';
 import { getFavoriteIds } from '@/lib/favorites';
+import { profileJsonLd } from '@/lib/jsonld';
+import { social } from '@/lib/seo';
 import { ago, plural } from '@/lib/format';
 import type { ListingCard } from '@/lib/types';
 import { OfferHistory, type HistoryPage } from './offer-history';
@@ -32,7 +35,8 @@ const since = (iso: string) => {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const p = await load((await params).id);
-  return { title: `${p.companyName ?? p.name} – inzeráty a hodnocení`, description: `${p.listings.length} aktivních inzerátů, hodnocení ${p.rating?.toFixed(1) ?? '–'} z 5.` };
+  const title = `${p.companyName ?? p.name} – inzeráty a hodnocení`, description = `${p.listings.length} aktivních inzerátů, hodnocení ${p.rating?.toFixed(1) ?? '–'} z 5.`;
+  return { title, description, alternates: { canonical: `/uzivatel/${p.id}` }, ...social({ title, description, path: `/uzivatel/${p.id}`, image: p.avatarUrl, type: 'profile' }) };
 }
 
 function Verification({ ok, yes, no }: { ok: boolean; yes: string; no: string }) {
@@ -49,6 +53,7 @@ export default async function Page({ params }: Props) {
   const c = p.company;
   return (
     <div className="container-x py-6 sm:py-8">
+      <JsonLd data={profileJsonLd(p)} />
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <aside className="min-w-0 space-y-4">
           <div className="card p-5 sm:p-6">

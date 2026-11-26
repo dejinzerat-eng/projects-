@@ -1,6 +1,10 @@
 import type { MetadataRoute } from 'next';
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:3000');
+import { SITE } from '@/lib/seo';
+
 export default function robots(): MetadataRoute.Robots {
   if (process.env.NOINDEX === '1') return { rules: { userAgent: '*', disallow: '/' } };
-  return { rules: { userAgent: '*', allow: '/', disallow: ['/api/', '/muj-ucet/', '/zpravy/', '/admin/', '/hledat', '/pridat'] }, sitemap: `${SITE}/sitemap.xml` };
+  return {
+    rules: { userAgent: '*', allow: '/', disallow: ['/api/', '/admin', '/muj-ucet', '/zpravy', '/pridat', '/hledat', '/porovnani', '/namitka', '/prihlaseni', '/registrace', '/zapomenute-heslo', '/obnova-hesla', '/overeni-emailu', '/inzerat/*/upravit'] },
+    sitemap: `${SITE}/sitemap.xml`,
+  };
 }

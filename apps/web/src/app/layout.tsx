@@ -5,17 +5,20 @@ import { Header } from '@/components/header';
 import { MobileNav } from '@/components/mobile-nav';
 import { ToastProvider } from '@/components/toast';
 import { getMe } from '@/lib/api';
+import { SITE, SITE_NAME, social } from '@/lib/seo';
 import './globals.css';
 
 const body = Onest({ subsets: ['latin', 'latin-ext'], variable: '--font-body', display: 'swap' });
 
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:3000');
+const DESCRIPTION = 'Prodávejte a nakupujte rychle a bezpečně. Inzeráty zdarma z celé České republiky: auta, reality, elektronika, mobily, nábytek, oblečení a další.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
   title: { default: 'Dejinzerat.cz – moderní inzerce a bazar zdarma', template: '%s | Dejinzerat.cz' },
-  description: 'Prodávejte a nakupujte rychle a bezpečně. Inzeráty zdarma z celé České republiky: auta, reality, elektronika, mobily, nábytek, oblečení a další.',
-  openGraph: { siteName: 'Dejinzerat.cz', locale: 'cs_CZ', type: 'website' },
+  description: DESCRIPTION,
+  applicationName: SITE_NAME,
+  ...social({ title: 'Dejinzerat.cz – moderní inzerce a bazar zdarma', description: DESCRIPTION }),
+  formatDetection: { telephone: false },
   robots: process.env.NOINDEX === '1' ? { index: false, follow: false } : undefined,
 };
 export const viewport: Viewport = { themeColor: '#f6f7f8' };

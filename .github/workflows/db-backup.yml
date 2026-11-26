@@ -1,0 +1,97 @@
+# Denní záloha databáze (pg_dump) do artefaktu GitHub Actions.
+# Dokud v repozitáři není tajný klíč DATABASE_BACKUP_URL, úloha nic nedělá (jen vypíše, že je vypnutá).
+#
+# Nastavení (Settings → Secrets and variables → Actions):
+#   secrets.DATABASE_BACKUP_URL   přímé připojení k Postgresu (ne přes PgBouncer), např.
+#                                 postgresql://postgres.<ref>:<heslo>@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require
+#   secrets.BACKUP_PASSPHRASE     (doporučeno) heslo pro zašifrování zálohy (gpg, AES-256) – záloha obsahuje osobní údaje
+#   vars.BACKUP_SCHEMA            schéma k záloze (výchozí ?schema= z URL, jinak „app“; „*“ = celá databáze)
+#   vars.BACKUP_RETENTION_DAYS    jak dlouho artefakt uchovat (výchozí 30 dní, max. 90)
+# Obnova: viz docs/ZALOHY.md
+name: Záloha databáze
+
+on:
+  schedule:
+    - cron: '17 2 * * *' # každý den 02:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: pg_dump
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_BACKUP_URL: ${{ secrets.DATABASE_BACKUP_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      BACKUP_SCHEMA: ${{ vars.BACKUP_SCHEMA }}
+    steps:
+      - name: Kontrola nastavení
+        id: cfg
+        run: |
+          if [ -z "$DATABASE_BACKUP_URL" ]; then
+            echo "::notice title=Záloha vypnutá::Nastavte tajný klíč DATABASE_BACKUP_URL, aby se databáze zálohovala."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "stamp=$(date -u +%Y-%m-%dT%H%MZ)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Export databáze (pg_dump 17)
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p backup
+          # Parametry Prismy (?schema=app&pgbouncer=true&connection_limit=1) libpq nezná a pg_dump by s nimi skončil chybou.
+          # Odstraníme je; schéma z ?schema= použijeme, pokud není nastavená proměnná BACKUP_SCHEMA.
+          eval "$(python3 - <<'PY'
+          import os, shlex, urllib.parse as u
+          p = u.urlsplit(os.environ["DATABASE_BACKUP_URL"])
+          q = u.parse_qsl(p.query, keep_blank_values=True)
+          schema = dict(q).get("schema", "")
+          q = [(k, v) for k, v in q if k not in ("schema", "pgbouncer", "connection_limit", "pool_timeout", "statement_cache_size")]
+          print("PG_URL=" + shlex.quote(u.urlunsplit(p._replace(query=u.urlencode(q)))))
+          print("URL_SCHEMA=" + shlex.quote(schema))
+          PY
+          )"
+          echo "::add-mask::$PG_URL"
+          SCHEMA="${BACKUP_SCHEMA:-${URL_SCHEMA:-app}}"
+          SCHEMA_ARGS=""
+          if [ "$SCHEMA" != "*" ]; then SCHEMA_ARGS="--schema=$SCHEMA"; fi
+          echo "Zálohuji schéma: $SCHEMA"
+          docker run --rm -e PGCONNECT_TIMEOUT=30 -e PG_URL="$PG_URL" -v "$PWD/backup:/backup" postgres:17 \
+            sh -c 'pg_dump "$PG_URL" "$@"' sh --format=custom --compress=9 --no-owner --no-privileges $SCHEMA_ARGS \
+            --file "/backup/dejinzerat-${{ steps.cfg.outputs.stamp }}.dump"
+          # Kontrola, že archiv jde přečíst a není prázdný (např. špatně zvolené schéma)
+          docker run --rm -v "$PWD/backup:/backup" postgres:17 pg_restore --list "/backup/dejinzerat-${{ steps.cfg.outputs.stamp }}.dump" > backup/obsah.txt
+          TABLES=$(grep -c 'TABLE DATA' backup/obsah.txt || true)
+          echo "Tabulky v záloze: $TABLES"
+          if [ "${TABLES:-0}" -eq 0 ]; then echo "::error title=Prázdná záloha::Záloha neobsahuje žádné tabulky – zkontrolujte BACKUP_SCHEMA a oprávnění role."; exit 1; fi
+          ls -lh backup
+
+      - name: Zašifrování
+        if: steps.cfg.outputs.enabled == 'true' && env.BACKUP_PASSPHRASE != ''
+        run: |
+          set -euo pipefail
+          f="backup/dejinzerat-${{ steps.cfg.outputs.stamp }}.dump"
+          gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --symmetric --cipher-algo AES256 -o "$f.gpg" "$f" <<< "$BACKUP_PASSPHRASE"
+          rm "$f"
+
+      - name: Varování – nešifrovaná záloha
+        if: steps.cfg.outputs.enabled == 'true' && env.BACKUP_PASSPHRASE == ''
+        run: echo "::warning title=Nešifrovaná záloha::Nastavte BACKUP_PASSPHRASE – artefakt obsahuje osobní údaje."
+
+      - name: Uložení artefaktu
+        if: steps.cfg.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ steps.cfg.outputs.stamp }}
+          path: backup/
+          retention-days: ${{ vars.BACKUP_RETENTION_DAYS || 30 }}
+          if-no-files-found: error

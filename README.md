@@ -52,8 +52,9 @@ Po prvním spuštění se v administraci (Přehled → nebo `POST /admin/reindex
 | `TURNSTILE_SECRET`, `TURNSTILE_SITE_KEY` | CAPTCHA (Cloudflare Turnstile) |
 | `PREMODERATION=1` | Všechny inzeráty čekají na schválení |
 | `COOKIE_SECURE=1` | Zapnout na HTTPS |
+| `OPERATOR_NAME`, `OPERATOR_ICO`, `OPERATOR_ADDRESS`, `OPERATOR_REGISTRY`, `OPERATOR_EMAIL`, `OPERATOR_PHONE`, `OPERATOR_DSA_EMAIL` | Identifikace provozovatele v e-mailech (oznámení DSA). Stejné proměnné čte i web (patička, Kontakt, právní texty), pokud je nemá v systémových nastaveních. |
 
-Web (`apps/web/.env.local`): `API_INTERNAL_URL`, `NEXT_PUBLIC_SITE_URL`, `NOINDEX=1` pro testovací prostředí.
+Web (`apps/web/.env.local`): `API_INTERNAL_URL`, `NEXT_PUBLIC_SITE_URL`, `NOINDEX=1` pro testovací prostředí, `OPERATOR_*` (viz výše).
 
 ## Nasazení (dočasná verze)
 
@@ -62,3 +63,27 @@ Web (`apps/web/.env.local`): `API_INTERNAL_URL`, `NEXT_PUBLIC_SITE_URL`, `NOINDE
 - Databáze: Supabase PostgreSQL (pooler aws-0-eu-central-1, role `dej_app`), schéma `app`. Migrace a výchozí data se spouští při sestavení.
 - Fotky: Vercel Blob (`BLOB_READ_WRITE_TOKEN`). Hledání bez Meilisearch běží v PostgreSQL.
 - Proměnné prostředí jsou jen ve Vercelu (DATABASE_URL, DIRECT_URL, CRON_SECRET, ADMIN_PASSWORD, COOKIE_SECURE, DISABLE_JOBS, NOINDEX).
+
+## SEO
+
+- Každá veřejná stránka má titulek, popis, kanonickou adresu, Open Graph a Twitter kartu; výchozí obrázek pro sdílení kreslí `apps/web/src/app/opengraph-image.tsx`.
+- Stránkování výpisů (`?strana=N`) má vlastní kanonickou adresu; kombinace filtrů, prázdné lokality a soukromé části (účet, zprávy, administrace, přidání inzerátu, přihlášení, hledání) mají `noindex`.
+- Strukturovaná data podle typu obsahu (`apps/web/src/lib/jsonld.ts`): Product, Car/Vehicle/Motorcycle (auto-moto), RealEstateListing (reality), JobPosting (práce), Service (služby), BreadcrumbList, ItemList (výpisy), WebSite + SearchAction a Organization (úvod), Person/Organization s hodnocením (profil).
+- Sitemapa: index `/sitemap.xml` → `/sitemap/static.xml` (úvod, kategorie z databáze, lokality, informační stránky), `/sitemap/inzeraty-N.xml` (všechny aktivní inzeráty po 10 000) a `/sitemap/profily-N.xml`. Data dává API `GET /seo/sitemap*`.
+- Lokální vstupní stránky: `/lokalita/praha`, `/kategorie/elektronika/mesto/brno`, `/kategorie/reality/byty/mesto/ostrava`.
+- Smazané, zamítnuté a dávno neaktivní inzeráty se trvale (308) přesměrují do své kategorie (`?odstraneno=1` zobrazí vysvětlení). Neznámé adresy kategorií a stránek se dohledají v tabulce přesměrování (Administrace → SEO).
+
+## Právní texty a DSA
+
+- Seed vytvoří návrhy stránek Podmínky používání, Zásady zpracování osobních údajů, Pravidla inzerování, Nahlašování nezákonného obsahu, Cookies, Kontakt, Informace pro spotřebitele, Podmínky placených služeb a Nápověda (`apps/api/src/seed-pages.ts`). **Jsou to návrhy – před spuštěním je musí zkontrolovat právník.** Seed nikdy nepřepíše text, který správce upravil (mění jen původní zástupné texty a neupravená znění ze seedu).
+- Texty používají jednoduchý Markdown a značky `{{provozovatel}}`, `{{ico}}`, `{{sidlo}}`, `{{rejstrik}}`, `{{email}}`, `{{telefon}}`, `{{dsa_email}}`, které web nahradí údaji provozovatele (systémová nastavení → proměnné `OPERATOR_*` → zástupný text v hranatých závorkách).
+- Oznámení nezákonného obsahu (čl. 16 DSA): veřejný formulář `/nahlasit-obsah` (i bez účtu, číslo oznámení + potvrzení e-mailem), vyřizování v Administrace → Nezákonný obsah (rozhodnutí s odůvodněním se pošle oznamovateli i autorovi), námitky autorů `/namitka` (čl. 20) a roční statistiky pro zprávu o transparentnosti.
+
+## Zálohy
+
+Podrobně v [docs/ZALOHY.md](docs/ZALOHY.md). Shrnutí:
+- **Supabase:** Free plán zálohy nemá. Pro plán dělá denní zálohy (7 dní), doplněk **PITR** umožní obnovu k libovolné sekundě (7–28 dní). Pro ostrý provoz doporučujeme Pro + PITR.
+- **Nezávislá kopie:** `.github/workflows/db-backup.yml` každý den spustí `pg_dump` a uloží (volitelně zašifrovaný) artefakt na 30 dní. Zapne se sám, jakmile v GitHubu nastavíte secret `DATABASE_BACKUP_URL` (a doporučeně `BACKUP_PASSPHRASE`).
+- **Obnova:** `scripts/db-restore.sh <záloha> <cílová DATABASE_URL>` – vždy nejdřív do nové databáze, ověřit a pak přepnout proměnné ve Vercelu.
+- Fotky ve Vercel Blob nemají verzování – viz docs/ZALOHY.md.
+
