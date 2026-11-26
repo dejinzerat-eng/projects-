@@ -1,7 +1,7 @@
 export interface ListingCard {
   id: string; slug: string; title: string; price: number | null; priceNegotiable: boolean; currency: string;
   city: string; region: string; condition: string | null; offerType: string; image: string | null; createdAt: number;
-  categorySlug: string; parentCategorySlug: string; categoryName: string; verified: boolean; isBusiness?: boolean; isTop: boolean; highlighted: boolean;
+  categorySlug: string; parentCategorySlug: string; categoryName: string; verified: boolean; /** Firma s IČO ověřeným v ARES (štítek „Firma“) */ isBusiness?: boolean; isTop: boolean; highlighted: boolean;
   status: string; distanceKm?: number;
 }
 export interface FilterDef { key: string; label: string; type: 'select' | 'multiselect' | 'range' | 'boolean'; options?: string[]; unit?: string; min?: number; max?: number }

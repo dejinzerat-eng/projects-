@@ -1,9 +1,9 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { Prisma } from '@prisma/client';
-import { buildSearchText, fromSearchString, haversine, normalizeSearchText, queryWords, stemCz, synonymsOf, toSearchString } from '@dej/shared';
+import { buildSearchText, fromSearchString, haversine, normalizeSearchText, queryWords, savedSearchKey, stemCz, synonymsOf, toSearchString } from '@dej/shared';
 import { findMunicipality, municipalityByZip, nearestMunicipality, resolveLocation, suggestMunicipalities } from '@dej/shared/dist/municipalities';
-import { boundingBox, buildTerms, categoriesFor, filterSql, orderSql, termsFuzzy, termsMatch, tierSql } from './search-query';
+import { boundingBox, buildTerms, categoriesFor, filterSql, orderSql, promotionExpired, rankAt, termsFuzzy, termsMatch, tierSql } from './search-query';
 
 const sqlText = (s: Prisma.Sql) => s.sql;
 
@@ -80,8 +80,16 @@ describe('SQL pro vyhledávání v PostgreSQL', () => {
   });
 
   it('nejdražší dávají ceny „dohodou“ na konec', () => {
-    assert.match(sqlText(orderSql('price_desc', base)), /"price" DESC NULLS LAST/);
-    assert.match(sqlText(orderSql('price_asc', base)), /"price" ASC NULLS LAST/);
+    assert.match(sqlText(orderSql('price_desc', base)), /"priceCzk" DESC NULLS LAST/);
+    assert.match(sqlText(orderSql('price_asc', base)), /"priceCzk" ASC NULLS LAST/);
+  });
+
+  it('cena se řadí i filtruje v Kč (eura přepočtená), ne podle částky v původní měně', () => {
+    assert.doesNotMatch(sqlText(orderSql('price_asc', base)), /"price" /);
+    const w = filterSql({ priceMin: 100, priceMax: 5000 }, base).map(sqlText).join(' ');
+    assert.match(w, /"priceCzk" >= /);
+    assert.match(w, /"priceCzk" <= /);
+    assert.doesNotMatch(w, /"price" /);
   });
 
   it('relevance: kvalita shody → platné topování → datum', () => {
@@ -99,7 +107,7 @@ describe('SQL pro vyhledávání v PostgreSQL', () => {
   });
 
   it('typ prodejce a ověření', () => {
-    assert.match(filterSql({ sellerType: 'business' }, base).map(sqlText).join(' '), /"isBusiness" = true/);
+    assert.match(filterSql({ sellerType: 'business' }, base).map(sqlText).join(' '), /"isBusiness" = true AND u."companyVerifiedAt" IS NOT NULL/);
     assert.match(filterSql({ sellerType: 'private' }, base).map(sqlText).join(' '), /"isBusiness" = false/);
   });
 
@@ -195,5 +203,51 @@ describe('parametry v URL', () => {
     assert.match(toSearchString({ sellerType: 'private', lat: 50.1, lng: 14.4 }), /prodejce=soukromy/);
     assert.equal(fromSearchString(new URLSearchParams('lat=500&lng=14')).lat, undefined);
     assert.equal(fromSearchString(new URLSearchParams('prodejce=xyz')).sellerType, undefined);
+  });
+});
+
+describe('konec propagace', () => {
+  const now = new Date('2026-11-26T12:00:00Z');
+  const past = new Date('2026-11-25T12:00:00Z');
+  const future = new Date('2026-11-30T12:00:00Z');
+
+  it('vymaže jen prošlé topování / zvýraznění', () => {
+    assert.deepEqual(promotionExpired({ topUntil: past, highlightedUntil: future }, now), { topUntil: null });
+    assert.deepEqual(promotionExpired({ topUntil: future, highlightedUntil: past }, now), { highlightedUntil: null });
+    assert.deepEqual(promotionExpired({ topUntil: past, highlightedUntil: past }, now), { topUntil: null, highlightedUntil: null });
+    assert.deepEqual(promotionExpired({ topUntil: null, highlightedUntil: future }, now), {});
+  });
+
+  it('prošlé topování už v Meilisearch neřadí inzerát před novější', () => {
+    const base = { bumpedAt: null, createdAt: past };
+    const oldTop = rankAt({ ...base, topUntil: past, publishedAt: new Date('2026-11-01T00:00:00Z') }, now.getTime());
+    const fresh = rankAt({ ...base, topUntil: null, publishedAt: new Date('2026-11-20T00:00:00Z') }, now.getTime());
+    const activeTop = rankAt({ ...base, topUntil: future, publishedAt: new Date('2026-11-01T00:00:00Z') }, now.getTime());
+    assert.ok(fresh > oldTop);
+    assert.ok(activeTop > fresh);
+  });
+});
+
+describe('klíč uloženého hledání', () => {
+  it('nezáleží na stránce, řazení, pořadí ani velikosti písmen', () => {
+    const a = savedSearchKey({ q: '  iPhone   15 ', category: 'mobily', condition: ['USED', 'NEW'], page: 3, sort: 'newest', attrs: { brand: ['b', 'a'] } });
+    const b = savedSearchKey({ attrs: { brand: ['a', 'b'] }, condition: ['NEW', 'USED'], category: 'mobily', q: 'iphone 15' });
+    assert.equal(a, b);
+  });
+
+  it('jiné podmínky dají jiný klíč', () => {
+    assert.notEqual(savedSearchKey({ q: 'kolo' }), savedSearchKey({ q: 'kolo', city: 'Brno' }));
+    assert.notEqual(savedSearchKey({ q: 'kolo', sellerType: 'private' }), savedSearchKey({ q: 'kolo', sellerType: 'business' }));
+  });
+
+  it('nespadne na uloženém JSON v nečekaném tvaru', () => {
+    const odd = { q: 123, attrs: 'x', condition: 'NEW' } as unknown as Parameters<typeof savedSearchKey>[0];
+    assert.doesNotThrow(() => savedSearchKey(odd));
+    assert.equal(savedSearchKey(odd), savedSearchKey({ condition: ['NEW'] }));
+  });
+
+  it('stejný klíč z URL i z uloženého JSON', () => {
+    const fromUrl = fromSearchString(new URLSearchParams('mesto=Praha&q=Kolo&cena_do=5000&strana=2'));
+    assert.equal(savedSearchKey(fromUrl), savedSearchKey({ priceMax: 5000, city: 'Praha', q: 'kolo' }));
   });
 });

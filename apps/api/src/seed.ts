@@ -236,7 +236,7 @@ async function main() {
         const p = price == null ? null : c ? Math.round((price * (0.9 + ((n % 5) / 20))) / 100) * 100 : price;
         const description = desc ?? `${title}.\n\nProdávám z důvodu ${['nadbytečnosti', 'přechodu na nový model', 'stěhování', 'nevyužití'][n % 4]}. ${cond === 'NEW' ? 'Zboží je zcela nové, nerozbalené.' : cond === 'LIKE_NEW' ? 'Stav jako nové, bez škrábanců, kompletní balení.' : 'Běžné stopy používání, plně funkční.'}\n\nOsobní předání v lokalitě ${city.name}, případně pošlu přes Zásilkovnu. Na dotazy rád odpovím ve zprávě.`;
         const l = await prisma.listing.create({ data: {
-          slug: slugify(title), title, description, price: p, priceNegotiable: p == null || n % 6 === 0, condition: cond, offerType: cat.slug === 'reality' && (attrs.offerType === 'Pronájem') ? 'RENT' : 'SELL',
+          slug: slugify(title), title, description, price: p, priceCzk: p, priceNegotiable: p == null || n % 6 === 0, condition: cond, offerType: cat.slug === 'reality' && (attrs.offerType === 'Pronájem') ? 'RENT' : 'SELL',
           categoryId: sub.id, userId: user.id, city: city.name, region: city.region, zip: city.zip, lat: city.lat + ((n % 7) - 3) * 0.01, lng: city.lng + ((n % 5) - 2) * 0.01,
           attributes: attrs as Prisma.InputJsonValue, searchText: buildSearchText({ title, description, attributes: attrs, city: city.name }), status: 'ACTIVE', createdAt: created, publishedAt: created, expiresAt: new Date(created.getTime() + 30 * 864e5),
           views: (n * 37) % 900, topUntil: n % 11 === 0 ? new Date(Date.now() + 5 * 864e5) : null, highlightedUntil: n % 7 === 0 ? new Date(Date.now() + 5 * 864e5) : null,

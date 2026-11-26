@@ -149,8 +149,9 @@ export function filterSql(p: SearchParams, o: FilterOptions): Prisma.Sql[] {
     w.push(Prisma.sql`c."slug" = ${p.sub}::text`);
     if (p.category) w.push(Prisma.sql`pc."slug" = ${p.category}::text`);
   } else if (p.category) w.push(Prisma.sql`((c."slug" = ${p.category}::text AND c."parentId" IS NULL) OR pc."slug" = ${p.category}::text)`);
-  if (p.priceMin != null && Number.isFinite(Number(p.priceMin))) w.push(Prisma.sql`l."price" >= ${Math.round(Number(p.priceMin))}::int`);
-  if (p.priceMax != null && Number.isFinite(Number(p.priceMax))) w.push(Prisma.sql`l."price" <= ${Math.round(Number(p.priceMax))}::int`);
+  // Cena v Kč (EUR přepočtené kurzem), aby filtr „do 5 000 Kč“ nevracel inzerát za 5 000 €
+  if (p.priceMin != null && Number.isFinite(Number(p.priceMin))) w.push(Prisma.sql`l."priceCzk" >= ${Math.round(Number(p.priceMin))}::int`);
+  if (p.priceMax != null && Number.isFinite(Number(p.priceMax))) w.push(Prisma.sql`l."priceCzk" <= ${Math.round(Number(p.priceMax))}::int`);
   const radius = Math.min(MAX_RADIUS_KM, Math.max(0, Number(p.radius) || 0));
   const nameMatch = o.cityKey ? Prisma.sql`${sqlNorm(Prisma.sql`l."city"`)} = ${o.cityKey}::text` : undefined;
   const cityMatch = nameMatch && o.cityRegion ? Prisma.sql`(${nameMatch} AND l."region" IN (${o.cityRegion}::text, ''))` : nameMatch;
@@ -164,7 +165,8 @@ export function filterSql(p: SearchParams, o: FilterOptions): Prisma.Sql[] {
   if (p.condition?.length) w.push(Prisma.sql`l."condition"::text IN (${Prisma.join(p.condition.map((c) => Prisma.sql`${c}::text`))})`);
   if (p.offerType) w.push(Prisma.sql`l."offerType"::text = ${p.offerType}::text`);
   if (p.verified) w.push(Prisma.sql`u."phoneVerifiedAt" IS NOT NULL`);
-  if (p.sellerType) w.push(p.sellerType === 'business' ? Prisma.sql`u."isBusiness" = true` : Prisma.sql`u."isBusiness" = false`);
+  // Firmy = jen s ověřeným IČO (stejně jako štítek „Firma“ na kartě); soukromí = kdo se za firmu neoznačil
+  if (p.sellerType) w.push(p.sellerType === 'business' ? Prisma.sql`(u."isBusiness" = true AND u."companyVerifiedAt" IS NOT NULL)` : Prisma.sql`u."isBusiness" = false`);
   const since = o.publishedAfter ?? (p.since && SINCE_MS[p.since] ? new Date(o.now.getTime() - SINCE_MS[p.since]) : undefined);
   if (since) w.push(Prisma.sql`l."publishedAt" > ${ts(since)}`);
   for (const [k, v] of Object.entries(p.attrs ?? {})) {
@@ -181,7 +183,7 @@ export function filterSql(p: SearchParams, o: FilterOptions): Prisma.Sql[] {
   return w;
 }
 
-/** Aktivní topování (2) nebo zvýraznění (1) – jen nevypršelé. */
+/** Aktivní topování (2) nebo zvýraznění (1) – jen nevypršelé (vypršelé čistí i pravidelná úloha, viz promotionExpired). */
 export function promoSql(now: Date): Prisma.Sql {
   return Prisma.sql`(CASE WHEN l."topUntil" > ${ts(now)} THEN 2 WHEN l."highlightedUntil" > ${ts(now)} THEN 1 ELSE 0 END)`;
 }
@@ -206,8 +208,9 @@ export type Sort = NonNullable<SearchParams['sort']>;
 export function orderSql(sort: Sort | undefined, o: { now: Date; geo?: Geo; quality?: Prisma.Sql }): Prisma.Sql {
   const date = Prisma.sql`l."publishedAt" DESC NULLS LAST, l."id" DESC`;
   switch (sort) {
-    case 'price_asc': return Prisma.sql`l."price" ASC NULLS LAST, l."id" ASC`;
-    case 'price_desc': return Prisma.sql`l."price" DESC NULLS LAST, l."id" DESC`;
+    // Podle ceny v Kč – eura se přepočítají kurzem (100 € je dražší než 2 000 Kč)
+    case 'price_asc': return Prisma.sql`l."priceCzk" ASC NULLS LAST, l."id" ASC`;
+    case 'price_desc': return Prisma.sql`l."priceCzk" DESC NULLS LAST, l."id" DESC`;
     case 'newest': return date;
     case 'distance': if (o.geo) return Prisma.sql`${distanceSql(o.geo)} ASC NULLS LAST, ${date}`;
     // falls through – bez polohy řadíme podle relevance
@@ -224,4 +227,18 @@ export const FROM_SQL = Prisma.sql`FROM "Listing" l JOIN "Category" c ON c."id" 
 export function backfillSearchTextSql(onlyEmpty = true): Prisma.Sql {
   const src = Prisma.sql`concat_ws(' ', l."title", l."description", (SELECT string_agg(e.v, ' ') FROM (SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(x.value) = 'array' THEN x.value ELSE jsonb_build_array(x.value) END) AS v FROM jsonb_each(CASE WHEN jsonb_typeof(l."attributes") = 'object' THEN l."attributes" ELSE '{}'::jsonb END) x WHERE jsonb_typeof(x.value) IN ('string', 'number', 'array')) e), l."city")`;
   return Prisma.sql`UPDATE "Listing" l SET "searchText" = left(${sqlNorm(src)}, 12000) ${onlyEmpty ? Prisma.sql`WHERE l."searchText" = ''` : Prisma.empty}`;
+}
+
+/** Propagace, jejíž platnost už skončila – pravidelná úloha ji vymaže a inzerát přeindexuje. */
+export function promotionExpired(l: { topUntil: Date | null; highlightedUntil: Date | null }, now: Date): { topUntil?: null; highlightedUntil?: null } {
+  return {
+    ...(l.topUntil && l.topUntil <= now ? { topUntil: null } : {}),
+    ...(l.highlightedUntil && l.highlightedUntil <= now ? { highlightedUntil: null } : {}),
+  };
+}
+
+/** Pořadí v Meilisearch (rankAt): platné topování nad vším ostatním, jinak datum posunutí / zveřejnění. */
+export function rankAt(l: { topUntil: Date | null; bumpedAt: Date | null; publishedAt: Date | null; createdAt: Date }, now: number): number {
+  const date = (l.bumpedAt ?? l.publishedAt ?? l.createdAt).getTime();
+  return l.topUntil && l.topUntil.getTime() > now ? date + 1e12 : date;
 }

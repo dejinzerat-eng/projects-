@@ -4,8 +4,11 @@ import { z } from 'zod';
 import { config } from '../common/config';
 import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
+import { DEFAULT_EUR_RATE } from '../listings/price';
 
 const num = (v: string | undefined, d: number) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : d);
+/** Kurz eura z prostředí – celé Kč v rozsahu nastavení (1–1000), jinak výchozí. */
+const eurRateFromEnv = (v: string | undefined) => { const r = Math.round(num(v, DEFAULT_EUR_RATE)); return r >= 1 && r <= 1000 ? r : DEFAULT_EUR_RATE; };
 
 /** Schéma všech nastavení. Výchozí hodnoty pocházejí z proměnných prostředí (záloha, když v DB nic není). */
 export const SettingsSchema = z.object({
@@ -14,6 +17,8 @@ export const SettingsSchema = z.object({
   /** Nejvýše aktivních inzerátů zdarma pro soukromou osobu (0 = bez omezení). Ověřené firemní účty limit nemají. */
   freeActiveListings: z.number().int().min(0).max(100_000),
   maxListingsPerHour: z.number().int().min(1).max(1000),
+  /** Pevný kurz Kč za 1 EUR pro řazení a filtr ceny (Listing.priceCzk) */
+  eurRate: z.number().int('Kurz zadejte v celých korunách.').min(1, 'Kurz musí být alespoň 1 Kč.').max(1000, 'Kurz může být nejvýše 1000 Kč.'),
   supportEmail: z.union([z.email('Zadejte platný e-mail podpory.'), z.literal('')]),
   supportPhone: z.string().trim().max(30),
   operatorName: z.string().trim().max(120),
@@ -29,6 +34,8 @@ export function envDefaults(env: NodeJS.ProcessEnv = process.env): Settings {
     listingDays: config.listingDays,
     freeActiveListings: num(env.FREE_ACTIVE_LISTINGS, 0),
     maxListingsPerHour: num(env.MAX_LISTINGS_PER_HOUR, 20),
+    // Kurz z prostředí jen jako platné celé číslo (jinak by uložení formuláře nastavení selhalo na validaci)
+    eurRate: eurRateFromEnv(env.EUR_RATE),
     supportEmail: env.SUPPORT_EMAIL ?? 'podpora@dejinzerat.cz',
     supportPhone: env.SUPPORT_PHONE ?? '',
     operatorName: env.OPERATOR_NAME ?? '',
@@ -59,7 +66,8 @@ export class SettingsService {
 
   async all(): Promise<Settings> {
     const cached = await this.redis.get(CACHE_KEY).catch(() => null);
-    if (cached) { try { return JSON.parse(cached) as Settings; } catch { /* poškozená cache */ } }
+    // Výchozí hodnoty pod cache: nový klíč (např. eurRate) nechybí ani v cache uložené starší verzí aplikace
+    if (cached) { try { return { ...envDefaults(), ...(JSON.parse(cached) as Partial<Settings>) }; } catch { /* poškozená cache */ } }
     const rows = await this.prisma.setting.findMany();
     const s = mergeSettings(envDefaults(), rows);
     await this.redis.set(CACHE_KEY, JSON.stringify(s), 30).catch(() => undefined);
@@ -79,6 +87,8 @@ export class SettingsService {
     const changed = (Object.keys(patch) as (keyof Settings)[]).filter((k) => patch[k] !== undefined && patch[k] !== before[k]);
     await this.prisma.$transaction(changed.map((key) => this.prisma.setting.upsert({ where: { key }, create: { key, value: patch[key] as Prisma.InputJsonValue }, update: { value: patch[key] as Prisma.InputJsonValue } })));
     await this.redis.del(CACHE_KEY).catch(() => undefined);
+    // Nový kurz eura: přepočítat cenu v Kč u všech inzerátů v EUR (řazení a filtr ceny)
+    if (changed.includes('eurRate')) await this.prisma.$executeRaw`UPDATE "Listing" SET "priceCzk" = LEAST(2147483647, ROUND("price" * ${patch.eurRate}::numeric))::int WHERE "currency" = 'EUR' AND "price" IS NOT NULL`;
     return { changed: Object.fromEntries(changed.map((k) => [k, { from: before[k], to: patch[k] }])), settings: await this.all() };
   }
 }

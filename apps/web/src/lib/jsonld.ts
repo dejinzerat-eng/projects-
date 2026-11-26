@@ -70,8 +70,10 @@ export function listingJsonLd(l: ListingLd): Json[] {
   const seller = { '@type': l.seller.isBusiness ? 'Organization' : 'Person', name: sellerName, url: abs(`/uzivatel/${l.seller.id}`) };
   const place = { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: l.city, ...(l.zip ? { postalCode: l.zip } : {}), addressCountry: 'CZ' } };
   const available = ['ACTIVE', 'RESERVED'].includes(l.status);
-  const offer = l.price != null ? {
-    '@type': 'Offer', price: l.price, priceCurrency: l.currency, url, seller, areaServed: l.city,
+  // Dar má cenu 0 Kč (schema.org to připouští) – Offer tak nechybí ani u věcí zdarma
+  const gift = l.offerType === 'GIVE';
+  const offer = l.price != null || gift ? {
+    '@type': 'Offer', price: gift ? 0 : l.price, priceCurrency: gift ? 'CZK' : l.currency, url, seller, areaServed: l.city,
     availability: l.status === 'SOLD' ? 'https://schema.org/SoldOut' : available ? 'https://schema.org/InStock' : 'https://schema.org/Discontinued',
     ...(l.condition ? { itemCondition: CONDITION[l.condition] } : {}),
     ...(l.offerType === 'RENT' ? { businessFunction: 'http://purl.org/goodrelations/v1#LeaseOut' } : {}),

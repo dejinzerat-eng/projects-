@@ -142,6 +142,21 @@ export function toSearchString(p: SearchParams): string {
   return u.toString();
 }
 
+/**
+ * Klíč uloženého hledání: stejné podmínky = stejný klíč. Bez stránky a řazení; nezáleží na pořadí parametrů,
+ * hodnot ve vícenásobném výběru ani na velikosti písmen a mezerách v hledaném textu.
+ */
+export function savedSearchKey(p: SearchParams): string {
+  const { page: _p, sort: _s, ...rest } = p;
+  const sorted = <T,>(v: T): T => (Array.isArray(v) ? ([...v].map(String).sort() as T) : v);
+  // Uložený JSON nemusí mít přesný tvar (starší záznamy, ruční volání API) – text bereme jen jako řetězec
+  const q = typeof rest.q === 'string' ? rest.q.replace(/\s+/g, ' ').trim().toLowerCase() || undefined : undefined;
+  const attrs = rest.attrs && typeof rest.attrs === 'object' ? Object.fromEntries(Object.entries(rest.attrs).map(([k, v]) => [k, sorted(v)])) : undefined;
+  const u = new URLSearchParams(toSearchString({ ...rest, q, condition: sorted(rest.condition), attrs }));
+  u.sort();
+  return u.toString();
+}
+
 /** Souřadnice z URL jen tehdy, když jsou obě platné. */
 function geoParams(lat?: number, lng?: number): Pick<SearchParams, 'lat' | 'lng'> {
   if (lat == null || lng == null || Math.abs(lat) > 90 || Math.abs(lng) > 180) return {};

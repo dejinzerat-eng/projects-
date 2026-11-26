@@ -145,7 +145,7 @@ export class ListingsController {
   @Auth()
   @Get('me/favorites')
   async favorites(@CurrentUser() u: AuthUser) {
-    const favs = await this.prisma.favorite.findMany({ where: { userId: u.id, listing: { OR: [{ status: { in: ['ACTIVE', 'RESERVED', 'SOLD', 'EXPIRED'] } }, { userId: u.id, status: { not: 'DELETED' } }] } }, include: { listing: { include: { images: { orderBy: { position: 'asc' }, take: 1 }, category: { include: { parent: true } }, user: { select: { id: true, name: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true } } } } }, orderBy: { createdAt: 'desc' } });
+    const favs = await this.prisma.favorite.findMany({ where: { userId: u.id, listing: { OR: [{ status: { in: ['ACTIVE', 'RESERVED', 'SOLD', 'EXPIRED'] } }, { userId: u.id, status: { not: 'DELETED' } }] } }, include: { listing: { include: { images: { orderBy: { position: 'asc' }, take: 1 }, category: { include: { parent: true } }, user: { select: { id: true, name: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, companyVerifiedAt: true } } } } }, orderBy: { createdAt: 'desc' } });
     return favs.map((f) => this.search.toCard(f.listing));
   }
 
@@ -153,7 +153,7 @@ export class ListingsController {
   @Get('compare')
   async compare(@Query('ids') ids = '') {
     const list = ids.split(',').filter(Boolean).slice(0, 4);
-    const rows = await this.prisma.listing.findMany({ where: { id: { in: list }, status: { in: ['ACTIVE', 'RESERVED', 'SOLD'] } }, include: { images: { orderBy: { position: 'asc' }, take: 1 }, category: { include: { parent: true } }, user: { select: { id: true, name: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true } } } });
+    const rows = await this.prisma.listing.findMany({ where: { id: { in: list }, status: { in: ['ACTIVE', 'RESERVED', 'SOLD'] } }, include: { images: { orderBy: { position: 'asc' }, take: 1 }, category: { include: { parent: true } }, user: { select: { id: true, name: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, companyVerifiedAt: true } } } });
     return rows.map((l) => ({ ...this.search.toCard(l), attributes: l.attributes, publishedAt: l.publishedAt }));
   }
 

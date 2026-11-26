@@ -5,7 +5,7 @@ import { findMunicipality, suggestMunicipalities } from '@dej/shared/dist/munici
 import { config } from '../common/config';
 import { PrismaService } from '../common/prisma.service';
 import {
-  backfillSearchTextSql, buildTerms, distanceSql, filterSql, FROM_SQL, FUZZY_THRESHOLD, fuzzyScoreSql, Geo, MAX_RADIUS_KM, NORM_TITLE, orderSql,
+  backfillSearchTextSql, buildTerms, distanceSql, rankAt, filterSql, FROM_SQL, FUZZY_THRESHOLD, fuzzyScoreSql, Geo, MAX_RADIUS_KM, NORM_TITLE, orderSql,
   SEARCH_TEXT, termsFuzzy, termsMatch, tierSql, wordPrefix,
 } from './search-query';
 
@@ -14,7 +14,7 @@ export { haversine };
 export const LISTING_INCLUDE = {
   images: { orderBy: { position: 'asc' as const }, take: 1 },
   category: { include: { parent: true } },
-  user: { select: { id: true, name: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true } },
+  user: { select: { id: true, name: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, companyVerifiedAt: true } },
 } satisfies Prisma.ListingInclude;
 type ListingWith = Prisma.ListingGetPayload<{ include: typeof LISTING_INCLUDE }>;
 
@@ -24,6 +24,7 @@ const PAGE = 24;
 export interface ListingCard {
   id: string; slug: string; title: string; price: number | null; priceNegotiable: boolean; currency: string;
   city: string; region: string; condition: string | null; offerType: string; image: string | null; createdAt: number;
+  /** isBusiness = firma s ověřeným IČO (štítek „Firma“); samotné označení „podnikatel“ nestačí */
   categorySlug: string; parentCategorySlug: string; categoryName: string; verified: boolean; isBusiness: boolean; isTop: boolean; highlighted: boolean;
   status: string; distanceKm?: number;
 }
@@ -72,8 +73,8 @@ export class SearchService implements OnModuleInit {
       await this.meili('/indexes', 'POST', { uid: 'listings', primaryKey: 'id' }).catch(() => undefined);
       await this.meili('/indexes/listings/settings', 'PATCH', {
         searchableAttributes: ['title', 'categoryName', 'attrText', 'description', 'city'],
-        filterableAttributes: ['categorySlug', 'parentCategorySlug', 'price', 'city', 'region', 'condition', 'offerType', 'verified', 'isBusiness', 'createdAt', '_geo', 'status', 'userId', ...ATTR_KEYS.map((k) => `attr_${k}`)],
-        sortableAttributes: ['price', 'createdAt', 'rankAt', '_geo'],
+        filterableAttributes: ['categorySlug', 'parentCategorySlug', 'price', 'priceCzk', 'privateSeller', 'city', 'region', 'condition', 'offerType', 'verified', 'isBusiness', 'createdAt', '_geo', 'status', 'userId', ...ATTR_KEYS.map((k) => `attr_${k}`)],
+        sortableAttributes: ['price', 'priceCzk', 'createdAt', 'rankAt', '_geo'],
         rankingRules: ['words', 'typo', 'proximity', 'attribute', 'sort', 'exactness', 'rankAt:desc'],
         typoTolerance: { enabled: true, minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 } },
         synonyms: synonymMap(),
@@ -96,7 +97,7 @@ export class SearchService implements OnModuleInit {
       id: l.id, slug: l.slug, title: l.title, price: l.price, priceNegotiable: l.priceNegotiable, currency: l.currency,
       city: l.city, region: l.region, condition: l.condition, offerType: l.offerType, image: l.images[0]?.thumbUrl ?? null,
       createdAt: (l.publishedAt ?? l.createdAt).getTime(), categorySlug: l.category.slug, parentCategorySlug: parent.slug, categoryName: l.category.name,
-      verified: !!l.user.phoneVerifiedAt, isBusiness: !!l.user.isBusiness,
+      verified: !!l.user.phoneVerifiedAt, isBusiness: !!l.user.isBusiness && !!l.user.companyVerifiedAt,
       isTop: !!l.topUntil && l.topUntil.getTime() > now, highlighted: !!l.highlightedUntil && l.highlightedUntil.getTime() > now,
       status: l.status,
     };
@@ -106,8 +107,10 @@ export class SearchService implements OnModuleInit {
     const card = this.toCard(l);
     const attrs = (l.attributes ?? {}) as Record<string, unknown>;
     const doc: Record<string, unknown> = {
-      ...card, description: l.description.slice(0, 2000), userId: l.userId,
-      rankAt: Math.max((l.bumpedAt ?? l.publishedAt ?? l.createdAt).getTime(), card.isTop ? Date.now() + 1e12 : 0),
+      ...card, description: l.description.slice(0, 2000), userId: l.userId, priceCzk: l.priceCzk, privateSeller: !l.user.isBusiness,
+      // Konec propagace: isTop/highlighted se při hledání přepočítají; rankAt srovná pravidelná úloha přeindexováním
+      topUntil: l.topUntil?.getTime() ?? 0, highlightedUntil: l.highlightedUntil?.getTime() ?? 0,
+      rankAt: rankAt(l, Date.now()),
       attrText: Object.values(attrs).filter((v) => typeof v === 'string').join(' '),
     };
     for (const [k, v] of Object.entries(attrs)) doc[`attr_${k}`] = v;
@@ -165,8 +168,8 @@ export class SearchService implements OnModuleInit {
     const esc = (s: string) => JSON.stringify(s);
     if (p.sub) f.push(`categorySlug = ${esc(p.sub)}`);
     else if (p.category) f.push(`parentCategorySlug = ${esc(p.category)}`);
-    if (p.priceMin != null) f.push(`price >= ${Number(p.priceMin)}`);
-    if (p.priceMax != null) f.push(`price <= ${Number(p.priceMax)}`);
+    if (p.priceMin != null) f.push(`priceCzk >= ${Number(p.priceMin)}`);
+    if (p.priceMax != null) f.push(`priceCzk <= ${Number(p.priceMax)}`);
     const geo = this.geoOf(p);
     if (geo && p.radius) f.push(`_geoRadius(${geo.lat}, ${geo.lng}, ${Math.min(MAX_RADIUS_KM, Number(p.radius)) * 1000})`);
     else if (p.city) f.push(`city = ${esc(geo?.name ?? p.city)}`);
@@ -174,7 +177,7 @@ export class SearchService implements OnModuleInit {
     if (p.condition?.length) f.push(`condition IN [${p.condition.map(esc).join(',')}]`);
     if (p.offerType) f.push(`offerType = ${esc(p.offerType)}`);
     if (p.verified) f.push('verified = true');
-    if (p.sellerType) f.push(`isBusiness = ${p.sellerType === 'business'}`);
+    if (p.sellerType) f.push(p.sellerType === 'business' ? 'isBusiness = true' : 'privateSeller = true');
     const since = publishedAfter?.getTime() ?? (p.since ? Date.now() - { '24h': 864e5, '7d': 7 * 864e5, '30d': 30 * 864e5 }[p.since] : undefined);
     if (since) f.push(`createdAt > ${since}`);
     for (const [k, v] of Object.entries(p.attrs ?? {})) {
@@ -187,17 +190,19 @@ export class SearchService implements OnModuleInit {
     }
     const sort: string[] = [];
     if (p.sort === 'newest') sort.push('createdAt:desc');
-    else if (p.sort === 'price_asc') sort.push('price:asc');
-    else if (p.sort === 'price_desc') sort.push('price:desc');
+    else if (p.sort === 'price_asc') sort.push('priceCzk:asc');
+    else if (p.sort === 'price_desc') sort.push('priceCzk:desc');
     else if (p.sort === 'distance' && geo) sort.push(`_geoPoint(${geo.lat}, ${geo.lng}):asc`);
     else if (!p.q) sort.push('rankAt:desc');
     const r = await this.meili('/indexes/listings/search', 'POST', {
       q: p.q ?? '', filter: f, sort, hitsPerPage: limit, page,
       facets: ['parentCategorySlug', 'categorySlug', 'condition'],
-      attributesToRetrieve: ['id', 'slug', 'title', 'price', 'priceNegotiable', 'currency', 'city', 'region', 'condition', 'offerType', 'image', 'createdAt', 'categorySlug', 'parentCategorySlug', 'categoryName', 'verified', 'isBusiness', 'isTop', 'highlighted', 'status', '_geo'],
+      attributesToRetrieve: ['id', 'slug', 'title', 'price', 'priceNegotiable', 'currency', 'city', 'region', 'condition', 'offerType', 'image', 'createdAt', 'categorySlug', 'parentCategorySlug', 'categoryName', 'verified', 'isBusiness', 'topUntil', 'highlightedUntil', 'status', '_geo'],
     });
-    const hits = (r.hits as (ListingCard & { _geo?: { lat: number; lng: number }; _geoDistance?: number })[]).map(({ _geo, _geoDistance, ...h }) => ({
-      ...h, ...(geo && _geo ? { distanceKm: Math.round(haversine(geo, _geo)) } : {}),
+    const now = Date.now();
+    type Hit = Omit<ListingCard, 'isTop' | 'highlighted'> & { topUntil?: number; highlightedUntil?: number; _geo?: { lat: number; lng: number }; _geoDistance?: number };
+    const hits = (r.hits as Hit[]).map(({ _geo, _geoDistance, topUntil, highlightedUntil, ...h }) => ({
+      ...h, isTop: (topUntil ?? 0) > now, highlighted: (highlightedUntil ?? 0) > now, ...(geo && _geo ? { distanceKm: Math.round(haversine(geo, _geo)) } : {}),
     }));
     return { hits, total: r.totalHits as number, page, pages: r.totalPages as number, facets: r.facetDistribution as Record<string, Record<string, number>>, engine: 'meilisearch', ...(geo ? { origin: geo } : {}) };
   }

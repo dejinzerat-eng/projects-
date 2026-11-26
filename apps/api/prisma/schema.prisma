@@ -161,6 +161,8 @@ model Listing {
   price            Int?
   priceNegotiable  Boolean       @default(false)
   currency         String        @default("CZK")
+  /// Cena přepočtená na Kč (EUR podle nastavení eurRate) – pro řazení a filtr ceny; udržuje aplikace
+  priceCzk         Int?
   condition        Condition?
   offerType        OfferType     @default(SELL)
   status           ListingStatus @default(ACTIVE)
@@ -207,6 +209,7 @@ model Listing {
   @@index([contentHash])
   @@index([status, publishedAt])
   @@index([lat, lng])
+  @@index([status, priceCzk])
   @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 

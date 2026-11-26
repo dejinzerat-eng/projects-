@@ -1,9 +1,10 @@
 import Link from 'next/link';
+import { Fragment } from 'react';
 import { redirect } from 'next/navigation';
 import { ChevronLeft, ChevronRight, SearchX, Sparkles, SpellCheck } from 'lucide-react';
 import { filtersFor, toSearchString, type SearchParams } from '@dej/shared';
 import { api } from '@/lib/api';
-import { getFavoriteIds, getSavedSearchKeys, savedSearchKey } from '@/lib/favorites';
+import { getFavoriteIds, getSavedSearches, savedSearchKey } from '@/lib/favorites';
 import { plural } from '@/lib/format';
 import type { Category, SearchResult } from '@/lib/types';
 import { CompareBar } from './compare';
@@ -14,16 +15,17 @@ import { SortSelect } from './sort-select';
 
 type SP = Record<string, string | string[] | undefined>;
 
-export async function SearchView({ searchParams, category, sub, basePath, heading }: { searchParams: SP; category?: string; sub?: string; basePath: string; heading?: string }) {
+/** `crumbs` = drobečková navigace vstupní stránky (Domů / Kategorie / Město); bez ní se odvodí z kategorie. */
+export async function SearchView({ searchParams, category, sub, basePath, heading, crumbs }: { searchParams: SP; category?: string; sub?: string; basePath: string; heading?: string; crumbs?: { name: string; path: string }[] }) {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(searchParams)) if (typeof v === 'string') qs.set(k, v);
   if (category) qs.set('kategorie', category);
   if (sub) qs.set('pod', sub);
-  const [cats, res, favorites, savedKeys] = await Promise.all([
+  const [cats, res, favorites, saved] = await Promise.all([
     api<Category[]>('/categories', { revalidate: 60, auth: false }),
     api<SearchResult & { params: SearchParams }>(`/search?${qs}`, { auth: false }),
     getFavoriteIds(),
-    getSavedSearchKeys(),
+    getSavedSearches(),
   ]);
   const p = res.params;
   // Chytré hledání: přesměrujeme na URL s rozpoznanými filtry, ať je panel filtrů vyplněný a odkaz sdílitelný
@@ -45,16 +47,23 @@ export async function SearchView({ searchParams, category, sub, basePath, headin
   return (
     <div className="container-x py-6 sm:py-8">
       <nav className="mb-3 flex flex-wrap items-center gap-1.5 text-sm text-muted" aria-label="Drobečková navigace">
-        <Link href="/" className="hover:text-ink">Domů</Link><span>/</span>
-        {cat ? <Link href={`/kategorie/${cat.slug}`} className="hover:text-ink">{cat.name}</Link> : <span>{heading ?? 'Hledání'}</span>}
-        {subCat && <><span>/</span><Link href={`/kategorie/${cat!.slug}/${subCat.slug}`} className="hover:text-ink">{subCat.name}</Link></>}
+        {crumbs ? crumbs.map((c, i) => (
+          <Fragment key={c.path}>
+            {i > 0 && <span>/</span>}
+            {i === crumbs.length - 1 && i > 0 ? <span aria-current="page">{c.name}</span> : <Link href={c.path} className="hover:text-ink">{c.name}</Link>}
+          </Fragment>
+        )) : <>
+          <Link href="/" className="hover:text-ink">Domů</Link><span>/</span>
+          {cat ? <Link href={`/kategorie/${cat.slug}`} className="hover:text-ink">{cat.name}</Link> : <span>{heading ?? 'Hledání'}</span>}
+          {subCat && <><span>/</span><Link href={`/kategorie/${cat!.slug}/${subCat.slug}`} className="hover:text-ink">{subCat.name}</Link></>}
+        </>}
       </nav>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="h-display text-3xl font-bold sm:text-4xl">{title}</h1>
           <p className="mt-1 text-muted">{plural(res.total, 'inzerát', 'inzeráty', 'inzerátů')}</p>
         </div>
-        <SaveSearch key={savedSearchKey(p)} params={p} initialSaved={savedKeys.has(savedSearchKey(p))} label={[p.q, subCat?.name ?? cat?.name, p.city ?? (p.lat != null ? 'v okolí mé polohy' : ''), p.priceMax ? `do ${p.priceMax} Kč` : ''].filter(Boolean).join(', ') || 'Všechny inzeráty'} />
+        <SaveSearch key={savedSearchKey(p)} params={p} savedId={saved.get(savedSearchKey(p)) ?? null} label={[p.q, subCat?.name ?? cat?.name, p.city ?? (p.lat != null ? 'v okolí mé polohy' : ''), p.priceMax ? `do ${p.priceMax} Kč` : ''].filter(Boolean).join(', ') || 'Všechny inzeráty'} />
       </div>
       {recognized.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-brand-soft bg-brand-soft/50 px-4 py-3 text-sm">

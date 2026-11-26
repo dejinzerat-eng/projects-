@@ -1,7 +1,7 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
-import { toSearchString, type SearchParams } from '@dej/shared';
+import { savedSearchKey, type SearchParams } from '@dej/shared';
 import { api } from './api';
 
 /** ID oblíbených inzerátů přihlášeného uživatele (jednou za požadavek), jinak prázdná množina. */
@@ -11,15 +11,12 @@ export const getFavoriteIds = cache(async (): Promise<Set<string>> => {
   try { return new Set(await api<string[]>('/me/favorites/ids')); } catch { return new Set(); }
 });
 
-/** Klíč uloženého hledání (bez stránky a řazení) – stejný tvar jako URL parametry. */
-export function savedSearchKey(p: SearchParams): string {
-  const { page: _p, sort: _s, ...query } = p;
-  return toSearchString(query);
-}
+export { savedSearchKey };
 
-/** Klíče uložených hledání přihlášeného uživatele – tlačítko „Hlídat“ pak ví, že už hlídáme. */
-export const getSavedSearchKeys = cache(async (): Promise<Set<string>> => {
+/** Uložená hledání přihlášeného uživatele podle normalizovaného klíče → ID (tlačítko „Hlídat“ ví, že už hlídáte, a umí hlídání zrušit). */
+export const getSavedSearches = cache(async (): Promise<Map<string, string>> => {
   const c = await cookies();
-  if (!c.get('dej_session')) return new Set();
-  try { return new Set((await api<{ query: SearchParams }[]>('/me/saved-searches')).map((s) => savedSearchKey(s.query))); } catch { return new Set(); }
+  if (!c.get('dej_session')) return new Map();
+  // Jen hledání se zapnutými upozorněními – u vypnutých tlačítko nabídne „Hlídat“ (API upozornění znovu zapne)
+  try { return new Map((await api<{ id: string; query: SearchParams; notify: boolean }[]>('/me/saved-searches')).filter((s) => s.notify).map((s) => [savedSearchKey(s.query), s.id])); } catch { return new Map(); }
 });

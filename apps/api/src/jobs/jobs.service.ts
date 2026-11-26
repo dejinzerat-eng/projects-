@@ -6,12 +6,14 @@ import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { StorageService } from '../media/storage.service';
 import { cleanupUnsentAttachments } from '../messages/attachments-cleanup';
+import { promotionExpired } from '../search/search-query';
 import { SearchService } from '../search/search.service';
 import { runRetention } from '../users/gdpr';
 
 /**
  * Pravidelné úlohy (každých 5 minut, zámek v Redisu → běží jen na jedné instanci):
  * - upozornění na brzy končící inzeráty (3 dny předem) a jejich expirace,
+ * - konec topování / zvýraznění (vymaže prošlá data a přeindexuje, aby inzerát nezůstal první),
  * - chytrá upozornění na nové inzeráty odpovídající uloženému hledání,
  * - jednou za hodinu úklid neodeslaných fotek ve zprávách (starších 24 h), jednou denně retence dat.
  */
@@ -31,7 +33,7 @@ export class JobsService implements OnApplicationBootstrap, OnModuleDestroy {
 
   async tick() {
     if (!(await this.redis.lock('jobs:tick', 240))) return;
-    try { await this.search.backfillSearchText(); await this.expiry(); await this.savedSearchAlerts(); } catch (e) { this.log.error((e as Error).stack); }
+    try { await this.search.backfillSearchText(); await this.expiry(); await this.promotionExpiry(); await this.savedSearchAlerts(); } catch (e) { this.log.error((e as Error).stack); }
     if (await this.redis.lock('jobs:attachments', 3600)) await this.unsentAttachments().catch((e) => this.log.error((e as Error).stack));
     if (await this.redis.lock('jobs:retention', 86_400)) await runRetention(this.prisma).catch((e) => this.log.error((e as Error).stack));
   }
@@ -60,6 +62,20 @@ export class JobsService implements OnApplicationBootstrap, OnModuleDestroy {
       for (const e of expired) await this.search.index(e.id);
       this.log.log(`Expirováno ${expired.length} inzerátů`);
     }
+  }
+
+  /** Prošlé topování a zvýraznění: smazat datum platnosti a přeindexovat (pořadí v Meilisearch se počítá při indexaci). */
+  async promotionExpiry(now = new Date()) {
+    const rows = await this.prisma.listing.findMany({
+      where: { OR: [{ topUntil: { lte: now } }, { highlightedUntil: { lte: now } }] },
+      select: { id: true, topUntil: true, highlightedUntil: true }, take: 1000,
+    });
+    for (const l of rows) {
+      await this.prisma.listing.update({ where: { id: l.id }, data: promotionExpired(l, now) });
+      await this.search.index(l.id);
+    }
+    if (rows.length) this.log.log(`Skončila propagace inzerátů: ${rows.length}`);
+    return rows.length;
   }
 
   async savedSearchAlerts() {

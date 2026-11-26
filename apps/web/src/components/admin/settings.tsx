@@ -4,7 +4,7 @@ import { call } from '@/lib/client';
 import { useAct } from './dialog';
 
 interface Settings {
-  premoderation: boolean; listingDays: number; freeActiveListings: number; maxListingsPerHour: number;
+  premoderation: boolean; listingDays: number; freeActiveListings: number; maxListingsPerHour: number; eurRate: number;
   supportEmail: string; supportPhone: string; operatorName: string; operatorIco: string; operatorAddress: string;
 }
 
@@ -23,10 +23,11 @@ export function SettingsForm({ initial, canReindex }: { initial: Settings; canRe
             <input type="checkbox" className="mt-0.5 size-5" checked={v.premoderation} onChange={(e) => setV({ ...v, premoderation: e.target.checked })} />
             <span><span className="font-medium">Premoderace</span><span className="block text-sm text-muted">Každý nový inzerát (i změna textu schváleného) čeká na schválení moderátorem. Bez premoderace jde ke schválení jen rizikový obsah.</span></span>
           </label>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div><label className="label" htmlFor="s-days">Platnost inzerátu (dní)</label><input id="s-days" className="input" {...num('listingDays')} /></div>
             <div><label className="label" htmlFor="s-free">Aktivních inzerátů zdarma</label><input id="s-free" className="input" {...num('freeActiveListings')} /><p className="mt-1 text-xs text-muted">Pro soukromé osoby a neověřené firmy, 0 = bez omezení</p></div>
             <div><label className="label" htmlFor="s-hour">Nových inzerátů za hodinu</label><input id="s-hour" className="input" {...num('maxListingsPerHour')} /><p className="mt-1 text-xs text-muted">Ochrana proti spamu</p></div>
+            <div><label className="label" htmlFor="s-eur">Kurz eura (Kč za 1 €)</label><input id="s-eur" className="input" {...num('eurRate')} /><p className="mt-1 text-xs text-muted">Pro řazení a filtr ceny u inzerátů v eurech</p></div>
           </div>
         </section>
         <section className="card space-y-3 p-5">

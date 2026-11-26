@@ -15,6 +15,9 @@ export class ListingPolicyService {
   listingDays() { return this.settings.get('listingDays'); }
   async expiresAt() { return new Date(Date.now() + (await this.settings.get('listingDays')) * 864e5); }
 
+  /** Kurz Kč za 1 EUR pro Listing.priceCzk. */
+  eurRate() { return this.settings.get('eurRate'); }
+
   /** Limit nových inzerátů za hodinu (anti-spam). */
   maxPerHour() { return this.settings.get('maxListingsPerHour'); }
 
