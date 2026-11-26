@@ -64,7 +64,7 @@ export function SearchBox({ initial = '', size = 'md', autoFocus }: { initial?: 
   const Icon = { q: Search, cat: LayoutGrid, city: MapPin, recent: Clock };
   return (
     <div ref={box} className="relative w-full">
-      <form onSubmit={submit} role="search" className={`flex items-center rounded-2xl border bg-surface transition focus-within:border-ink-2 focus-within:ring-4 focus-within:ring-brand-soft ${lg ? 'h-16 border-line shadow-card pl-5' : 'h-11 border-line pl-3.5'}`}>
+      <form onSubmit={submit} role="search" className={`flex items-center rounded-2xl border bg-surface transition focus-within:border-ink-2 focus-within:ring-4 focus-within:ring-brand-soft ${lg ? 'h-14 border-line shadow-card pl-5' : 'h-11 border-line pl-3.5'}`}>
         <Search className={`${lg ? 'size-6' : 'size-[18px]'} shrink-0 text-muted`} aria-hidden />
         <input
           value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); setActive(-1); }} onFocus={() => { setRecent(readRecent()); setOpen(true); }} onKeyDown={key}
@@ -74,7 +74,7 @@ export function SearchBox({ initial = '', size = 'md', autoFocus }: { initial?: 
           className={`min-w-0 flex-1 bg-transparent px-3 outline-none placeholder:text-muted ${lg ? 'text-lg' : 'text-[15px]'}`}
         />
         {q && <button type="button" onClick={() => { setQ(''); setData(null); }} className="grid size-8 place-items-center rounded-full text-muted hover:bg-surface-2" aria-label="Vymazat"><X className="size-4" /></button>}
-        <button type="submit" className={`btn btn-primary shrink-0 ${lg ? 'mr-2 h-12 px-6 text-base' : 'mr-1 h-9 px-3.5 text-sm rounded-xl'}`}>
+        <button type="submit" className={`btn btn-primary shrink-0 ${lg ? 'mr-1.5 h-11 px-6 text-base' : 'mr-1 h-9 px-3.5 text-sm rounded-xl'}`}>
           <span className={lg ? '' : 'sr-only sm:not-sr-only'}>Hledat</span>{!lg && <Search className="size-4 sm:hidden" />}
         </button>
       </form>
