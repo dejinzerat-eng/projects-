@@ -3,8 +3,25 @@ import { cookies, headers as requestHeaders } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { loginUrl } from './safe-back';
 
-const API = process.env.API_INTERNAL_URL
-  ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api` : 'http://localhost:4000');
+const API_ENV = process.env.API_INTERNAL_URL
+  ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api` : undefined);
+
+/**
+ * Adresa API pro serverové komponenty. Na Vercelu běží API ve stejném nasazení (/api), a když adresa
+ * není v proměnných prostředí (systémové proměnné Vercelu nemusí být zpřístupněné), použije se doména,
+ * na kterou přišel požadavek. Lokálně samostatný server na portu 4000.
+ */
+async function apiBase(): Promise<string> {
+  if (API_ENV) return API_ENV;
+  if (process.env.VERCEL) {
+    try {
+      const h = await requestHeaders();
+      const host = h.get('x-forwarded-host') ?? h.get('host');
+      if (host) return `${h.get('x-forwarded-proto')?.split(',')[0] ?? 'https'}://${host}/api`;
+    } catch { /* mimo požadavek (sestavení) – výchozí adresa */ }
+  }
+  return 'http://localhost:4000';
+}
 
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 
@@ -16,7 +33,7 @@ export async function api<T>(path: string, init: RequestInit & { revalidate?: nu
     const s = c.get('dej_session');
     if (s) headers.set('cookie', `dej_session=${s.value}`);
   }
-  const r = await fetch(`${API}${path}`, { ...init, headers, cache: init.revalidate ? 'force-cache' : 'no-store', next: init.revalidate ? { revalidate: init.revalidate } : undefined });
+  const r = await fetch(`${await apiBase()}${path}`, { ...init, headers, cache: init.revalidate ? 'force-cache' : 'no-store', next: init.revalidate ? { revalidate: init.revalidate } : undefined });
   if (!r.ok) {
     let msg = r.statusText;
     try { msg = (await r.json()).message ?? msg; } catch { /* */ }
