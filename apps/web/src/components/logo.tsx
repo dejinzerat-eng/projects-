@@ -1,22 +1,30 @@
 import Link from 'next/link';
+import { LOGO_PATH_A, LOGO_PATH_B, LOGO_PATH_D, LOGO_VIEWBOX } from './logo-paths';
 
+/** Celé logo „DEJINZERAT.CZ“ (původní tvar z www.dejinzerat.cz). Barvy bere z tokenů --logo-a / --logo-b, takže funguje ve světlém i tmavém režimu. */
+export function Wordmark({ className = 'h-7 w-auto', title }: { className?: string; title?: string }) {
+  return (
+    <svg viewBox={LOGO_VIEWBOX} className={className} role={title ? 'img' : undefined} aria-label={title} aria-hidden={title ? undefined : true}>
+      <path fill="var(--logo-a)" d={LOGO_PATH_A} />
+      <path fill="var(--logo-b)" d={LOGO_PATH_B} />
+    </svg>
+  );
+}
+
+/** Ikona: písmeno „D“ z loga na barevné dlaždici (stejná jako ikona v prohlížeči). */
 export function LogoMark({ className = 'size-8' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden>
-      <rect width="32" height="32" rx="9" fill="var(--brand)" />
-      <path d="M9.5 10.5c0-1.1.9-2 2-2h9a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-5.2l-3.6 3.1c-.5.4-1.2.1-1.2-.6v-2.5a2 2 0 0 1-1-1.7z" fill="#fff" />
-      <circle cx="19.2" cy="12.3" r="1.5" fill="var(--brand)" />
+    <svg viewBox="0 0 64 64" className={className} aria-hidden>
+      <rect width="64" height="64" rx="15" fill="var(--logo-a)" />
+      <path fill="#fff" transform="translate(32 32) scale(1.08) translate(-16.45 -31.65)" d={LOGO_PATH_D} />
     </svg>
   );
 }
 
 export function Logo() {
   return (
-    <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="Dejinzerat.cz – úvodní stránka">
-      <LogoMark />
-      <span className="h-display text-[21px] font-bold leading-none tracking-tight">
-        <span className="text-brand">dej</span>inzerat<span className="text-muted font-semibold">.cz</span>
-      </span>
+    <Link href="/" className="flex shrink-0 items-center" aria-label="Dejinzerat.cz – úvodní stránka">
+      <Wordmark className="h-[22px] w-auto sm:h-7" />
     </Link>
   );
 }

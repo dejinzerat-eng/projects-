@@ -21,6 +21,9 @@
   --danger: #c92a2a;
   --danger-soft: #ffe8e8;
   --focus: #1d6fd6;
+  /* Logo (původní tvar z www.dejinzerat.cz): a = „DEJ“ a „.CZ“, b = „INZERAT“. */
+  --logo-a: #ea561a;
+  --logo-b: var(--brand);
   --shadow-card: 0 1px 2px rgb(27 31 36 / 0.04), 0 4px 16px rgb(27 31 36 / 0.05);
   --shadow-pop: 0 12px 40px rgb(27 31 36 / 0.14), 0 2px 6px rgb(27 31 36 / 0.06);
   color-scheme: light;
@@ -45,6 +48,8 @@
   --danger: #ff6b6b;
   --danger-soft: #3b1b1b;
   --focus: #5ea2f0;
+  --logo-a: #f26b33;
+  --logo-b: var(--brand);
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
   --shadow-pop: 0 12px 40px rgb(0 0 0 / 0.5);
   color-scheme: dark;
