@@ -14,7 +14,7 @@ import { useToast } from './toast';
 
 interface Msg { id: string; senderId: string; body: string; imageUrl: string | null; createdAt: string; readAt: string | null; warning: MessageWarningData | null }
 export interface ThreadData {
-  id: string; listing: { id: string; slug: string; title: string; price: number | null; priceNegotiable: boolean; status: string; image: string | null } | null;
+  id: string; listing: { id: string; slug: string; title: string; price: number | null; priceNegotiable: boolean; offerType?: string; currency?: string; status: string; image: string | null } | null;
   other: { id: string; name: string; avatarUrl: string | null; phoneVerifiedAt: string | null }; role: string; messages: Msg[];
   iBlocked: boolean; blocked: boolean; archived: boolean; photos: boolean; canReview: boolean; myReview: { rating: number } | null;
 }
@@ -75,7 +75,7 @@ export function Thread({ initial, meId }: { initial: ThreadData; meId: string })
         <Link href={listingUrl(t.listing)} className="flex items-center gap-3 border-b border-line bg-surface-2/60 px-4 py-2.5 hover:bg-surface-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           {t.listing.image && <img src={t.listing.image} alt="" className="size-10 rounded-lg object-cover" />}
-          <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{t.listing.title}</div><div className="text-sm">{price(t.listing.price, t.listing.priceNegotiable)}{t.listing.status !== 'ACTIVE' && <span className="ml-2 text-muted">· {STATUS_LABEL[t.listing.status]}</span>}</div></div>
+          <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{t.listing.title}</div><div className="text-sm">{price(t.listing.price, t.listing.priceNegotiable, t.listing.currency, t.listing.offerType)}{t.listing.status !== 'ACTIVE' && <span className="ml-2 text-muted">· {STATUS_LABEL[t.listing.status]}</span>}</div></div>
         </Link>
       )}
       <div className="flex-1 space-y-2 overflow-y-auto bg-paper p-4">
