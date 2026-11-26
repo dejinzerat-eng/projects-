@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Delete, Get, Header, NotFoundExc
 import type { Request } from 'express';
 import { Prisma } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
-import { CITIES, findCity } from '@dej/shared';
+import { CITIES, findCity, savedSearchKey, type SearchParams } from '@dej/shared';
 import { z } from 'zod';
 import { Auth, AuthUser, CurrentUser } from '../common/auth.guard';
 import { PrismaService } from '../common/prisma.service';
@@ -208,11 +208,12 @@ export class UsersController {
   @Auth()
   @Post('me/saved-searches')
   async save(@CurrentUser() u: AuthUser, @Body(new ZodPipe(SavedSearchDto)) dto: z.infer<typeof SavedSearchDto>) {
-    // Stejné hledání podruhé neukládáme
-    const existing = await this.prisma.savedSearch.findFirst({ where: { userId: u.id, query: { equals: dto.query as Prisma.InputJsonValue } } });
+    // Stejné hledání podruhé neukládáme (porovnání normalizovaných podmínek, ne doslovného JSON)
+    const mine = await this.prisma.savedSearch.findMany({ where: { userId: u.id } });
+    const key = savedSearchKey(dto.query as SearchParams);
+    const existing = mine.find((s) => savedSearchKey(s.query as SearchParams) === key);
     if (existing) return existing;
-    const n = await this.prisma.savedSearch.count({ where: { userId: u.id } });
-    if (n >= 50) throw new BadRequestException('Nejvýše 50 uložených hledání.');
+    if (mine.length >= 50) throw new BadRequestException('Nejvýše 50 uložených hledání.');
     return this.prisma.savedSearch.create({ data: { userId: u.id, name: dto.name, query: dto.query as Prisma.InputJsonValue, notify: dto.notify } });
   }
 

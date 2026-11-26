@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { Prisma } from '@prisma/client';
-import { buildSearchText, fromSearchString, haversine, normalizeSearchText, queryWords, stemCz, synonymsOf, toSearchString } from '@dej/shared';
+import { buildSearchText, fromSearchString, haversine, normalizeSearchText, queryWords, savedSearchKey, stemCz, synonymsOf, toSearchString } from '@dej/shared';
 import { findMunicipality, municipalityByZip, nearestMunicipality, resolveLocation, suggestMunicipalities } from '@dej/shared/dist/municipalities';
 import { boundingBox, buildTerms, categoriesFor, filterSql, orderSql, promotionExpired, rankAt, termsFuzzy, termsMatch, tierSql } from './search-query';
 
@@ -225,5 +225,23 @@ describe('konec propagace', () => {
     const activeTop = rankAt({ ...base, topUntil: future, publishedAt: new Date('2026-11-01T00:00:00Z') }, now.getTime());
     assert.ok(fresh > oldTop);
     assert.ok(activeTop > fresh);
+  });
+});
+
+describe('klíč uloženého hledání', () => {
+  it('nezáleží na stránce, řazení, pořadí ani velikosti písmen', () => {
+    const a = savedSearchKey({ q: '  iPhone   15 ', category: 'mobily', condition: ['USED', 'NEW'], page: 3, sort: 'newest', attrs: { brand: ['b', 'a'] } });
+    const b = savedSearchKey({ attrs: { brand: ['a', 'b'] }, condition: ['NEW', 'USED'], category: 'mobily', q: 'iphone 15' });
+    assert.equal(a, b);
+  });
+
+  it('jiné podmínky dají jiný klíč', () => {
+    assert.notEqual(savedSearchKey({ q: 'kolo' }), savedSearchKey({ q: 'kolo', city: 'Brno' }));
+    assert.notEqual(savedSearchKey({ q: 'kolo', sellerType: 'private' }), savedSearchKey({ q: 'kolo', sellerType: 'business' }));
+  });
+
+  it('stejný klíč z URL i z uloženého JSON', () => {
+    const fromUrl = fromSearchString(new URLSearchParams('mesto=Praha&q=Kolo&cena_do=5000&strana=2'));
+    assert.equal(savedSearchKey(fromUrl), savedSearchKey({ priceMax: 5000, city: 'Praha', q: 'kolo' }));
   });
 });
