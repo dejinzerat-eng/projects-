@@ -73,6 +73,8 @@ export function categoryRedirects(
   return [{ from, to }, ...children];
 }
 
+const REDIRECT_PREFIX_MAX = 5;
+
 /**
  * Kandidáti pro vyhledání přesměrování: nejdřív přesná adresa, u výpisů kategorií pak i kratší začátky,
  * aby se např. /kategorie/stara/mesto/praha přesměrovala podle pravidla pro /kategorie/stara (zbytek cesty se připojí).
@@ -81,6 +83,7 @@ export function redirectCandidates(path: string): { prefix: string; rest: string
   const out = [{ prefix: path, rest: '' }];
   if (!path.startsWith('/kategorie/')) return out;
   const parts = path.split('/');
-  for (let n = parts.length - 1; n >= 3; n--) out.push({ prefix: parts.slice(0, n).join('/'), rest: `/${parts.slice(n).join('/')}` });
+  // Nejdelší adresa výpisu je /kategorie/hlavni/pod/mesto/obec – delší začátky nemá smysl hledat (a omezí to dotaz)
+  for (let n = Math.min(parts.length - 1, REDIRECT_PREFIX_MAX); n >= 3; n--) out.push({ prefix: parts.slice(0, n).join('/'), rest: `/${parts.slice(n).join('/')}` });
   return out;
 }

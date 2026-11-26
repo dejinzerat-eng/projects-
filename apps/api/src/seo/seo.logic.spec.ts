@@ -78,5 +78,9 @@ describe('přesměrování kategorií', () => {
     assert.deepEqual(redirectCandidates('/kategorie/auta/osobni/mesto/praha').map((c) => `${c.prefix}|${c.rest}`), [
       '/kategorie/auta/osobni/mesto/praha|', '/kategorie/auta/osobni/mesto|/praha', '/kategorie/auta/osobni|/mesto/praha', '/kategorie/auta|/osobni/mesto/praha',
     ]);
+    // Dlouhá adresa: hledají se jen začátky do délky výpisu kategorie s lokalitou
+    const long = redirectCandidates(`/kategorie/a${'/x'.repeat(200)}`);
+    assert.equal(long.length, 4);
+    assert.deepEqual(long.slice(1).map((c) => c.prefix), ['/kategorie/a/x/x', '/kategorie/a/x', '/kategorie/a']);
   });
 });
