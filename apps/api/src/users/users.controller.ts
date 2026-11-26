@@ -65,7 +65,9 @@ export class UsersController {
   @Patch('me')
   async updateMe(@CurrentUser() u: AuthUser, @Body(new ZodPipe(ProfileDto)) dto: z.infer<typeof ProfileDto>) {
     const city = dto.city ? findCity(dto.city) : undefined;
-    await this.prisma.user.update({ where: { id: u.id }, data: { ...dto, companyId: dto.companyId || null, city: city?.name ?? dto.city, region: city?.region } });
+    const before = await this.prisma.user.findUnique({ where: { id: u.id }, select: { companyId: true, companyName: true } });
+    const companyChanged = (dto.companyId !== undefined && (dto.companyId || null) !== before?.companyId) || (dto.companyName !== undefined && (dto.companyName || null) !== (before?.companyName || null));
+    await this.prisma.user.update({ where: { id: u.id }, data: { ...dto, companyId: dto.companyId || null, city: city?.name ?? dto.city, region: city?.region, ...(companyChanged ? { companyVerifiedAt: null } : {}) } }); // WP6: změna IČO/názvu ruší ověření firmy
     await this.auth.flushUser(u.id);
     return { ok: true };
   }

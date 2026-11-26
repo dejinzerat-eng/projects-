@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ReportStatus, ReportTarget } from '@prisma/client';
 import { z } from 'zod';
 import { AuthUser } from '../common/auth.guard';
@@ -95,6 +95,7 @@ export class ReportsService {
   async resolve(id: string, actor: AuthUser, status: 'RESOLVED' | 'DISMISSED', note?: string) {
     const r = await this.prisma.report.findUnique({ where: { id } });
     if (!r) throw new NotFoundException('Nahlášení neexistuje.');
+    if (r.status !== 'OPEN') throw new ConflictException('Nahlášení už bylo vyřízeno.');
     const open = await this.prisma.report.findMany({ where: { targetType: r.targetType, targetId: r.targetId, status: 'OPEN' }, select: { id: true, reporterId: true } });
     const ids = [...new Set([r.id, ...open.map((o) => o.id)])];
     await this.prisma.report.updateMany({ where: { id: { in: ids } }, data: { status, resolvedById: actor.id, resolvedAt: new Date(), resolutionNote: note || null } });

@@ -17,15 +17,16 @@ export class ListingPolicyService {
   /** Limit nových inzerátů za hodinu (anti-spam). */
   maxPerHour() { return this.settings.get('maxListingsPerHour'); }
 
-  /** Před zveřejněním: omezený účet nesmí zveřejňovat; soukromá osoba má limit aktivních inzerátů zdarma. */
+  /** Před zveřejněním: omezený účet nesmí zveřejňovat; soukromá osoba a neověřená firma mají limit aktivních inzerátů zdarma. */
   async beforePublish(userId: string, exceptListingId?: string, checkLimit = true) {
     await this.trust.assertNotRestricted(userId);
     const limit = await this.settings.get('freeActiveListings');
     if (!limit || !checkLimit) return;
-    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { isBusiness: true, role: true } });
-    if (!u || u.isBusiness || u.role !== 'USER') return;
+    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { isBusiness: true, companyVerifiedAt: true, role: true } });
+    // Firma je bez limitu jen s ověřeným IČO (isBusiness si uživatel nastavuje sám)
+    if (!u || (u.isBusiness && u.companyVerifiedAt) || u.role !== 'USER') return;
     const active = await this.prisma.listing.count({ where: { userId, status: { in: ['ACTIVE', 'PENDING', 'RESERVED'] }, ...(exceptListingId ? { id: { not: exceptListingId } } : {}) } });
-    if (active >= limit) throw new BadRequestException(`Limit aktivních inzerátů zdarma je ${limit}. Ukončete některý starší inzerát, nebo si pořiďte firemní účet.`);
+    if (active >= limit) throw new BadRequestException(`Limit aktivních inzerátů zdarma je ${limit}. Ukončete některý starší inzerát, nebo si nechte ověřit firemní účet.`);
   }
 
   /** Po uložení: vysoce rizikový obsah → automatické omezení účtu. */

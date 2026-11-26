@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListingStatus, Prisma } from '@prisma/client';
-import { filtersFor, findCity, slugify } from '@dej/shared';
+import { can, filtersFor, findCity, slugify } from '@dej/shared';
 import { z } from 'zod';
 import { AuthUser } from '../common/auth.guard';
 import { config } from '../common/config';
@@ -88,6 +88,11 @@ export class ListingsService {
     await Promise.all(ids.map((id, position) => this.prisma.listingImage.updateMany({ where: { id, ownerId: userId }, data: { listingId, position } })));
   }
 
+  private async hasNewPhotos(listingId: string, ids: string[]) {
+    const prev = new Set((await this.prisma.listingImage.findMany({ where: { listingId }, select: { id: true } })).map((i) => i.id));
+    return ids.some((x) => !prev.has(x));
+  }
+
   async ownOrThrow(id: string, user: AuthUser) {
     const l = await this.prisma.listing.findUnique({ where: { id } });
     if (!l || l.status === 'DELETED') throw new NotFoundException('Inzerát neexistuje.');
@@ -106,8 +111,8 @@ export class ListingsService {
     let status = l.status;
     if (l.status === 'DRAFT' && dto.publish) status = risk.score >= 50 || premoderation ? 'PENDING' : 'ACTIVE';
     else if (risk.score >= 50 && l.status === 'ACTIVE') status = 'PENDING';
-    // Při premoderaci jde ke schválení i změněný text schváleného inzerátu
-    else if (premoderation && l.status === 'ACTIVE' && (l.title !== dto.title || l.description !== dto.description)) status = 'PENDING';
+    // Při premoderaci jde ke schválení i změněný text nebo nové fotografie schváleného inzerátu
+    else if (premoderation && l.status === 'ACTIVE' && (l.title !== dto.title || l.description !== dto.description || (await this.hasNewPhotos(id, dto.imageIds)))) status = 'PENDING';
     await this.prisma.listing.update({
       where: { id },
       data: {
@@ -127,6 +132,7 @@ export class ListingsService {
   async setStatus(id: string, user: AuthUser, status: 'ACTIVE' | 'RESERVED' | 'SOLD') {
     const l = await this.ownOrThrow(id, user);
     if (!['ACTIVE', 'RESERVED', 'SOLD'].includes(l.status)) throw new BadRequestException('Stav tohoto inzerátu nelze změnit.');
+    if (status !== 'SOLD' && l.status === 'SOLD') await this.policy.beforePublish(user.id, id); // WP6: znovuzveřejnění prodaného = limit a omezení účtu
     await this.prisma.listing.update({ where: { id }, data: { status } });
     await this.search.index(id);
     return { ok: true };
@@ -156,9 +162,10 @@ export class ListingsService {
         user: { select: { id: true, name: true, avatarUrl: true, city: true, createdAt: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, lastSeenAt: true, phone: true } },
       },
     });
-    const isOwner = viewer && (viewer.id === l?.userId || viewer.role !== 'USER');
-    if (!l || l.status === 'DELETED' || (!isOwner && ['DRAFT', 'PENDING', 'REJECTED'].includes(l.status))) throw new NotFoundException('Inzerát neexistuje nebo byl odstraněn.');
-    if (!isOwner && (await this.redis.lock(`view:${id}:${viewer?.id ?? ip}`, 3600))) {
+    const isOwner = !!viewer && viewer.id === l?.userId;
+    const staff = !!viewer && can(viewer.role, 'listings.read'); // WP6: tým vidí i neveřejné inzeráty, ale není vlastník (úpravy jen přes /admin)
+    if (!l || l.status === 'DELETED' || (!isOwner && !staff && ['DRAFT', 'PENDING', 'REJECTED'].includes(l.status))) throw new NotFoundException('Inzerát neexistuje nebo byl odstraněn.');
+    if (!isOwner && !staff && (await this.redis.lock(`view:${id}:${viewer?.id ?? ip}`, 3600))) {
       await this.prisma.listing.update({ where: { id }, data: { views: { increment: 1 } } });
     }
     const [rating, activeCount, favCount, isFavorite] = await Promise.all([

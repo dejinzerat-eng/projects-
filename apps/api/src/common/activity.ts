@@ -10,6 +10,8 @@ export const ACTIVITY_INTERVAL_SEC = 600;
 export async function markActive(prisma: PrismaService, redis: RedisService, userId: string) {
   try {
     if (!(await redis.lock(`active:${userId}`, ACTIVITY_INTERVAL_SEC))) return;
-    await prisma.user.updateMany({ where: { id: userId }, data: { lastActiveAt: new Date() } });
+    // Podmínka v DB drží limit i bez Redisu na více serverless instancích
+    const now = new Date();
+    await prisma.user.updateMany({ where: { id: userId, OR: [{ lastActiveAt: null }, { lastActiveAt: { lt: new Date(now.getTime() - ACTIVITY_INTERVAL_SEC * 1000) } }] }, data: { lastActiveAt: now } });
   } catch { /* statistika aktivity není kritická */ }
 }

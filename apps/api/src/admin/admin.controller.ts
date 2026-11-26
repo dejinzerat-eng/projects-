@@ -8,6 +8,7 @@ import { ZodPipe } from '../common/zod';
 import { assessListingDetailed } from '../listings/moderation';
 import { LISTING_INCLUDE, SearchService } from '../search/search.service';
 import { audit, diff } from './audit';
+import { ListingPolicyService } from './listing-policy.service';
 
 const STATUSES = ['DRAFT', 'PENDING', 'ACTIVE', 'RESERVED', 'SOLD', 'EXPIRED', 'REJECTED', 'DELETED'] as const;
 const reason = z.string({ error: 'Uveďte důvod úpravy.' }).trim().min(3, 'Uveďte důvod (alespoň 3 znaky).').max(500);
@@ -26,7 +27,7 @@ const PromoteDto = z.object({ topDays: z.number().int().min(0).max(90).optional(
 /** Administrace: přehled, moderace inzerátů, auditní log. Oprávnění podle mapy rolí (@Can). */
 @Controller('admin')
 export class AdminController {
-  constructor(private prisma: PrismaService, private search: SearchService) {}
+  constructor(private prisma: PrismaService, private search: SearchService, private policy: ListingPolicyService) {}
 
   @Can('stats.read')
   @Get('stats')
@@ -91,7 +92,9 @@ export class AdminController {
     const l = await this.prisma.listing.findUnique({ where: { id } });
     if (!l) throw new NotFoundException('Inzerát neexistuje.');
     const status: ListingStatus = dto.action === 'approve' ? 'ACTIVE' : dto.action === 'reject' ? 'REJECTED' : 'DELETED';
-    await this.prisma.listing.update({ where: { id }, data: { status, rejectReason: dto.action === 'approve' ? null : dto.reason, publishedAt: status === 'ACTIVE' ? (l.publishedAt ?? new Date()) : l.publishedAt } });
+    // Schválený inzerát má plnou platnost od schválení (čekání ve frontě se do platnosti nepočítá)
+    const renew = status === 'ACTIVE' && (!l.publishedAt || !l.expiresAt || l.expiresAt < new Date());
+    await this.prisma.listing.update({ where: { id }, data: { status, rejectReason: dto.action === 'approve' ? null : dto.reason, publishedAt: status === 'ACTIVE' ? (l.publishedAt ?? new Date()) : l.publishedAt, ...(renew ? { expiresAt: await this.policy.expiresAt(), expiryNotifiedAt: null } : {}) } });
     const title = { approve: `Inzerát „${l.title}“ byl schválen`, reject: `Inzerát „${l.title}“ byl zamítnut`, delete: `Inzerát „${l.title}“ byl odstraněn moderátorem` }[dto.action];
     await this.prisma.notification.create({ data: { userId: l.userId, type: 'moderation', title, body: dto.reason, link: '/muj-ucet/inzeraty' } });
     await audit(this.prisma, u, `listing.${dto.action}`, 'listing', id, { reason: dto.reason ?? null, from: l.status, to: status, owner: l.userId });
@@ -108,7 +111,8 @@ export class AdminController {
     const { reason: why, ...patch } = dto;
     const changes = diff(l as unknown as Record<string, unknown>, patch);
     if (!Object.keys(changes).length) throw new BadRequestException('Nic se nezměnilo.');
-    await this.prisma.listing.update({ where: { id }, data: { ...patch, ...(patch.status === 'ACTIVE' && !l.publishedAt ? { publishedAt: new Date() } : {}) } });
+    const reactivate = patch.status === 'ACTIVE' && l.status !== 'ACTIVE';
+    await this.prisma.listing.update({ where: { id }, data: { ...patch, ...(reactivate && !l.publishedAt ? { publishedAt: new Date() } : {}), ...(reactivate && (!l.expiresAt || l.expiresAt < new Date()) ? { expiresAt: await this.policy.expiresAt(), expiryNotifiedAt: null } : {}) } });
     await this.prisma.notification.create({ data: { userId: l.userId, type: 'moderation', title: `Moderátor upravil váš inzerát „${patch.title ?? l.title}“`, body: why, link: '/muj-ucet/inzeraty' } });
     await audit(this.prisma, u, 'listing.staff_edit', 'listing', id, { reason: why, owner: l.userId, changes });
     await this.search.index(id);

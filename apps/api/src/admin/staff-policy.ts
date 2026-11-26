@@ -24,6 +24,7 @@ export function checkStatusChange(actor: PolicyActor, target: PolicyTarget, next
   if (target.role !== 'USER') {
     if (!can(actor.role, 'users.manage')) return 'Účty členů týmu může blokovat jen administrátor.';
     if (isAdminRole(target.role) && !can(actor.role, 'admins.manage')) return 'Administrátory může blokovat jen hlavní administrátor.';
+    if (isAdminRole(target.role) && next === 'RESTRICTED') return 'Administrátorský účet nelze omezit, jen zablokovat.';
     if (target.role === 'SUPERADMIN' && target.status === 'ACTIVE' && next !== 'ACTIVE' && activeSuperadmins <= 1) return 'Posledního hlavního administrátora nelze zablokovat.';
   }
   return null;

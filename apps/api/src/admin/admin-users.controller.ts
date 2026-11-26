@@ -31,6 +31,19 @@ export class AdminUsersController {
   constructor(private prisma: PrismaService, private auth: AuthService, private search: SearchService, private trust: TrustService) {}
 
   private superadmins() { return this.prisma.user.count({ where: { role: 'SUPERADMIN', status: 'ACTIVE' } }); }
+
+  /**
+   * Změna účtu hlavního administrátora: kontrola „posledního hlavního administrátora“ a zápis proběhnou v jedné transakci
+   * se zámkem řádků, takže dva souběžné požadavky nemohou odebrat oba poslední hlavní administrátory.
+   */
+  private async superadminChange(check: (active: number) => string | null, data: Prisma.UserUpdateInput, id: string) {
+    await this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "User" WHERE role = 'SUPERADMIN' AND status = 'ACTIVE' FOR UPDATE`;
+      const err = check(rows.length);
+      if (err) throw new ForbiddenException(err);
+      await tx.user.update({ where: { id }, data });
+    });
+  }
   private async target(id: string) {
     const t = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true, status: true, email: true, name: true } });
     if (!t) throw new NotFoundException('Uživatel neexistuje.');
@@ -76,7 +89,8 @@ export class AdminUsersController {
     if (t.role === dto.role) return { ok: true };
     const err = checkRoleChange(u, t, dto.role, await this.superadmins());
     if (err) throw new ForbiddenException(err);
-    await this.prisma.user.update({ where: { id }, data: { role: dto.role } });
+    if (t.role === 'SUPERADMIN') await this.superadminChange((n) => checkRoleChange(u, t, dto.role, n), { role: dto.role }, id);
+    else await this.prisma.user.update({ where: { id }, data: { role: dto.role } });
     await this.auth.flushUser(id);
     await audit(this.prisma, u, 'user.role', 'user', id, { from: t.role, to: dto.role });
     return { ok: true };
@@ -91,7 +105,8 @@ export class AdminUsersController {
     const err = checkStatusChange(u, t, dto.status, await this.superadmins());
     if (err) throw new ForbiddenException(err);
     if (dto.status === 'BLOCKED') {
-      await this.prisma.user.update({ where: { id }, data: { status: 'BLOCKED' } });
+      if (t.role === 'SUPERADMIN') await this.superadminChange((n) => checkStatusChange(u, t, 'BLOCKED', n), { status: 'BLOCKED' }, id);
+      else await this.prisma.user.update({ where: { id }, data: { status: 'BLOCKED' } });
       await this.prisma.userRestriction.updateMany({ where: { userId: id, liftedAt: null }, data: { liftedAt: new Date(), liftedById: u.id, liftNote: 'Účet zablokován' } });
       await this.auth.revokeAll(id);
       const ls = await this.prisma.listing.findMany({ where: { userId: id, status: 'ACTIVE' }, select: { id: true } });

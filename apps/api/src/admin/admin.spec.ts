@@ -76,6 +76,7 @@ describe('blokace a omezení', () => {
     assert.equal(checkStatusChange(sa, user('SUPERADMIN', 'ACTIVE', 's2'), 'BLOCKED', 2), null);
   });
   it('správce obchodních účtů neblokuje', () => assert.ok(checkStatusChange(biz, user(), 'BLOCKED', 1)));
+  it('administrátorský účet nelze omezit', () => assert.match(checkStatusChange(sa, user('ADMIN', 'ACTIVE', 'a2'), 'RESTRICTED', 2)!, /nelze omezit/));
 });
 
 describe('automatické omezení', () => {

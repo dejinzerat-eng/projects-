@@ -11,7 +11,7 @@ const num = (v: string | undefined, d: number) => (v !== undefined && v !== '' &
 export const SettingsSchema = z.object({
   premoderation: z.boolean(),
   listingDays: z.number().int().min(1, 'Platnost musí být alespoň 1 den.').max(365, 'Platnost může být nejvýše 365 dní.'),
-  /** Nejvýše aktivních inzerátů zdarma pro soukromou osobu (0 = bez omezení). Firemní účty limit nemají. */
+  /** Nejvýše aktivních inzerátů zdarma pro soukromou osobu (0 = bez omezení). Ověřené firemní účty limit nemají. */
   freeActiveListings: z.number().int().min(0).max(100_000),
   maxListingsPerHour: z.number().int().min(1).max(1000),
   supportEmail: z.union([z.email('Zadejte platný e-mail podpory.'), z.literal('')]),
