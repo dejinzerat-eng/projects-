@@ -12,6 +12,7 @@ import { ZodPipe } from '../common/zod';
 import { contentHash, isWeakHash, normalizeText, PHASH_MAX_DISTANCE } from './duplicates';
 import { nextExpiry, nextStatus, REVIEW_SCORE } from './lifecycle';
 import { assessListing } from './moderation';
+import { isPriceAnomaly, LOW_PRICE_REASON, pickPriceStats, PRICE_ANOMALY_MIN_SAMPLE, PRICE_ANOMALY_SCORE, PRICED_OFFER_TYPES, type PriceStats } from './price-anomaly';
 import { canRevealPhone } from '../users/phone-privacy';
 
 const VideoUrl = z.string().trim().max(500)
@@ -129,8 +130,32 @@ export class ListingsService {
     return { hash, own, otherText, otherPhoto };
   }
 
-  /** Riziko z pravidel obsahu + z duplicit. Vlastní duplicitu odmítne s vysvětlením. */
-  private async assess(ownerId: string, listing: { id: string; createdAt: Date } | null, dto: ListingInput, publishing: boolean) {
+  /** Medián ceny aktivních inzerátů (podkategorie / celá hlavní kategorie) se stejným typem nabídky a měnou, cache 1 h. */
+  private async priceStats(scope: 'sub' | 'parent', categoryId: string, offerType: string, currency: string): Promise<PriceStats> {
+    const key = `pricemed:v1:${scope}:${categoryId}:${offerType}:${currency}`;
+    const cached = await this.redis.get(key).catch(() => null);
+    if (cached) { try { return JSON.parse(cached) as PriceStats; } catch { /* poškozená cache */ } }
+    const cat = scope === 'sub' ? Prisma.sql`l."categoryId" = ${categoryId}` : Prisma.sql`l."categoryId" IN (SELECT id FROM "Category" WHERE "parentId" = ${categoryId})`;
+    const [r] = await this.prisma.$queryRaw<{ median: number | null; n: number }[]>`
+      SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price)::float AS median, COUNT(*)::int AS n FROM "Listing" l
+      WHERE ${cat} AND l.status = 'ACTIVE' AND l.price > 0 AND l."offerType"::text = ${offerType} AND l.currency = ${currency}`;
+    const stats = { median: r?.median ?? null, sample: r?.n ?? 0 };
+    await this.redis.set(key, JSON.stringify(stats), 3600).catch(() => undefined);
+    return stats;
+  }
+
+  /** Podezřele nízká cena vůči mediánu kategorie (viz price-anomaly.ts). Výpadek dotazu inzerát neblokuje. */
+  private async lowPrice(dto: ListingInput, cat: { id: string; parentId: string | null }) {
+    if (dto.price == null || dto.price <= 0 || !PRICED_OFFER_TYPES.includes(dto.offerType)) return false;
+    try {
+      const sub = await this.priceStats('sub', cat.id, dto.offerType, dto.currency);
+      const parent = sub.sample >= PRICE_ANOMALY_MIN_SAMPLE || !cat.parentId ? null : await this.priceStats('parent', cat.parentId, dto.offerType, dto.currency);
+      return isPriceAnomaly(dto.price, pickPriceStats(sub, parent));
+    } catch { return false; }
+  }
+
+  /** Riziko z pravidel obsahu + z duplicit + z ceny. Vlastní duplicitu odmítne s vysvětlením. */
+  private async assess(ownerId: string, listing: { id: string; createdAt: Date } | null, dto: ListingInput, publishing: boolean, cat: { id: string; parentId: string | null }) {
     const risk = assessListing({ title: dto.title, description: dto.description, price: dto.price, categorySlug: dto.categorySlug });
     const dup = await this.findDuplicates(ownerId, listing?.id ?? null, listing?.createdAt ?? new Date(), dto.title, dto.description, dto.imageIds);
     if (publishing && dup.own) {
@@ -140,6 +165,7 @@ export class ListingsService {
     const reasons = [...risk.reasons];
     if (dup.otherText) { score += REVIEW_SCORE; reasons.push('Shodný text s inzerátem jiného uživatele'); }
     if (dup.otherPhoto) { score += REVIEW_SCORE; reasons.push('Fotka z inzerátu jiného uživatele'); }
+    if (!reasons.includes(LOW_PRICE_REASON) && (await this.lowPrice(dto, cat))) { score += PRICE_ANOMALY_SCORE; reasons.push(LOW_PRICE_REASON); }
     return { score: Math.min(100, score), reasons, hash: dup.hash };
   }
 
@@ -159,7 +185,7 @@ export class ListingsService {
     const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
     const attributes = this.cleanAttributes(cat.defs, dto.attributes, dto.publish);
     const loc = resolveLocation(dto.city, dto.zip);
-    const risk = await this.assess(user.id, null, dto, dto.publish);
+    const risk = await this.assess(user.id, null, dto, dto.publish, cat);
     const status = nextStatus({ publish: dto.publish, premoderation: await this.policy.premoderation(), score: risk.score });
     const now = new Date();
     const listing = await this.prisma.listing.create({
@@ -208,7 +234,7 @@ export class ListingsService {
     const attributes = this.cleanAttributes(cat.defs, dto.attributes, publishing);
     // Lokalita se určí vždy znovu – neznámá obec smaže kraj i souřadnice, nezůstanou ty staré
     const loc = resolveLocation(dto.city, dto.zip);
-    const risk = await this.assess(l.userId, l, dto, publishing);
+    const risk = await this.assess(l.userId, l, dto, publishing, cat);
     const premoderation = await this.policy.premoderation();
     let status = nextStatus({ current: l.status, publish: dto.publish, premoderation, score: risk.score });
     // Při premoderaci jde ke schválení i změněný text nebo nové fotografie schváleného inzerátu
