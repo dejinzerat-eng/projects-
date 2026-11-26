@@ -19,10 +19,10 @@ export const HIGH_RISK_SCORE = 80;
 // Zakázané výrazy jsou kmeny slov – na konci nemají hranici slova, aby se chytilo i „pistoli“, „marihuanu“.
 // Skóre 80 = vysoké riziko (zbraně, drogy, doklady, sex. služby), 60 = jen ke kontrole (padělky, léky, půjčky).
 const PROHIBITED: Rule[] = [
-  rule('zbraně a střelivo', 80, /\b(zbra[nň]|pistol(?!n[ií]k)|revolver|samopal|kalašnikov|ak-?47\b|glock|brokovnic|kulovnic|munic|st[řr]elivo|ostr[éý]\s+n[aá]boj|n[aá]boj[eů]?\s+(do|pro)\s+(pistol|zbra|revolver|pušk|brokovnic)|r[aá]ž[ei]\s+\d|ru[čc]n[ií]\s+gran[aá]t|výbušnin|trhavin|semtex|tlumi[čc]\s+(hluku\s+)?(na|pro)\s+(zbra|pistol|pušk))/iu),
-  rule('drogy', 80, /\b(drog[ayu]|marihuan|kokain|pervitin|heroin|ha[sš]i[sš]|extáz|mdma\b|lsd\b|ketamin|fentanyl|lysohl[aá]vk|crystal\s?meth|thc\s?(olej|vape|n[aá]pl[nň]|gum[ií]k|bonbon|kv[ěe]t))/iu),
-  rule('padělané doklady', 80, /\b(((prod[aá]m|nab[ií]z[ií]m|za[řr][ií]d[ií]m|vyrob[ií]m)\s+(\p{L}+\s+){0,2}(ob[čc]ansk\p{L}*\s+pr[ůu]kaz|[řr]idi[čc]sk\p{L}*\s+pr[ůu]kaz|[řr]idi[čc][aá]k|pas|doklady|ob[čc]anku))|([řr]idi[čc][aá]k\p{L}*|doklady|pas|ob[čc]ansk\p{L}*\s+pr[ůu]kaz)\s+na\s+prodej|[řr]idi[čc][aá]k\p{L}*\s+bez\s+(zkou[šs]ek|autoškoly)|(fale[šs]n|pad[ěe]lan)\p{L}*\s+(doklad|pas|pr[ůu]kaz|[řr]idi[čc][aá]k|bankovk|pen[ií]z|eur|dolar))/iu),
-  rule('sexuální služby', 80, /\b(eskort|(?<!ford\s{1,3})escort|sex\s?služb|sexu[aá]ln\p{L}*\s+služb|erotick[éá]\s+(služb|mas[aá]ž)|prostituc|happy\s?end)/iu),
+  rule('zbraně a střelivo', 80, /\b(zbra[nň]|pistol(?!n[ií]k|ov)|revolver|samopal|kalašnikov|ak-?47\b|glock|brokovnic|kulovnic|munic|st[řr]elivo|ostr[éý]\s+n[aá]boj|n[aá]boj[eů]?\s+(do|pro)\s+(pistol|zbra|revolver|pušk|brokovnic)|r[aá]ž[ei]\s+\d|ru[čc]n[ií]\s+gran[aá]t|výbušnin|trhavin|semtex|tlumi[čc]\s+(hluku\s+)?(na|pro)\s+(zbra|pistol|pušk))/iu),
+  rule('drogy', 80, /\b(drog[ayu]\s+(na\s+prodej|skladem|dovezu|dod[aá]m|ihned|levn)|(prod[aá]m|nab[ií]z[ií]m|dod[aá]m|sezenu|se[žz]enu|dovezu)\s+(\p{L}+\s+){0,2}drog[ayu]?\b|marihuan|kokain|pervitin|heroin(?![ae])|ha[sš]i[sš]|extáz|mdma\b|lsd\b|ketamin|fentanyl|lysohl[aá]vk|crystal\s?meth|thc\s?(olej|vape|n[aá]pl[nň]|gum[ií]k|bonbon|kv[ěe]t))/iu),
+  rule('padělané doklady', 80, /\b(((prod[aá]m|nab[ií]z[ií]m|za[řr][ií]d[ií]m|vyrob[ií]m)\s+((nov|česk|slovensk|evropsk|prav|origin[aá]ln|registrovan|cestovn|platn|fale[šs]n|pad[ěe]lan)\p{L}*\s+|v[aá]m\s+|ti\s+){0,2}(ob[čc]ansk\p{L}*\s+pr[ůu]kaz|[řr]idi[čc]sk\p{L}*\s+pr[ůu]kaz|[řr]idi[čc][aá]k[yu]?\b|pas[yu]?\b|ob[čc]ank[uy]\b|doklady\s+(toto[žz]nosti|na\s+(jin[ée]|cizí|libovoln))))|(za[řr][ií]d[ií]m|vyrob[ií]m)\s+(v[aá]m\s+|ti\s+)?(\p{L}+\s+)?doklady\b|([řr]idi[čc][aá]k\p{L}*|doklady|pas|ob[čc]ansk\p{L}*\s+pr[ůu]kaz)\s+na\s+prodej|[řr]idi[čc][aá]k\p{L}*\s+bez\s+(zkou[šs]ek|autoškoly)|(fale[šs]n|pad[ěe]lan)\p{L}*\s+(doklad|pas|pr[ůu]kaz|[řr]idi[čc][aá]k|bankovk|pen[ií]z|eur|dolar))/iu),
+  rule('sexuální služby', 80, /\b(eskort\p{L}*\s+(služb|agentur|sleč|d[ií]v[kč]|společ)|(?<!ford\s{1,3})escort\s+(služb|agentur|sleč|d[ií]v[kč]|girl|servis|service)|sex\s?služb|sexu[aá]ln\p{L}*\s+služb|erotick[éá]\s+(služb|mas[aá]ž)|prostituc|mas[aá][žz]\p{L}*[^\n]{0,40}happy\s?end)/iu),
   rule('padělky značkového zboží', 60, /\b(pad[ěe]lek|pad[ěe]lky|replik\p{L}*\s+(zna[čc]k|rolex|louis|lv\b|gucci|chanel|prada|herm[eè]s|dior|nike|adidas|moncler|canada\s+goose|balenciaga)|fake\s+(rolex|nike|gucci|louis|adidas)|kopie\s+(zna[čc]k|rolex|louis|gucci|chanel|hodinek\s+rolex)|1\s?:\s?1\s+(kopie|replik)|aaa\s+kvalit)/iu),
   rule('léčiva a anabolika', 60, /\b(l[ée]k\p{L}*\s+na\s+p[řr]edpis|anaboli[kc]|steroid[yůa]|xanax|rivotril|neurol\b|tramal|oxykodon|oxycontin|morfin|metadon|subutex)/iu),
   rule('kradené zboží a chráněné druhy', 60, /\b(kraden\p{L}*\s+(zbo[žz][ií]|v[ěe]c|telefon|mobil|kol[oa]|aut[oa]|notebook)|bez\s+dokladu\s+o\s+p[ůu]vodu|slonovin)/iu),
@@ -34,7 +34,9 @@ const BENIGN = [
   /\b(tavn|st[řr][ií]kac|lakovac|p[aá]jec|horkovzdu[šs]n|vodn|d[ěe]tsk|tlakov|myc|h[řr]eb[ií]kovac|sponkovac|n[ýy]tovac|silikonov|vzduchov|mas[aá][žz]n|p[ěe]nov|kartu[šs]ov|ofukovac|foukac|plastov|kapaln)\p{L}*\s+(pistol|zbra[nň])\p{L}*/iu,
   /\bpistol\p{L}*\s+(na|pro)\s+(silikon|lepidl|tavn|barv|lak|vod|myt|kartu[šs]|h[řr]eb[ií]k|sponk|n[ýy]t|p[ěe]n|maz|vzduch|ofuk|fouk|tmel|mont[aá][žz]n|pneu|hu[šs]t[ěe]n)\p{L}*/iu,
   /\bpistolov\p{L}*\s+(vrta[čc]k|[šs]roubov[aá]k|uchop|rukoje)\p{L}*/iu,
-  /\b(nerf|airsoft|hra[čc]k\p{L}*|lego|playmobil|paintball)\s+(\p{L}+\s+)?(pistol|zbra[nň]|revolver)\p{L}*/iu,
+  /\b(nerf|airsoft\p{L}*|hra[čc]k\p{L}*|lego|playmobil|paintball\p{L}*|kuli[čc]kov\p{L}*)\s+(\p{L}+\s+)?(pistol|zbra[nň]|revolver|pu[šs]k|samopal|kala[šs]nikov|glock)\p{L}*(\s+(glock|colt|beretta|walther|ak-?47|m4|kala[šs]nikov)\p{L}*)?/iu,
+  // Příslušenství (trezor na zbraně, pouzdro na pistoli, čisticí sada) – samo o sobě zakázané není
+  /\b(trezor|sk[řr][ií][ňn]|pouzd[rř]|dr[žz][aá]k|kuf[rř]|ta[šs]k|stojan|[čc]ist[ií]c|sad[ay]|obal|vitr[ií]n|ter[čc]|[řr]emen|popruh)\p{L}*\s+(na|pro)\s+(\p{L}+\s+)?(zbra|pistol|pu[šs]k|brokovnic|revolver)\p{L}*/iu,
 ].map(w);
 
 // Znaky podvodu (Western Union, kurýr „po zaplacení“, prodejce v zahraničí, kontakt mimo portál, platební odkazy, údaje z karty)

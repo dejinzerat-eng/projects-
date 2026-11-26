@@ -69,6 +69,7 @@ describe('české zakázané zboží (Unicode hranice slov)', () => {
     'Zařídím řidičák bez autoškoly', 'Prodám občanský průkaz', 'Falešné bankovky 1:1', 'Střelivo ráže 9 mm', 'Kalašnikov AK-47 deko',
     'Pervitin skladem', 'Eskortní služby Praha', 'Erotické masáže s happy end', 'Hašiš a lysohlávky', 'THC vape náplně',
   ];
+  prohibited.push('Prodám pas', 'Prodám řidičák', 'Nabízím drogy, dovezu', 'Escort služby Brno', 'Vyrobím vám doklady na jiné jméno');
   for (const t of prohibited) it(`zachytí: ${t}`, () => assert.ok(listing(t).reasons.includes('Možný zakázaný obsah'), t));
 
   it('vysoce rizikové zboží má skóre pro automatické omezení', () => {
@@ -92,6 +93,12 @@ describe('české zakázané zboží (Unicode hranice slov)', () => {
     'Kniha Pistolník – Stephen King', 'Ford Escort 1.6 combi', 'Drogerie zboží – šampony', 'Přední náboj Shimano Deore', 'Český granát – náušnice',
     'Pistolová vrtačka Makita', 'Pronájem bytu, nutný občanský průkaz při podpisu', 'CBD olej s obsahem THC do 1 %', 'Perník domácí, medový',
     'Tlakový čistič Kärcher s pistolí na mytí', 'Replika historického meče', 'Mikina Adidas originál',
+    // běžné inzeráty, které nesmí vést k automatickému omezení účtu
+    'Prodám kolo s doklady, servisní knížka', 'Prodám auto doklady v pořádku', 'Prodám doklady k autu', 'Prodám pasivní reproduktory',
+    'Prodám pastelky pro děti', 'Prodám obal na řidičák', 'Prodám pouzdro na pas', 'DVD Happy End – film 1967', 'Trezor na zbraně, 3 kusy',
+    'Skříň na zbraně s klíčem', 'Pouzdro na pistoli kožené', 'Čisticí sada na zbraně', 'Airsoftová pistole Glock na kuličky',
+    'Kniha Drogy a společnost', 'Prodám drogerii, zboží za polovic', 'Heroine kostým na karneval', 'Pistolový konektor 12 V', 'Kolo Escort 26"',
+    'Muniční bedna originál armáda',
   ];
   for (const t of benign) it(`nezachytí: ${t}`, () => assert.equal(listing(t).score, 0, t));
 });
