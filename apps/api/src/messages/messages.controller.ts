@@ -12,8 +12,8 @@ import { RedisService } from '../common/redis.service';
 import { ZodPipe } from '../common/zod';
 import { config } from '../common/config';
 import { StorageService } from '../media/storage.service';
-import { assessMessageSafety, cleanPreview, escapeHtml, looksLikeLink, foreignPhones } from './link-check';
-import { directKey, isOwnMediaUrl, ownHosts, photosEnabled } from './messages.util';
+import { assessMessageSafety, cleanPreview, escapeHtml, foreignPhones } from './link-check';
+import { directKey, isOwnMediaUrl, messageEmail, ownHosts, photosEnabled, safeName } from './messages.util';
 
 export { escapeHtml };
 
@@ -31,8 +31,6 @@ const PERSON_SELECT = { id: true, name: true, avatarUrl: true, phoneVerifiedAt: 
 
 type ListingRow = { id: string; title: string; slug: string; price: number | null; priceNegotiable: boolean; status: string; images: { thumbUrl: string }[] } | null;
 const listingOut = (l: ListingRow) => (l ? { id: l.id, title: l.title, slug: l.slug, price: l.price, priceNegotiable: l.priceNegotiable, status: l.status, image: l.images[0]?.thumbUrl ?? null } : null);
-/** Jméno do e-mailu a notifikace: bez řídicích znaků, a když vypadá jako odkaz, raději ho nezobrazíme. */
-const safeName = (name: string) => (looksLikeLink(name) ? 'Uživatel' : cleanPreview(name, 60) || 'Uživatel');
 
 @Auth()
 @Controller()
@@ -81,11 +79,13 @@ export class MessagesController {
       include: {
         listing: { select: LISTING_SELECT },
         buyer: { select: PERSON_SELECT }, seller: { select: PERSON_SELECT },
-        messages: { orderBy: { createdAt: 'asc' }, take: 500 },
+        // posledních 500 zpráv (ne prvních 500), aby se v dlouhé konverzaci zobrazily ty nové
+        messages: { orderBy: { createdAt: 'desc' }, take: 500 },
         reviews: { where: { authorId: u.id } },
       },
     });
     if (!c || (c.buyerId !== u.id && c.sellerId !== u.id)) throw new NotFoundException('Konverzace neexistuje.');
+    c.messages.reverse();
     const now = new Date();
     await Promise.all([
       this.prisma.message.updateMany({ where: { conversationId: id, senderId: { not: u.id }, readAt: null }, data: { readAt: now } }),
@@ -215,12 +215,7 @@ export class MessagesController {
     ]);
     if (!other || other.status !== 'ACTIVE' || pref?.emailOnMessage === false) return;
     if (!(await this.redis.lock(`msgmail:${c.id}:${otherId}`, 1800))) return;
-    const listingTitle = c.listing && !looksLikeLink(c.listing.title) ? cleanPreview(c.listing.title, 80) : null;
-    const subject = listingTitle ? `Nová zpráva k inzerátu „${listingTitle}“` : `Nová zpráva od ${name}`;
-    const quote = body && !risky ? `<blockquote style="margin:12px 0;padding:8px 12px;border-left:3px solid #ddd;color:#333">${escapeHtml(cleanPreview(body, 500))}</blockquote>` : `<p>${hasImage && !body ? 'Poslal(a) vám fotografii.' : 'Zprávu si přečtěte přímo na Dejinzerat.cz.'}</p>`;
-    const html = `<p><strong>${escapeHtml(name)}</strong> vám napsal(a)${listingTitle ? ` k inzerátu „${escapeHtml(listingTitle)}“` : ''}:</p>${quote}`
-      + `<p><a href="${config.webOrigin}${link}">Otevřít konverzaci</a></p>`
-      + `<p style="font-size:12px;color:#666">Nikdy neplaťte předem a nezadávejte údaje z karty na odkazech ze zpráv. E-maily o nových zprávách vypnete v <a href="${config.webOrigin}/zpravy">Zprávách</a>.</p>`;
+    const { subject, html } = messageEmail({ name, listingTitle: c.listing?.title ?? null, body, risky, hasImage, url: `${config.webOrigin}${link}`, settingsUrl: `${config.webOrigin}/zpravy` });
     await this.mail.send(other.email, subject, html);
   }
 
@@ -286,10 +281,11 @@ export class MessagesController {
       include: {
         listing: { select: LISTING_SELECT },
         buyer: { select: { id: true, name: true, email: true, status: true, createdAt: true } }, seller: { select: { id: true, name: true, email: true, status: true, createdAt: true } },
-        messages: { orderBy: { createdAt: 'asc' }, take: 500 },
+        messages: { orderBy: { createdAt: 'desc' }, take: 500 },
       },
     });
     if (!c) throw new NotFoundException('Konverzace neexistuje.');
+    c.messages.reverse();
     await this.prisma.auditLog.create({ data: { actorId: u.id, action: 'report.view_conversation', targetType: 'conversation', targetId: id } });
     const hosts = ownHosts();
     return {

@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { assessMessageSafety, cleanPreview, escapeHtml, extractLinks, foreignPhones, looksLikeLink } from './link-check';
-import { directKey, isOwnMediaUrl } from './messages.util';
+import { directKey, isOwnMediaUrl, messageEmail } from './messages.util';
 
 const OWN = ['dejinzerat.cz', 'localhost'];
 const level = (s: string) => assessMessageSafety(s, OWN)?.level ?? null;
@@ -66,6 +66,22 @@ describe('podezřelé odkazy ve zprávách', () => {
     assert.ok(w.advice.length > 20);
   });
 
+  it('překlepy po tečce, „signal“ a čísla objednávek nejsou poplach', () => {
+    for (const s of ['Dobře.Co cena?', 'Dobrý den.Co je to za model?', 'Je to iPhone 13.Pro max', 'Super.Pro mě ideální', 'Tady neni signal, zavolám', 'obj. č. 00123456789', 'napište na jan.novak@seznam.cz']) {
+      assert.equal(level(s), null, s);
+    }
+    assert.equal(level('dobře.co'), 'warn');
+    assert.equal(level('pište mi na signal'), 'warn');
+    assert.equal(level('tel 00447700900123'), 'danger');
+  });
+
+  it('skrytá doména před @ a formuláře Google', () => {
+    assert.equal(level('zasilkovna.cz@evil.com'), 'danger');
+    assert.equal(level('zásilkovna-platba.cz'), 'danger');
+    assert.equal(level('https://zásilkovna.cz/platba'), 'danger');
+    assert.equal(level('vyplňte https://docs.google.com/forms/d/xyz'), 'warn');
+  });
+
   it('extractLinks ořízne interpunkci a www', () => {
     assert.deepEqual(extractLinks('(viz www.Example.cz/a).').map((l) => [l.host, l.path]), [['example.cz', '/a']]);
     assert.equal(looksLikeLink('Jan Novák'), false);
@@ -78,6 +94,17 @@ describe('pomocné funkce zpráv', () => {
     assert.equal(escapeHtml('<a href="x">\'&'), '&lt;a href=&quot;x&quot;&gt;&#39;&amp;');
     assert.equal(cleanPreview('a‮b\n\n c', 140), 'a b c');
     assert.equal(cleanPreview('x'.repeat(200), 10).length, 10);
+  });
+
+  it('e-mail o zprávě escapuje jméno, název i text a riskantní text vynechá', () => {
+    const e = messageEmail({ name: '<img src=x onerror=alert(1)>', listingTitle: 'Kolo <b>"top"</b>', body: '<script>alert(1)</script>', risky: false, hasImage: false, url: 'https://dejinzerat.cz/zpravy/1', settingsUrl: 'https://dejinzerat.cz/zpravy' });
+    assert.ok(!/<img|<script|<b>/.test(e.html), e.html);
+    assert.ok(e.html.includes('&lt;script&gt;'));
+    assert.equal(e.subject, 'Nová zpráva k inzerátu „Kolo <b>"top"</b>“'); // předmět je prostý text
+    const r = messageEmail({ name: 'Výhra na evil.top', listingTitle: null, body: 'plaťte na bit.ly/x', risky: true, hasImage: false, url: 'u', settingsUrl: 's' });
+    assert.ok(!r.html.includes('bit.ly') && !r.html.includes('evil.top') && !r.subject.includes('evil.top'));
+    assert.ok(messageEmail({ name: 'Jana', listingTitle: null, body: '', risky: false, hasImage: true, url: 'u', settingsUrl: 's' }).html.includes('fotografii'));
+    assert.ok(!messageEmail({ name: 'Jana\r\nBcc: x@y.cz', listingTitle: 'A\r\nB', body: 'x', risky: false, hasImage: false, url: 'u', settingsUrl: 's' }).subject.includes('\n'));
   });
 
   it('directKey nezávisí na pořadí', () => {

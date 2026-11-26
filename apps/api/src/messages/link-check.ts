@@ -19,7 +19,8 @@ const OFFICIAL = new Set([
   'unicreditbank.cz', 'csas.cz', 'mbank.cz', 'creditas.cz', 'equabank.cz', 'dejinzerat.cz',
 ]);
 /** Běžné bezpečné stránky – bez varování */
-const ALLOW = new Set(['youtube.com', 'youtu.be', 'mapy.cz', 'mapy.com', 'google.com', 'vimeo.com']);
+// google.com sem záměrně nepatří: docs.google.com/forms a sites.google.com se zneužívají k phishingu
+const ALLOW = new Set(['youtube.com', 'youtu.be', 'mapy.cz', 'mapy.com', 'vimeo.com']);
 
 /** Značky, které podvodníci napodobují. Krátké zkratky (ppl, dpd, kb…) se hledají jen jako samostatné části domény. */
 const BRAND_STEMS = ['zasilkovna', 'packeta', 'balikovna', 'ceskaposta', 'postaonline', 'bazos', 'sbazar', 'vinted', 'paypal', 'revolut', 'airbank', 'moneta', 'csob', 'raiffeisen', 'unicredit', 'sporitelna', 'creditas', 'equabank', 'dejinzerat'];
@@ -34,9 +35,10 @@ const URL_RE = new RegExp(
   String.raw`|(?<![\p{N}.])\d{1,3}(?:\.\d{1,3}){3}(?![\p{N}.]|\.\d)(?::\d+)?(?:\/[^\s<>"']*)?`,
   'giu',
 );
-const MESSENGER_RE = /(?<![\p{L}\p{N}])(whats\s?app|wa\.me|telegram|t\.me|signal|viber)(?![\p{L}\p{N}])/iu;
+// „signal“ bez diakritiky je i běžné slovo („není tu signal“), proto jen v kontextu aplikace
+const MESSENGER_RE = /(?<![\p{L}\p{N}])(whats\s?app|wa\.me|telegram|t\.me|viber|(?:na|přes|pres|v|ve)\s+signal(?:u)?|signal\s?app)(?![\p{L}\p{N}])/iu;
 // +44…, 0044…; čísla +420/+421 jsou v pořádku
-const INTL_PHONE_RE = /(?<![\p{L}\p{N}+])(?:\+|00)\s?(\d[\d \-.]{6,16}\d)/gu;
+const INTL_PHONE_RE = /(?<![\p{L}\p{N}+])(\+|00)\s?(\d[\d \-.]{6,16}\d)/gu;
 // Obraty typické pro podvody (Unicode hranice slov, aby fungovala diakritika)
 const SCAM_PHRASES = [
   /western\s?union|moneygram/iu,
@@ -49,19 +51,38 @@ const SCAM_PHRASES = [
   /bezpečn[aáé]\s+platb[aya]|platb[au]\s+přes\s+(zásilkovnu|ppl|dpd|poštu)|převzetí\s+platby/iu,
 ];
 
-export interface ParsedLink { raw: string; host: string; path: string }
+// „zasilkovna.cz@evil.com“ bez schématu – v adresním řádku vede na evil.com
+const AT_TRICK_RE = /(?<![\p{L}\p{N}@.-])(?:[a-z0-9-]+\.)+(?:cz|sk|com|eu|net)@((?:[a-z0-9-]+\.)+[a-z]{2,})/giu;
+
+/** `bare` = adresa bez https:// a www. (holá doména) */
+export interface ParsedLink { raw: string; host: string; path: string; bare?: boolean; uhost?: string; masked?: string }
+
+/** Holá doména s velkým písmenem jen na začátku koncovky („Dobře.Co cena?“, „13.Pro“) je překlep po tečce, ne odkaz. */
+const sentenceTypo = (raw: string) => {
+  const tld = raw.split(/[/?#:]/)[0].split('.').pop() ?? '';
+  return tld.length > 1 && /^\p{Lu}\p{Ll}+$/u.test(tld);
+};
 
 export function extractLinks(text: string): ParsedLink[] {
   const out: ParsedLink[] = [];
+  for (const m of text.matchAll(AT_TRICK_RE)) {
+    const masked = m[0].slice(0, m[0].indexOf('@')).toLowerCase();
+    // Běžný e-mail (jan.novak@seznam.cz) nevadí – jen když se před @ schovává známá doména nebo značka
+    if (OFFICIAL.has(registered(masked)) || BRAND_STEMS.some((b) => masked.replace(/[.-]/g, '').includes(b))) out.push({ raw: m[0], host: m[1].toLowerCase(), path: '', masked });
+  }
   for (const m of text.matchAll(URL_RE)) {
     const raw = m[0].replace(/[),.;:!?»“”'"]+$/u, '');
+    const bare = !/^(https?:\/\/|www\.)/i.test(raw);
+    if (bare && sentenceTypo(raw)) continue;
     const noScheme = raw.replace(/^https?:\/\//i, '');
     const cut = noScheme.search(/[/?#]/);
     let host = (cut === -1 ? noScheme : noScheme.slice(0, cut)).toLowerCase().replace(/:\d+$/, '').replace(/^www\./, '').replace(/\.$/, '');
-    if (host.includes('@')) host = host.slice(host.lastIndexOf('@') + 1); // https://zasilkovna.cz@evil.com
+    let masked: string | undefined;
+    if (host.includes('@')) { masked = host.slice(0, host.lastIndexOf('@')); host = host.slice(host.lastIndexOf('@') + 1); } // https://zasilkovna.cz@evil.com
     if (!host) continue;
+    const uhost = host;
     try { host = new URL(`http://${host}`).hostname; } catch { /* necháme, jak je */ }
-    out.push({ raw, host, path: cut === -1 ? '' : noScheme.slice(cut).toLowerCase() });
+    out.push({ raw, host, uhost, path: cut === -1 ? '' : noScheme.slice(cut).toLowerCase(), bare, masked });
   }
   return out;
 }
@@ -77,24 +98,32 @@ export function assessLink(link: ParsedLink, ownHosts: string[] = []): { level: 
   const own = ownHosts.some((h) => host === h || host.endsWith(`.${h}`));
   if (own || ALLOW.has(reg) || ALLOW.has(host)) return { level: null };
   if (isIp(host)) return { level: 'danger', reason: `Odkaz vede na IP adresu (${host}) místo běžné stránky.` };
-  if (host.split('.').some((p) => p.startsWith('xn--')) || /[^\x00-\x7f]/.test(host)) return { level: 'danger', reason: `Adresa ${host} obsahuje neobvyklé znaky a může napodobovat známou stránku.` };
+  const uhost = link.uhost ?? host;
+  if (link.masked) return { level: 'danger', reason: `Adresa začíná „${link.masked}“, ale ve skutečnosti vede na ${host}.` };
+  const punycode = /(^|\.)xn--/.test(uhost);
+  const unicode = /[^\x00-\x7f]/.test(uhost) || (host.includes('xn--') && !punycode);
+  // Napsané xn-- nebo odkaz s https:// či www. na doménu s diakritikou = možná napodobenina.
+  // Holá doména s diakritikou („dobře.co“) je spíš překlep – nebezpečná je jen, když napodobuje značku (níže).
+  if (punycode || (unicode && !link.bare)) return { level: 'danger', reason: `Adresa ${host} obsahuje neobvyklé znaky a může napodobovat známou stránku.` };
   if (SHORTENERS.has(host) || SHORTENERS.has(reg)) return { level: 'danger', reason: `Zkrácený odkaz (${host}) skrývá, kam ve skutečnosti vede.` };
   if (OFFICIAL.has(reg) || OFFICIAL.has(host)) return { level: null };
-  const flat = strip(host).replace(/[^a-z0-9.-]/g, '');
+  const flat = strip(uhost).replace(/[^a-z0-9.-]/g, '');
   const tokens = flat.split(/[.-]/);
   const joined = flat.replace(/[.-]/g, '');
   if (BRAND_STEMS.some((b) => joined.includes(b)) || tokens.some((t) => BRAND_TOKENS.has(t)) || /ceska-?posta|cesk[ae]-?sporitelna|komercni-?banka/.test(flat)) {
-    return { level: 'danger', reason: `Stránka ${host} se tváří jako dopravce, banka nebo bazar, ale není jejich oficiální adresou.` };
+    return { level: 'danger', reason: `Stránka ${uhost} se tváří jako dopravce, banka nebo bazar, ale není jejich oficiální adresou.` };
   }
-  if (PAY_WORDS.test(strip(link.path)) || PAY_WORDS.test(joined)) return { level: 'danger', reason: `Odkaz ${host} vede na platbu nebo „ověření“ mimo Dejinzerat.cz.` };
-  return { level: 'warn', reason: `Zpráva obsahuje odkaz na stránku mimo Dejinzerat.cz (${host}).` };
+  if (PAY_WORDS.test(strip(link.path)) || PAY_WORDS.test(joined)) return { level: 'danger', reason: `Odkaz ${uhost} vede na platbu nebo „ověření“ mimo Dejinzerat.cz.` };
+  return { level: 'warn', reason: `Zpráva obsahuje odkaz na stránku mimo Dejinzerat.cz (${uhost}).` };
 }
 
 export function foreignPhones(text: string): string[] {
   const out: string[] = [];
   for (const m of text.matchAll(INTL_PHONE_RE)) {
-    const digits = m[1].replace(/\D/g, '');
+    const digits = m[2].replace(/\D/g, '');
     if (digits.length < 8 || digits.length > 15) continue;
+    // „00123456789“ bez mezer bývá číslo objednávky; mezinárodní číslo s 00 má aspoň 11 číslic (kód země + číslo)
+    if (m[1] === '00' && /^\d+$/.test(m[2]) && digits.length < 11) continue;
     if (/^42[01]/.test(digits)) continue;
     out.push(`+${digits}`);
   }

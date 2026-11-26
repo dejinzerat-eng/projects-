@@ -1,5 +1,6 @@
 -- AlterEnum
-ALTER TYPE "ReportTarget" ADD VALUE 'CONVERSATION';
+-- IF NOT EXISTS: hodnotu může přidat i jiná migrace (sloučení větví)
+ALTER TYPE "ReportTarget" ADD VALUE IF NOT EXISTS 'CONVERSATION';
 
 -- AlterTable
 ALTER TABLE "Conversation" ADD COLUMN     "buyerArchivedAt" TIMESTAMP(3),
