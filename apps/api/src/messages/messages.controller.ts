@@ -160,6 +160,9 @@ export class MessagesController {
     if (!photosEnabled()) throw new ServiceUnavailableException('Posílání fotek zatím není zapnuté.');
     if (!file) throw new BadRequestException('Chybí fotka.');
     if (!/^image\/(jpeg|png|webp|heic|heif|avif)$/.test(file.mimetype)) throw new BadRequestException('Podporujeme fotky JPG, PNG, WebP a HEIC.');
+    // Nahrané, ale neodeslané fotky jsou veřejné URL – ať úložiště nejde zneužít jako hosting obrázků
+    const unsent = await this.prisma.messageAttachment.count({ where: { ownerId: u.id, messageId: null, createdAt: { gt: new Date(Date.now() - 86_400_000) } } });
+    if (unsent >= 10) throw new BadRequestException('Máte příliš mnoho neodeslaných fotek. Zkuste to později.');
     if ((await this.redis.incr(`msgimg:${u.id}`, 86_400)) > 200) throw new BadRequestException('Dnes už jste poslali příliš mnoho fotek.');
     let out: { data: Buffer; info: sharp.OutputInfo };
     try {
