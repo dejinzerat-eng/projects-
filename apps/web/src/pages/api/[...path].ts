@@ -32,6 +32,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     app ??= load();
     const express = await app;
     req.url = (req.url ?? '/').replace(/^\/api(?=\/|\?|$)/, '') || '/';
+    // Next do req.query přidá i segmenty cesty jako „path“ (název tohoto souboru) – API si dotaz
+    // přečte samo z req.url, jinak by parametr ?path= (např. /seo/redirect) dostal pole segmentů.
+    delete (req as { query?: unknown }).query;
     await new Promise<void>((resolve) => {
       res.on('finish', resolve);
       res.on('close', resolve);
