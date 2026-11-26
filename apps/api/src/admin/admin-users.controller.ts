@@ -8,7 +8,7 @@ import { Can } from '../common/permissions';
 import { PrismaService } from '../common/prisma.service';
 import { ZodPipe } from '../common/zod';
 import { SearchService } from '../search/search.service';
-import { audit, validIco } from './audit';
+import { audit, diff, validIco } from './audit';
 import { checkRoleChange, checkStatusChange } from './staff-policy';
 import { TrustService } from './trust.service';
 
@@ -160,8 +160,12 @@ export class AdminUsersController {
     const ico = dto.companyId ?? b.companyId;
     if (dto.verified && !(ico && validIco(ico))) throw new BadRequestException('Nelze ověřit: IČO chybí nebo nemá platný kontrolní součet.');
     const { verified, ...rest } = dto;
-    await this.prisma.user.update({ where: { id }, data: { ...rest, ...(verified !== undefined ? { companyVerifiedAt: verified ? new Date() : null } : {}), ...(dto.companyId && dto.companyId !== b.companyId ? { companyVerifiedAt: null } : {}) } });
-    await audit(this.prisma, u, 'business.update', 'user', id, dto);
+    // Ruční ověření nepřepíše datum už ověřené firmy; změna IČO ověření vždy ruší
+    const verifiedAt = verified === undefined ? undefined : verified ? (b.companyVerifiedAt ?? new Date()) : null;
+    const data = { ...rest, ...(verifiedAt !== undefined ? { companyVerifiedAt: verifiedAt } : {}), ...(dto.companyId && dto.companyId !== b.companyId ? { companyVerifiedAt: null } : {}) };
+    await this.prisma.user.update({ where: { id }, data });
+    const action = verified === true && !b.companyVerifiedAt ? 'business.verify' : verified === false && b.companyVerifiedAt ? 'business.unverify' : 'business.update';
+    await audit(this.prisma, u, action, 'user', id, { ...dto, changes: diff(b as unknown as Record<string, unknown>, data) });
     return { ok: true };
   }
 
