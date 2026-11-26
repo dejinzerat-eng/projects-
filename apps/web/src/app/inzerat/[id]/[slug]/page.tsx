@@ -25,7 +25,7 @@ interface Detail {
   condition: string | null; offerType: string; status: string; city: string; region: string; zip: string | null; attributes: Record<string, unknown>;
   videoUrl: string | null; views: number; publishedAt: string | null; createdAt: string; expiresAt: string;
   images: { url: string; thumbUrl: string }[]; category: { slug: string; name: string; parent: { slug: string; name: string } | null };
-  seller: { id: string; name: string; avatarUrl: string | null; city: string | null; createdAt: string; phoneVerified: boolean; emailVerified: boolean; isBusiness: boolean; companyName: string | null; companyId?: string | null; lastSeenAt: string | null; rating: number | null; reviewCount: number; activeListings: number; hasPhone: boolean };
+  seller: { id: string; name: string; avatarUrl: string | null; city: string | null; createdAt: string; phoneVerified: boolean; emailVerified: boolean; isBusiness: boolean; companyName: string | null; companyVerified?: boolean; companyId?: string | null; lastSeenAt: string | null; rating: number | null; reviewCount: number; activeListings: number; hasPhone: boolean };
   favorites: number; isFavorite: boolean; isOwner: boolean; filters: FilterDef[];
 }
 type Props = { params: Promise<{ id: string; slug: string }> };
@@ -139,10 +139,10 @@ export default async function Page({ params }: Props) {
             <Avatar name={l.seller.name} url={l.seller.avatarUrl} size={52} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 font-bold">
-                <span className="truncate">{l.seller.companyName ?? l.seller.name}</span>
+                <span className="truncate">{l.seller.companyVerified && l.seller.companyName ? l.seller.companyName : l.seller.name}</span>
                 {l.seller.phoneVerified && <BadgeCheck className="size-[18px] shrink-0 text-trust" aria-label="Ověřený prodejce" />}
-                {l.seller.isBusiness && <Building2 className="size-4 shrink-0 text-muted" aria-label="Firma" />}
               </div>
+              {l.seller.companyVerified && <div className="mt-0.5 inline-flex items-center gap-1 text-sm font-medium text-trust"><Building2 className="size-4 shrink-0" />Ověřená firma</div>}
               <div className="mt-0.5 flex items-center gap-1 text-sm text-muted">
                 {l.seller.reviewCount > 0 ? <><Star className="size-4 fill-top text-top" /><b className="text-ink">{l.seller.rating?.toFixed(1)}</b> ({l.seller.reviewCount})</> : 'Zatím bez hodnocení'}
                 <span>·</span>{plural(l.seller.activeListings, 'inzerát', 'inzeráty', 'inzerátů')}

@@ -284,11 +284,13 @@ export class ListingsService {
       viewer ? this.prisma.favorite.findUnique({ where: { userId_listingId: { userId: viewer.id, listingId: id } } }).then(Boolean) : false,
     ]);
     const { phone, showPhone, companyVerifiedAt, ...seller } = l.user;
+    // Obchodní jméno a odznak jen u firmy s IČO ověřeným v ARES (stejně jako na profilu); jinak jméno osoby
+    const companyVerified = seller.isBusiness && !!companyVerifiedAt && !!seller.companyId;
     // Interní údaje automatické kontroly vidí jen tým (jinak by šlo kontrolu obcházet)
     const { spamScore, riskReasons, contentHash: _hash, composeSeconds, ...pub } = l;
     return {
       ...pub, ...(staff ? { spamScore, riskReasons, composeSeconds } : {}), user: undefined, rejectReason: staff || viewer?.id === l.userId ? l.rejectReason : undefined,
-      seller: { ...seller, companyName: companyVerifiedAt ? seller.companyName : null, phoneVerified: !!l.user.phoneVerifiedAt, emailVerified: !!l.user.emailVerifiedAt, phoneVerifiedAt: undefined, emailVerifiedAt: undefined, rating: rating._avg.rating, reviewCount: rating._count, activeListings: activeCount, hasPhone: canRevealPhone(l.status, { phone, phoneVerifiedAt: l.user.phoneVerifiedAt, showPhone }, false) },
+      seller: { ...seller, companyName: companyVerified ? seller.companyName : null, companyVerified, phoneVerified: !!l.user.phoneVerifiedAt, emailVerified: !!l.user.emailVerifiedAt, phoneVerifiedAt: undefined, emailVerifiedAt: undefined, rating: rating._avg.rating, reviewCount: rating._count, activeListings: activeCount, hasPhone: canRevealPhone(l.status, { phone, phoneVerifiedAt: l.user.phoneVerifiedAt, showPhone }, false) },
       favorites: favCount, isFavorite, isOwner: !!isOwner, filters: l.category.parent ? effectiveFilters(l.category.parent.slug, l.category.parent.filters, l.category.slug, l.category.filters) : [],
     };
   }

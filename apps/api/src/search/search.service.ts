@@ -14,7 +14,7 @@ export { haversine };
 export const LISTING_INCLUDE = {
   images: { orderBy: { position: 'asc' as const }, take: 1 },
   category: { include: { parent: true } },
-  user: { select: { id: true, name: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true } },
+  user: { select: { id: true, name: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, companyVerifiedAt: true } },
 } satisfies Prisma.ListingInclude;
 type ListingWith = Prisma.ListingGetPayload<{ include: typeof LISTING_INCLUDE }>;
 
@@ -24,6 +24,7 @@ const PAGE = 24;
 export interface ListingCard {
   id: string; slug: string; title: string; price: number | null; priceNegotiable: boolean; currency: string;
   city: string; region: string; condition: string | null; offerType: string; image: string | null; createdAt: number;
+  /** isBusiness = firma s ověřeným IČO (štítek „Firma“); samotné označení „podnikatel“ nestačí */
   categorySlug: string; parentCategorySlug: string; categoryName: string; verified: boolean; isBusiness: boolean; isTop: boolean; highlighted: boolean;
   status: string; distanceKm?: number;
 }
@@ -96,7 +97,7 @@ export class SearchService implements OnModuleInit {
       id: l.id, slug: l.slug, title: l.title, price: l.price, priceNegotiable: l.priceNegotiable, currency: l.currency,
       city: l.city, region: l.region, condition: l.condition, offerType: l.offerType, image: l.images[0]?.thumbUrl ?? null,
       createdAt: (l.publishedAt ?? l.createdAt).getTime(), categorySlug: l.category.slug, parentCategorySlug: parent.slug, categoryName: l.category.name,
-      verified: !!l.user.phoneVerifiedAt, isBusiness: !!l.user.isBusiness,
+      verified: !!l.user.phoneVerifiedAt, isBusiness: !!l.user.isBusiness && !!l.user.companyVerifiedAt,
       isTop: !!l.topUntil && l.topUntil.getTime() > now, highlighted: !!l.highlightedUntil && l.highlightedUntil.getTime() > now,
       status: l.status,
     };
@@ -174,7 +175,7 @@ export class SearchService implements OnModuleInit {
     if (p.condition?.length) f.push(`condition IN [${p.condition.map(esc).join(',')}]`);
     if (p.offerType) f.push(`offerType = ${esc(p.offerType)}`);
     if (p.verified) f.push('verified = true');
-    if (p.sellerType) f.push(`isBusiness = ${p.sellerType === 'business'}`);
+    if (p.sellerType) f.push(p.sellerType === 'business' ? 'isBusiness = true' : 'privateSeller = true');
     const since = publishedAfter?.getTime() ?? (p.since ? Date.now() - { '24h': 864e5, '7d': 7 * 864e5, '30d': 30 * 864e5 }[p.since] : undefined);
     if (since) f.push(`createdAt > ${since}`);
     for (const [k, v] of Object.entries(p.attrs ?? {})) {

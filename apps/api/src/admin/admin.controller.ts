@@ -85,7 +85,7 @@ export class AdminController {
     const st = z.enum([...STATUSES, 'ALL']).catch('PENDING').parse(status);
     const rows = await this.prisma.listing.findMany({
       where: { ...(st !== 'ALL' ? { status: st } : {}), ...(q ? { OR: [{ title: { contains: q, mode: 'insensitive' } }, { id: q }, { user: { email: { contains: q, mode: 'insensitive' } } }] } : {}) },
-      include: { ...LISTING_INCLUDE, images: { orderBy: { position: 'asc' } }, user: { select: { id: true, name: true, email: true, status: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true } } },
+      include: { ...LISTING_INCLUDE, images: { orderBy: { position: 'asc' } }, user: { select: { id: true, name: true, email: true, status: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, companyVerifiedAt: true } } },
       orderBy: [{ spamScore: 'desc' }, { createdAt: 'desc' }], take: 100,
     });
     const reportCounts = await this.prisma.report.groupBy({ by: ['targetId'], where: { targetType: 'LISTING', status: 'OPEN', targetId: { in: rows.map((r) => r.id) } }, _count: true });

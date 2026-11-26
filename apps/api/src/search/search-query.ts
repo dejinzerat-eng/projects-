@@ -165,7 +165,8 @@ export function filterSql(p: SearchParams, o: FilterOptions): Prisma.Sql[] {
   if (p.condition?.length) w.push(Prisma.sql`l."condition"::text IN (${Prisma.join(p.condition.map((c) => Prisma.sql`${c}::text`))})`);
   if (p.offerType) w.push(Prisma.sql`l."offerType"::text = ${p.offerType}::text`);
   if (p.verified) w.push(Prisma.sql`u."phoneVerifiedAt" IS NOT NULL`);
-  if (p.sellerType) w.push(p.sellerType === 'business' ? Prisma.sql`u."isBusiness" = true` : Prisma.sql`u."isBusiness" = false`);
+  // Firmy = jen s ověřeným IČO (stejně jako štítek „Firma“ na kartě); soukromí = kdo se za firmu neoznačil
+  if (p.sellerType) w.push(p.sellerType === 'business' ? Prisma.sql`(u."isBusiness" = true AND u."companyVerifiedAt" IS NOT NULL)` : Prisma.sql`u."isBusiness" = false`);
   const since = o.publishedAfter ?? (p.since && SINCE_MS[p.since] ? new Date(o.now.getTime() - SINCE_MS[p.since]) : undefined);
   if (since) w.push(Prisma.sql`l."publishedAt" > ${ts(since)}`);
   for (const [k, v] of Object.entries(p.attrs ?? {})) {

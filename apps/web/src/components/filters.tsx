@@ -71,7 +71,7 @@ export function Filters({ categories, filters, fixedCategory }: { categories: Ca
       </Field>
       <Field label="Prodejce">
         <div className="flex flex-wrap gap-1.5">
-          {[['soukromy', 'Soukromá osoba'], ['firma', 'Firma']].map(([v, l]) => <button key={v} onClick={() => set({ prodejce: get('prodejce') === v ? undefined : v })} className={`chip ${get('prodejce') === v ? 'chip-active' : ''}`} aria-pressed={get('prodejce') === v}>{l}</button>)}
+          {[['soukromy', 'Soukromí'], ['firma', 'Firmy']].map(([v, l]) => <button key={v} onClick={() => set({ prodejce: get('prodejce') === v ? undefined : v })} className={`chip ${get('prodejce') === v ? 'chip-active' : ''}`} aria-pressed={get('prodejce') === v}>{l}</button>)}
         </div>
       </Field>
       <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface p-3">

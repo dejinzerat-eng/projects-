@@ -107,7 +107,7 @@ describe('SQL pro vyhledávání v PostgreSQL', () => {
   });
 
   it('typ prodejce a ověření', () => {
-    assert.match(filterSql({ sellerType: 'business' }, base).map(sqlText).join(' '), /"isBusiness" = true/);
+    assert.match(filterSql({ sellerType: 'business' }, base).map(sqlText).join(' '), /"isBusiness" = true AND u."companyVerifiedAt" IS NOT NULL/);
     assert.match(filterSql({ sellerType: 'private' }, base).map(sqlText).join(' '), /"isBusiness" = false/);
   });
 
