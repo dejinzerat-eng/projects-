@@ -1,6 +1,6 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, NotFoundException, Param, Post, Query, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Logger, NotFoundException, Param, Post, Query, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { Prisma } from '@prisma/client';
+import { Prisma, type Listing } from '@prisma/client';
 import type { Request } from 'express';
 import { z } from 'zod';
 import { Auth, AuthUser, CurrentUser, Roles } from '../common/auth.guard';
@@ -11,12 +11,17 @@ import { PrismaService } from '../common/prisma.service';
 import { ZodPipe } from '../common/zod';
 import { SearchService } from '../search/search.service';
 import {
-  AppealDto, DecideAppealDto, DecideNoticeDto, esc, listingIdFrom, makeRef, NOTICE_CATEGORIES, NoticeCategory, NoticeDto, NoticeInput, parseTarget, transparencySummary,
+  AppealDto, DecideAppealDto, DecideNoticeDto, esc, listingIdFrom, mailTarget, makeRef, NOTICE_CATEGORIES, NoticeCategory, NoticeDto, NoticeInput, parseTarget, transparencySummary,
 } from './notice.logic';
 import { operatorFromEnv } from './operator';
 
 const STATUS_TEXT = { RECEIVED: 'Přijato, čeká na posouzení', ACTION_TAKEN: 'Vyřízeno – obsah byl omezen', NO_ACTION: 'Vyřízeno – bez zásahu' } as const;
 const mail = (title: string, body: string) => `<div style="font-family:system-ui,sans-serif;max-width:560px;color:#1b1f24"><h2 style="font-size:20px">${title}</h2>${body}<p style="color:#69717a;font-size:13px;margin-top:24px">${esc(operatorFromEnv().name)} · Dejinzerat.cz · <a href="${config.webOrigin}/stranka/nahlasovani-obsahu">Jak vyřizujeme oznámení</a></p></div>`;
+
+/** E-mail nesmí shodit už uložené oznámení nebo rozhodnutí (výpadek Resend apod.) – chybu jen zalogujeme. */
+const log = new Logger('Notices');
+const safeSend = (mailer: MailerService, to: string, subject: string, html: string) =>
+  mailer.send(to, subject, html).catch((e: unknown) => log.error(`E-mail „${subject}“ se nepodařilo odeslat: ${(e as Error).message}`));
 
 /** Veřejná část: oznámení nezákonného obsahu (čl. 16 DSA) a námitky proti rozhodnutí moderace (čl. 20 DSA). */
 @Controller()
@@ -48,9 +53,9 @@ export class NoticesController {
       }
     }
     if (notice.reporterEmail) {
-      await this.mailer.send(notice.reporterEmail, `Potvrzení o přijetí oznámení ${notice.ref}`, mail('Vaše oznámení jsme přijali', `
+      await safeSend(this.mailer, notice.reporterEmail, `Potvrzení o přijetí oznámení ${notice.ref}`, mail('Vaše oznámení jsme přijali', `
         <p>Děkujeme. Oznámení o možném nezákonném obsahu jsme přijali <b>${notice.createdAt.toLocaleString('cs-CZ', { timeZone: 'Europe/Prague' })}</b> pod číslem <b>${notice.ref}</b>.</p>
-        <p><b>Druh obsahu:</b> ${esc(NOTICE_CATEGORIES[notice.category as NoticeCategory])}<br><b>Adresa:</b> ${esc(notice.targetUrl)}</p>
+        <p><b>Druh obsahu:</b> ${esc(NOTICE_CATEGORIES[notice.category as NoticeCategory])}<br><b>Adresa:</b> ${esc(mailTarget(notice.targetUrl, config.webOrigin))}</p>
         <p>Oznámení posoudíme bez zbytečného odkladu, nestranně a s péčí. O rozhodnutí a jeho důvodech vás budeme informovat na tento e-mail.</p>`));
     }
     return { ref: notice.ref, createdAt: notice.createdAt, emailSent: !!notice.reporterEmail };
@@ -67,7 +72,7 @@ export class NoticesController {
     if (!(await this.moderated(l))) throw new BadRequestException('Námitku lze podat jen proti rozhodnutí moderace (zamítnutý nebo stažený inzerát).');
     if (await this.prisma.moderationAppeal.findFirst({ where: { listingId: l.id, status: 'OPEN' } })) throw new BadRequestException('K tomuto inzerátu už námitku vyřizujeme.');
     const a = await this.prisma.moderationAppeal.create({ data: { ref: makeRef('NAM'), listingId: l.id, userId: u.id, text: dto.text } });
-    await this.mailer.send(u.email, `Námitka ${a.ref} přijata`, mail('Vaši námitku jsme přijali', `<p>Námitku proti rozhodnutí o inzerátu „${esc(l.title)}“ vyřizujeme pod číslem <b>${a.ref}</b>. Posoudí ji jiný člen týmu než ten, kdo rozhodoval původně, a výsledek vám pošleme e-mailem.</p>`));
+    await safeSend(this.mailer, u.email, `Námitka ${a.ref} přijata`, mail('Vaši námitku jsme přijali', `<p>Námitku proti rozhodnutí o inzerátu „${esc(l.title)}“ vyřizujeme pod číslem <b>${a.ref}</b>. Posoudí ji jiný člen týmu než ten, kdo rozhodoval původně, a výsledek vám pošleme e-mailem.</p>`));
     return { ref: a.ref, createdAt: a.createdAt };
   }
 
@@ -76,7 +81,9 @@ export class NoticesController {
     if (l.status === 'REJECTED') return true;
     if (l.status !== 'DELETED') return false;
     if (l.rejectReason) return true;
-    return !!(await this.prisma.auditLog.findFirst({ where: { targetType: 'listing', targetId: l.id, action: { in: ['listing.delete', 'listing.reject'] } } }));
+    // Rozhoduje poslední zásah moderace – inzerát kdysi zamítnutý, později schválený a pak smazaný autorem námitku nemá
+    const last = await this.prisma.auditLog.findFirst({ where: { targetType: 'listing', targetId: l.id, action: { startsWith: 'listing.' } }, orderBy: { createdAt: 'desc' }, select: { action: true } });
+    return !!last && ['listing.delete', 'listing.reject'].includes(last.action);
   }
 
   /** Moje inzeráty stažené moderací, proti kterým lze podat námitku. */
@@ -124,28 +131,34 @@ export class NoticesAdminController {
     if (!n) throw new NotFoundException();
     if (n.status !== 'RECEIVED') throw new BadRequestException('Oznámení už bylo vyřízeno.');
     const action = dto.status === 'NO_ACTION' ? 'none' : dto.action;
+    let l: Listing | null = null;
     if (action !== 'none') {
       if (n.targetType !== 'LISTING' || !n.targetId) throw new BadRequestException('Opatření lze automaticky provést jen u inzerátu. U jiného obsahu zvolte „bez automatického zásahu“ a zasáhněte ručně.');
-      const l = await this.prisma.listing.findUnique({ where: { id: n.targetId } });
+      l = await this.prisma.listing.findUnique({ where: { id: n.targetId } });
       if (!l) throw new BadRequestException('Inzerát už neexistuje.');
+    }
+    // Oznámení si „zabereme“ podmíněnou změnou stavu – dva moderátoři ho nevyřídí současně (a e-maily neodejdou dvakrát)
+    const claimed = await this.prisma.illegalContentNotice.updateMany({ where: { id, status: 'RECEIVED' }, data: { status: dto.status, action, decisionReason: dto.reason, decidedById: u.id, decidedAt: new Date() } });
+    if (!claimed.count) throw new BadRequestException('Oznámení už bylo vyřízeno.');
+    if (l) {
       const status = action === 'delete' ? 'DELETED' : 'REJECTED';
       await this.prisma.listing.update({ where: { id: l.id }, data: { status, rejectReason: dto.reason } });
       await this.search.index(l.id);
       // Odůvodnění pro autora obsahu (čl. 17 DSA) včetně možnosti podat námitku
       await this.prisma.notification.create({ data: { userId: l.userId, type: 'moderation', title: `Inzerát „${l.title}“ byl ${action === 'delete' ? 'odstraněn' : 'stažen'}`, body: `${dto.reason} Nesouhlasíte? Podejte námitku.`, link: `/namitka?inzerat=${l.id}` } });
       const owner = await this.prisma.user.findUnique({ where: { id: l.userId }, select: { email: true } });
-      if (owner) await this.mailer.send(owner.email, `Rozhodnutí o inzerátu „${l.title}“`, mail(`Inzerát byl ${action === 'delete' ? 'odstraněn' : 'stažen ze zveřejnění'}`, `
+      if (owner) await safeSend(this.mailer, owner.email, `Rozhodnutí o inzerátu „${l.title}“`, mail(`Inzerát byl ${action === 'delete' ? 'odstraněn' : 'stažen ze zveřejnění'}`, `
         <p>Na základě oznámení o nezákonném obsahu jsme posoudili váš inzerát „${esc(l.title)}“.</p>
         <p><b>Důvod:</b> ${esc(dto.reason)}</p>
         <p><b>Rozsah opatření:</b> inzerát není veřejně dostupný. Rozhodl člověk z týmu moderace na základě oznámení třetí osoby (čl. 16 DSA).</p>
         <p>Pokud s rozhodnutím nesouhlasíte, můžete do 6 měsíců <a href="${config.webOrigin}/namitka?inzerat=${l.id}">podat námitku</a>. Máte také právo obrátit se na certifikovaný orgán mimosoudního řešení sporů nebo na soud.</p>`));
       await this.prisma.auditLog.create({ data: { actorId: u.id, action: `listing.${action === 'delete' ? 'delete' : 'reject'}`, targetType: 'listing', targetId: l.id, meta: { notice: n.ref, reason: dto.reason } } });
     }
-    const done = await this.prisma.illegalContentNotice.update({ where: { id }, data: { status: dto.status, action, decisionReason: dto.reason, decidedById: u.id, decidedAt: new Date() } });
+    const done = { status: dto.status };
     await this.prisma.auditLog.create({ data: { actorId: u.id, action: `notice.${dto.status.toLowerCase()}`, targetType: 'notice', targetId: id, meta: { ref: n.ref, action } } });
     if (n.reporterEmail) {
-      await this.mailer.send(n.reporterEmail, `Rozhodnutí o oznámení ${n.ref}`, mail('Vaše oznámení jsme vyřídili', `
-        <p>Oznámení č. <b>${n.ref}</b> týkající se ${esc(n.targetUrl)}: <b>${STATUS_TEXT[done.status]}</b>.</p>
+      await safeSend(this.mailer, n.reporterEmail, `Rozhodnutí o oznámení ${n.ref}`, mail('Vaše oznámení jsme vyřídili', `
+        <p>Oznámení č. <b>${n.ref}</b> týkající se ${esc(mailTarget(n.targetUrl, config.webOrigin))}: <b>${STATUS_TEXT[done.status]}</b>.</p>
         <p><b>Odůvodnění:</b> ${esc(dto.reason)}</p>
         <p>Rozhodnutí učinil člověk z týmu moderace. Pokud s ním nesouhlasíte, odpovězte prosím na tento e-mail nebo se obraťte na certifikovaný orgán mimosoudního řešení sporů či na soud.</p>`));
     }
@@ -156,7 +169,8 @@ export class NoticesAdminController {
   @Get('appeals')
   async appeals(@Query('status') status = 'OPEN') {
     const st = ['OPEN', 'UPHELD', 'REJECTED'].includes(status) ? (status as 'OPEN') : undefined;
-    const rows = await this.prisma.moderationAppeal.findMany({ where: st ? { status: st } : {}, orderBy: { createdAt: st === 'OPEN' ? 'asc' : 'desc' }, take: 200 });
+    const where = st ? { status: st } : status === 'DECIDED' ? { status: { in: ['UPHELD' as const, 'REJECTED' as const] } } : {};
+    const rows = await this.prisma.moderationAppeal.findMany({ where, orderBy: { createdAt: st === 'OPEN' ? 'asc' : 'desc' }, take: 200 });
     const [ls, us] = await Promise.all([
       this.prisma.listing.findMany({ where: { id: { in: rows.map((r) => r.listingId) } }, select: { id: true, slug: true, title: true, status: true, rejectReason: true } }),
       this.prisma.user.findMany({ where: { id: { in: rows.map((r) => r.userId) } }, select: { id: true, name: true, email: true } }),
@@ -170,17 +184,18 @@ export class NoticesAdminController {
     const a = await this.prisma.moderationAppeal.findUnique({ where: { id } });
     if (!a) throw new NotFoundException();
     if (a.status !== 'OPEN') throw new BadRequestException('Námitka už byla vyřízena.');
+    const claimed = await this.prisma.moderationAppeal.updateMany({ where: { id, status: 'OPEN' }, data: { status: dto.status, decisionReason: dto.reason, decidedById: u.id, decidedAt: new Date() } });
+    if (!claimed.count) throw new BadRequestException('Námitka už byla vyřízena.');
     const l = await this.prisma.listing.findUnique({ where: { id: a.listingId } });
     if (dto.status === 'UPHELD' && l && ['REJECTED', 'DELETED'].includes(l.status)) {
-      await this.prisma.listing.update({ where: { id: l.id }, data: { status: 'ACTIVE', rejectReason: null, publishedAt: l.publishedAt ?? new Date() } });
+      await this.prisma.listing.update({ where: { id: l.id }, data: { status: 'ACTIVE', rejectReason: null, publishedAt: l.publishedAt ?? new Date(), ...(l.expiresAt && l.expiresAt.getTime() < Date.now() + 7 * 864e5 ? { expiresAt: new Date(Date.now() + 30 * 864e5) } : {}) } });
       await this.search.index(l.id);
     }
-    await this.prisma.moderationAppeal.update({ where: { id }, data: { status: dto.status, decisionReason: dto.reason, decidedById: u.id, decidedAt: new Date() } });
     await this.prisma.auditLog.create({ data: { actorId: u.id, action: `appeal.${dto.status.toLowerCase()}`, targetType: 'appeal', targetId: id, meta: { ref: a.ref, listingId: a.listingId } } });
     const title = dto.status === 'UPHELD' ? 'Námitce jsme vyhověli – inzerát je opět zveřejněn' : 'Námitku jsme zamítli';
     await this.prisma.notification.create({ data: { userId: a.userId, type: 'moderation', title, body: dto.reason, link: '/muj-ucet/inzeraty' } });
     const owner = await this.prisma.user.findUnique({ where: { id: a.userId }, select: { email: true } });
-    if (owner) await this.mailer.send(owner.email, `Rozhodnutí o námitce ${a.ref}`, mail(title, `<p>Inzerát: „${esc(l?.title ?? a.listingId)}“</p><p><b>Odůvodnění:</b> ${esc(dto.reason)}</p>${dto.status === 'REJECTED' ? '<p>Máte právo obrátit se na certifikovaný orgán mimosoudního řešení sporů nebo na soud.</p>' : ''}`));
+    if (owner) await safeSend(this.mailer, owner.email, `Rozhodnutí o námitce ${a.ref}`, mail(title, `<p>Inzerát: „${esc(l?.title ?? a.listingId)}“</p><p><b>Odůvodnění:</b> ${esc(dto.reason)}</p>${dto.status === 'REJECTED' ? '<p>Máte právo obrátit se na certifikovaný orgán mimosoudního řešení sporů nebo na soud.</p>' : ''}`));
     return { ok: true };
   }
 }

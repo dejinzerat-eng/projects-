@@ -24,7 +24,11 @@ export function NoticeForm({ categories, url = '', name = '', email = '', captch
       const captcha = (new FormData(e.currentTarget).get('cf-turnstile-response') as string | null) ?? undefined;
       setDone(await call<Receipt>('/notices', 'POST', { ...f, captcha }));
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+    } catch (err) {
+      setError((err as Error).message);
+      // Token Turnstile je jednorázový – po neúspěchu načteme nový
+      (window as unknown as { turnstile?: { reset: () => void } }).turnstile?.reset();
+    } finally { setBusy(false); }
   }
 
   if (done) {

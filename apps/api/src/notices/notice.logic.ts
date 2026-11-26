@@ -93,5 +93,17 @@ export function transparencySummary(rows: { category: string; status: string; cr
   return { total: rows.length, byCategory, byStatus, decided: hours.length, medianHours: median == null ? null : Math.round(median * 10) / 10 };
 }
 
+/**
+ * Adresa obsahu do e-mailu: naši adresu ukážeme, cizí ne. Potvrzení jde na e-mail zadaný kýmkoli –
+ * nesmí se z něj stát nástroj, jak našim jménem rozeslat odkaz na podvodný web.
+ */
+export function mailTarget(url: string, webOrigin: string) {
+  try {
+    const u = new URL(url), own = new URL(webOrigin);
+    if (u.hostname.replace(/^www\./, '') === own.hostname.replace(/^www\./, '')) return `${own.origin}${u.pathname}`;
+  } catch { /* neplatná adresa */ }
+  return 'adresa mimo Dejinzerat.cz (uvedená ve formuláři)';
+}
+
 /** Escapování textu do HTML e-mailu. */
 export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);

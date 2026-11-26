@@ -12,7 +12,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   const stav = (await searchParams).stav ?? 'RECEIVED';
   const appeals = stav.startsWith('namitky');
   const [rows, stats] = await Promise.all([
-    appeals ? api<Appeal[]>(`/admin/appeals?status=${stav === 'namitky' ? 'OPEN' : 'ALL'}`) : api<Notice[]>(`/admin/notices?status=${stav}`),
+    appeals ? api<Appeal[]>(`/admin/appeals?status=${stav === 'namitky' ? 'OPEN' : 'DECIDED'}`) : api<Notice[]>(`/admin/notices?status=${stav}`),
     api<Stats>('/admin/notices/stats'),
   ]);
   return (
@@ -22,7 +22,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
       <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           [`Oznámení ${stats.year}`, stats.total], ['Čeká na posouzení', stats.byStatus.RECEIVED ?? 0],
-          ['Medián vyřízení', stats.medianHours == null ? '–' : `${stats.medianHours} h`], ['Námitky (vyhověno)', `${stats.appeals} (${stats.appealsUpheld})`],
+          ['Medián vyřízení', stats.medianHours == null ? '–' : stats.medianHours < 1 ? `${Math.max(1, Math.round(stats.medianHours * 60))} min` : `${stats.medianHours} h`], ['Námitky (vyhověno)', `${stats.appeals} (${stats.appealsUpheld})`],
         ].map(([k, v]) => <div key={k} className="card p-4"><dt className="text-xs text-muted">{k}</dt><dd className="mt-1 text-xl font-bold">{v}</dd></div>)}
       </dl>
       {stats.total > 0 && <p className="mt-3 text-xs text-muted">Podle druhu: {Object.entries(stats.byCategory).map(([k, v]) => `${stats.categories[k] ?? k} ${v}`).join(' · ')}</p>}

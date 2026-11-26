@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { AppealDto, esc, listingIdFrom, makeRef, NoticeDto, parseTarget, REF_RE, transparencySummary } from './notice.logic';
+import { AppealDto, esc, listingIdFrom, mailTarget, makeRef, NoticeDto, parseTarget, REF_RE, transparencySummary } from './notice.logic';
 
 const ID = 'cmid1h9ax0001abcdefghijkl';
 const base = { category: 'PODVOD', targetUrl: `https://dejinzerat.cz/inzerat/${ID}/iphone`, explanation: 'Prodejce chce platbu předem přes Western Union a pak nekomunikuje.', name: 'Jan Novák', email: 'jan@example.cz', goodFaith: true };
@@ -72,5 +72,13 @@ describe('ostatní', () => {
   });
   it('esc escapuje HTML', () => {
     assert.equal(esc('<b>"x" & \'y\'</b>'), '&lt;b&gt;&quot;x&quot; &amp; &#39;y&#39;&lt;/b&gt;');
+  });
+});
+
+describe('mailTarget', () => {
+  it('v e-mailu ukáže jen adresu našeho webu, cizí odkaz ne', () => {
+    assert.equal(mailTarget('https://www.dejinzerat.cz/inzerat/abc/x?utm=1', 'https://dejinzerat.cz'), 'https://dejinzerat.cz/inzerat/abc/x');
+    assert.equal(mailTarget('https://podvod.example/login', 'https://dejinzerat.cz'), 'adresa mimo Dejinzerat.cz (uvedená ve formuláři)');
+    assert.equal(mailTarget('https://dejinzerat.cz.podvod.example/', 'https://dejinzerat.cz'), 'adresa mimo Dejinzerat.cz (uvedená ve formuláři)');
   });
 });
