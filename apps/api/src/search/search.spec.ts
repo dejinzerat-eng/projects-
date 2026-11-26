@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { Prisma } from '@prisma/client';
 import { buildSearchText, fromSearchString, haversine, normalizeSearchText, queryWords, savedSearchKey, stemCz, synonymsOf, toSearchString } from '@dej/shared';
 import { findMunicipality, municipalityByZip, nearestMunicipality, resolveLocation, suggestMunicipalities } from '@dej/shared/dist/municipalities';
-import { boundingBox, buildTerms, categoriesFor, filterSql, orderSql, promotionExpired, rankAt, termsFuzzy, termsMatch, tierSql } from './search-query';
+import { boundingBox, buildTerms, categoriesFor, filterSql, fuzzyScoreSql, orderSql, promotionExpired, rankAt, setTrgmSchema, termsFuzzy, termsMatch, tierSql } from './search-query';
 
 const sqlText = (s: Prisma.Sql) => s.sql;
 
@@ -142,6 +142,15 @@ describe('SQL pro vyhledávání v PostgreSQL', () => {
   it('oprava překlepů jen pro slova od 4 znaků', () => {
     assert.equal(termsFuzzy(Prisma.sql`t`, buildTerms('tv')), undefined);
     assert.match(sqlText(termsFuzzy(Prisma.sql`t`, buildTerms('iphoen 15'))!), /<%/);
+  });
+
+  it('pg_trgm volá se schématem rozšíření (Supabase: extensions mimo search_path)', () => {
+    setTrgmSchema('extensions');
+    try {
+      assert.match(sqlText(termsFuzzy(Prisma.sql`t`, buildTerms('iphoen'))!), /OPERATOR\("extensions"\.<%\)/);
+      assert.match(sqlText(fuzzyScoreSql(buildTerms('iphoen'), 'iphoen')), /"extensions"\.word_similarity\(/);
+    } finally { setTrgmSchema(null); }
+    assert.match(sqlText(termsFuzzy(Prisma.sql`t`, buildTerms('iphoen'))!), /OPERATOR\(<%\)/);
   });
 });
 

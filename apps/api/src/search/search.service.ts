@@ -6,7 +6,7 @@ import { config } from '../common/config';
 import { PrismaService } from '../common/prisma.service';
 import {
   backfillSearchTextSql, buildTerms, distanceSql, rankAt, filterSql, FROM_SQL, FUZZY_THRESHOLD, fuzzyScoreSql, Geo, MAX_RADIUS_KM, NORM_TITLE, orderSql,
-  SEARCH_TEXT, termsFuzzy, termsMatch, tierSql, wordPrefix,
+  SEARCH_TEXT, setTrgmSchema, termsFuzzy, termsMatch, tierSql, wordPrefix, wordSimilar, wordSimilarity,
 } from './search-query';
 
 export { haversine };
@@ -67,6 +67,9 @@ export class SearchService implements OnModuleInit {
   }
 
   async onModuleInit() {
+    await this.prisma.$queryRaw<{ s: string }[]>`SELECT n.nspname AS s FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'pg_trgm'`
+      .then((r) => setTrgmSchema(r[0]?.s))
+      .catch((e) => this.log.warn(`Schéma pg_trgm se nepodařilo zjistit: ${(e as Error).message}`));
     if (!config.meiliUrl) { this.log.log('Meilisearch není nastaven – hledá se v PostgreSQL.'); return; }
     try {
       await this.meili('/health');
@@ -292,12 +295,12 @@ export class SearchService implements OnModuleInit {
   private async suggestTitles(nq: string): Promise<string[]> {
     type R = { title: string };
     const status = Prisma.sql`l."status" IN ('ACTIVE', 'RESERVED')`;
-    const rank = Prisma.sql`(CASE WHEN ${NORM_TITLE} LIKE ${`${nq}%`} THEN 0 WHEN ${wordPrefix(NORM_TITLE, nq)} THEN 1 ELSE 2 END), word_similarity(${nq}::text, ${NORM_TITLE}) DESC, l."publishedAt" DESC NULLS LAST`;
+    const rank = Prisma.sql`(CASE WHEN ${NORM_TITLE} LIKE ${`${nq}%`} THEN 0 WHEN ${wordPrefix(NORM_TITLE, nq)} THEN 1 ELSE 2 END), ${wordSimilarity(Prisma.sql`${nq}::text`, NORM_TITLE)} DESC, l."publishedAt" DESC NULLS LAST`;
     const exact = await this.prisma.$queryRaw<R[]>(Prisma.sql`SELECT l."title" FROM "Listing" l WHERE ${status} AND ${wordPrefix(SEARCH_TEXT, nq)} AND ${wordPrefix(NORM_TITLE, nq)} ORDER BY ${rank} LIMIT 8`);
     if (exact.length >= 3 || nq.length < 4) return exact.map((r) => r.title);
     const [, fz] = await this.prisma.$transaction([
       this.prisma.$queryRaw`SELECT set_config('pg_trgm.word_similarity_threshold', ${String(FUZZY_THRESHOLD)}, true)`,
-      this.prisma.$queryRaw<R[]>(Prisma.sql`SELECT l."title" FROM "Listing" l WHERE ${status} AND ${nq}::text <% l."searchText" AND ${nq}::text <% ${NORM_TITLE} ORDER BY word_similarity(${nq}::text, ${NORM_TITLE}) DESC, l."publishedAt" DESC NULLS LAST LIMIT 8`),
+      this.prisma.$queryRaw<R[]>(Prisma.sql`SELECT l."title" FROM "Listing" l WHERE ${status} AND ${wordSimilar(Prisma.sql`${nq}::text`, SEARCH_TEXT)} AND ${wordSimilar(Prisma.sql`${nq}::text`, NORM_TITLE)} ORDER BY ${wordSimilarity(Prisma.sql`${nq}::text`, NORM_TITLE)} DESC, l."publishedAt" DESC NULLS LAST LIMIT 8`),
     ]);
     return [...new Set([...exact, ...(fz as R[])].map((r) => r.title))];
   }
