@@ -3,6 +3,7 @@ import { Onest } from 'next/font/google';
 import { Footer } from '@/components/footer';
 import { Header } from '@/components/header';
 import { MobileNav } from '@/components/mobile-nav';
+import { TermsBanner } from '@/components/terms-banner';
 import { ToastProvider } from '@/components/toast';
 import { getMe } from '@/lib/api';
 import { SITE, SITE_NAME, social } from '@/lib/seo';
@@ -32,6 +33,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <ToastProvider>
           <a href="#obsah" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-ink focus:px-3 focus:py-2 focus:text-paper">Přeskočit na obsah</a>
           <Header me={me} />
+          {me?.termsOutdated && <TermsBanner />}
           <main id="obsah">{children}</main>
           <Footer />
           <MobileNav unread={me?.unreadMessages} loggedIn={!!me} />
