@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Fragment } from 'react';
 import { redirect } from 'next/navigation';
 import { ChevronLeft, ChevronRight, SearchX, Sparkles, SpellCheck } from 'lucide-react';
 import { filtersFor, toSearchString, type SearchParams } from '@dej/shared';
@@ -14,7 +15,8 @@ import { SortSelect } from './sort-select';
 
 type SP = Record<string, string | string[] | undefined>;
 
-export async function SearchView({ searchParams, category, sub, basePath, heading }: { searchParams: SP; category?: string; sub?: string; basePath: string; heading?: string }) {
+/** `crumbs` = drobečková navigace vstupní stránky (Domů / Kategorie / Město); bez ní se odvodí z kategorie. */
+export async function SearchView({ searchParams, category, sub, basePath, heading, crumbs }: { searchParams: SP; category?: string; sub?: string; basePath: string; heading?: string; crumbs?: { name: string; path: string }[] }) {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(searchParams)) if (typeof v === 'string') qs.set(k, v);
   if (category) qs.set('kategorie', category);
@@ -45,9 +47,16 @@ export async function SearchView({ searchParams, category, sub, basePath, headin
   return (
     <div className="container-x py-6 sm:py-8">
       <nav className="mb-3 flex flex-wrap items-center gap-1.5 text-sm text-muted" aria-label="Drobečková navigace">
-        <Link href="/" className="hover:text-ink">Domů</Link><span>/</span>
-        {cat ? <Link href={`/kategorie/${cat.slug}`} className="hover:text-ink">{cat.name}</Link> : <span>{heading ?? 'Hledání'}</span>}
-        {subCat && <><span>/</span><Link href={`/kategorie/${cat!.slug}/${subCat.slug}`} className="hover:text-ink">{subCat.name}</Link></>}
+        {crumbs ? crumbs.map((c, i) => (
+          <Fragment key={c.path}>
+            {i > 0 && <span>/</span>}
+            {i === crumbs.length - 1 && i > 0 ? <span aria-current="page">{c.name}</span> : <Link href={c.path} className="hover:text-ink">{c.name}</Link>}
+          </Fragment>
+        )) : <>
+          <Link href="/" className="hover:text-ink">Domů</Link><span>/</span>
+          {cat ? <Link href={`/kategorie/${cat.slug}`} className="hover:text-ink">{cat.name}</Link> : <span>{heading ?? 'Hledání'}</span>}
+          {subCat && <><span>/</span><Link href={`/kategorie/${cat!.slug}/${subCat.slug}`} className="hover:text-ink">{subCat.name}</Link></>}
+        </>}
       </nav>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>

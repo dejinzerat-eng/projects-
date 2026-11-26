@@ -111,7 +111,7 @@ export async function LandingPage({ landing: l, searchParams: sp }: { landing: L
           <p className="flex items-start gap-2 rounded-2xl border border-line bg-surface px-4 py-3 text-sm text-ink-2" role="status"><Info className="mt-0.5 size-4 shrink-0 text-muted" />Inzerát, který jste hledali, už není dostupný. Podívejte se na podobné nabídky v této kategorii.</p>
         </div>
       )}
-      <SearchView searchParams={listingParams(l, sp)} category={cat?.slug} sub={sub?.slug} basePath={l.path} heading={title ?? undefined} />
+      <SearchView searchParams={listingParams(l, sp)} category={cat?.slug} sub={sub?.slug} basePath={l.path} heading={title ?? undefined} crumbs={city ? crumbs : undefined} />
       {(intro || top.length > 0 || city) && (
         <section className="container-x mt-4 space-y-8" aria-label="Další informace">
           {intro && <div className="card max-w-3xl p-6"><Markdown source={intro} /></div>}
