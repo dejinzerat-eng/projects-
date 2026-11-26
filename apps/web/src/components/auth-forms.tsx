@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { call } from '@/lib/client';
+import { safeBack } from '@/lib/safe-back';
 
 function useSubmit() {
   const [error, setError] = useState<string | null>(null);
@@ -14,8 +15,6 @@ function useSubmit() {
   return { error, busy, run };
 }
 
-/** Návrat po přihlášení jen na cestu našeho webu. Řídicí znaky prohlížeč z adresy vypouští („/\t/cizi.cz“ by se změnilo na „//cizi.cz“), proto je odmítáme. */
-const safeBack = (z: string | null) => (z && z.length <= 500 && z.startsWith('/') && !z.startsWith('//') && !z.startsWith('/\\') && !/[\x00-\x1f\x7f]/.test(z) ? z : '/');
 
 type Providers = { google?: boolean; apple?: boolean; sms?: boolean; captchaSiteKey?: string | null };
 let providersPromise: Promise<Providers> | undefined;

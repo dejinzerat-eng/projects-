@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import { ListingGrid } from '@/components/listing-card';
-import { api } from '@/lib/api';
+import { authApi } from '@/lib/api';
 import type { ListingCard } from '@/lib/types';
 export const metadata = { title: 'Oblíbené', robots: { index: false } };
 export default async function Page() {
-  const items = await api<ListingCard[]>('/me/favorites');
+  const items = await authApi<ListingCard[]>('/me/favorites', '/muj-ucet/oblibene');
   return (
     <div>
       <h1 className="h-display mb-5 text-3xl font-bold">Oblíbené inzeráty</h1>

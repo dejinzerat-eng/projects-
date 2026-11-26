@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { MarkRead } from '@/components/account-lists';
-import { api } from '@/lib/api';
+import { authApi } from '@/lib/api';
 import { ago } from '@/lib/format';
 export const metadata = { title: 'Upozornění', robots: { index: false } };
 interface N { id: string; title: string; body: string | null; link: string | null; readAt: string | null; createdAt: string; type: string }
 export default async function Page() {
-  const items = await api<N[]>('/me/notifications');
+  const items = await authApi<N[]>('/me/notifications', '/muj-ucet/upozorneni');
   return (
     <div>
       <div className="mb-5 flex items-center justify-between gap-3"><h1 className="h-display text-3xl font-bold">Upozornění</h1>{items.some((i) => !i.readAt) && <MarkRead />}</div>

@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { ConversationList, type ConvItem } from '@/components/conversation-list';
 import { MessageSettings } from '@/components/messages/message-settings';
-import { api } from '@/lib/api';
+import { authApi } from '@/lib/api';
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ archiv?: string }> }) {
   const archived = (await searchParams).archiv === '1';
-  const items = await api<ConvItem[]>(`/conversations${archived ? '?archived=1' : ''}`);
+  const items = await authApi<ConvItem[]>(`/conversations${archived ? '?archived=1' : ''}`, '/zpravy');
   return (
     <div className="container-x py-6 sm:py-10">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
