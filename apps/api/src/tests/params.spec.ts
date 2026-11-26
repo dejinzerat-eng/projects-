@@ -36,6 +36,9 @@ describe('effectiveFilters', () => {
   });
   it('podkategorie bez parametrů ve výchozím stromu nezdědí parametry rodiče', () => {
     assert.deepEqual(effectiveFilters('auto-moto', [defs[0]], 'nahradni-dily', []), []);
+    // vlastní parametr přidaný v administraci platí, parametry rodiče ani tak ne
+    const own: FilterDef = { key: 'part', label: 'Díl', type: 'select', options: ['Motor'] };
+    assert.deepEqual(effectiveFilters('auto-moto', [defs[0]], 'nahradni-dily', [own]), [own]);
   });
   it('ignoruje poškozené definice z databáze', () => {
     assert.deepEqual(effectiveFilters('x', 'nesmysl', 'y', [{ key: 'a' }, null, { key: 'b', label: 'B', type: 'boolean' }]).map((x) => x.key), ['b']);

@@ -44,7 +44,8 @@ export const ListingDraftDto = ListingDto.extend({
   categorySlug: z.string({ error: 'Pro uložení konceptu vyberte kategorii.' }).min(1, 'Pro uložení konceptu vyberte kategorii.'),
   subSlug: z.string({ error: 'Pro uložení konceptu vyberte podkategorii.' }).min(1, 'Pro uložení konceptu vyberte podkategorii.'),
   city: z.string().trim().max(80).default(''),
-  zip: z.string().trim().max(10).optional(),
+  // Neúplné PSČ v konceptu nevadí – uložíme jen platné, jinak ho vynecháme
+  zip: z.string().trim().max(10).optional().transform((z) => (z && /^\d{3}\s?\d{2}$/.test(z) ? z : undefined)),
   publish: z.literal(false),
 });
 
@@ -90,20 +91,21 @@ export class ListingsService {
 
   /**
    * Kontrola duplicit. Stejný text u vlastního aktivního inzerátu zablokuje, shoda s cizím inzerátem
-   * (text nebo znovu použitá fotka) pošle inzerát ke schválení.
+   * (text nebo znovu použitá fotka) pošle inzerát ke schválení. U cizích inzerátů porovnáváme jen se staršími
+   * (`before` = vznik posuzovaného inzerátu), aby původního autora nepotrestal ten, kdo od něj text či fotky zkopíroval.
    */
-  private async findDuplicates(ownerId: string, listingId: string | null, title: string, description: string, imageIds: string[]) {
+  private async findDuplicates(ownerId: string, listingId: string | null, before: Date, title: string, description: string, imageIds: string[]) {
     const hash = contentHash(title, description);
     const norm = `${normalizeText(title)}\n${normalizeText(description)}`;
     const notSelf = listingId ? { id: { not: listingId } } : {};
     const candidates = await this.prisma.listing.findMany({
       where: { ...notSelf, status: { in: DUP_STATUSES }, OR: [{ contentHash: hash }, { contentHash: null, title: { equals: title, mode: 'insensitive' } }] },
-      select: { id: true, slug: true, title: true, description: true, userId: true, contentHash: true }, take: 20,
+      select: { id: true, slug: true, title: true, description: true, userId: true, contentHash: true, createdAt: true }, take: 20,
     });
     const same = candidates.filter((c) => c.contentHash === hash || `${normalizeText(c.title)}\n${normalizeText(c.description)}` === norm);
     const own = same.find((c) => c.userId === ownerId) ?? null;
     // U velmi krátkých textů může jít o náhodu – cizí shodu hlásíme jen u popisu s nějakým obsahem
-    const otherText = normalizeText(description).length >= 30 && same.some((c) => c.userId !== ownerId);
+    const otherText = normalizeText(description).length >= 30 && same.some((c) => c.userId !== ownerId && c.createdAt < before);
 
     let otherPhoto = false;
     if (imageIds.length) {
@@ -115,7 +117,7 @@ export class ListingsService {
           JOIN "Listing" l ON l.id = li."listingId"
           JOIN unnest(${hashes}::bigint[]) AS h(v) ON length(replace(((li.phash # h.v)::bit(64))::text, '0', '')) <= ${PHASH_MAX_DISTANCE}
           WHERE li.phash IS NOT NULL AND li."ownerId" <> ${ownerId} AND l."userId" <> ${ownerId}
-            AND l.status IN ('ACTIVE', 'RESERVED', 'PENDING')
+            AND l.status IN ('ACTIVE', 'RESERVED', 'PENDING') AND l."createdAt" < ${before}
           LIMIT 1`;
         otherPhoto = rows.length > 0;
       }
@@ -124,9 +126,9 @@ export class ListingsService {
   }
 
   /** Riziko z pravidel obsahu + z duplicit. Vlastní duplicitu odmítne s vysvětlením. */
-  private async assess(ownerId: string, listingId: string | null, dto: ListingInput, publishing: boolean) {
+  private async assess(ownerId: string, listing: { id: string; createdAt: Date } | null, dto: ListingInput, publishing: boolean) {
     const risk = assessListing({ title: dto.title, description: dto.description, price: dto.price, categorySlug: dto.categorySlug });
-    const dup = await this.findDuplicates(ownerId, listingId, dto.title, dto.description, dto.imageIds);
+    const dup = await this.findDuplicates(ownerId, listing?.id ?? null, listing?.createdAt ?? new Date(), dto.title, dto.description, dto.imageIds);
     if (publishing && dup.own) {
       throw new ConflictException({ message: `Stejný inzerát už máte vložený („${dup.own.title}“). Upravte nebo prodlužte ten původní.`, field: 'title', duplicateOf: { id: dup.own.id, slug: dup.own.slug } });
     }
@@ -192,7 +194,7 @@ export class ListingsService {
     const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
     const attributes = this.cleanAttributes(cat.defs, dto.attributes, publishing);
     const city = dto.city ? findCity(dto.city) : undefined;
-    const risk = await this.assess(l.userId, id, dto, publishing);
+    const risk = await this.assess(l.userId, l, dto, publishing);
     const status = nextStatus({ current: l.status, publish: dto.publish, premoderation: config.premoderation, score: risk.score });
     const now = new Date();
     const expiresAt = nextExpiry({ before: l.status, after: status, expiresAt: l.expiresAt, now, days: config.listingDays });
@@ -259,8 +261,11 @@ export class ListingsService {
       viewer ? this.prisma.favorite.findUnique({ where: { userId_listingId: { userId: viewer.id, listingId: id } } }).then(Boolean) : false,
     ]);
     const { phone, ...seller } = l.user;
+    // Interní údaje automatické kontroly vidí jen moderátoři (jinak by šlo kontrolu obcházet)
+    const staff = !!viewer && viewer.role !== 'USER';
+    const { spamScore, riskReasons, contentHash: _hash, composeSeconds, ...pub } = l;
     return {
-      ...l, user: undefined,
+      ...pub, ...(staff ? { spamScore, riskReasons, composeSeconds } : {}), user: undefined,
       seller: { ...seller, phoneVerified: !!l.user.phoneVerifiedAt, emailVerified: !!l.user.emailVerifiedAt, phoneVerifiedAt: undefined, emailVerifiedAt: undefined, rating: rating._avg.rating, reviewCount: rating._count, activeListings: activeCount, hasPhone: !!phone },
       favorites: favCount, isFavorite, isOwner: !!isOwner, filters: l.category.parent ? effectiveFilters(l.category.parent.slug, l.category.parent.filters, l.category.slug, l.category.filters) : [],
     };
@@ -305,7 +310,8 @@ export class ListingsService {
   }
 
   async mine(userId: string, status?: string) {
-    const where: Prisma.ListingWhereInput = { userId, status: status ? (status as ListingStatus) : { not: 'DELETED' } };
+    const known = !!status && status !== 'DELETED' && (Object.values(ListingStatus) as string[]).includes(status);
+    const where: Prisma.ListingWhereInput = { userId, status: known ? (status as ListingStatus) : { not: 'DELETED' } };
     const rows = await this.prisma.listing.findMany({ where, include: { ...LISTING_INCLUDE, _count: { select: { favorites: true, conversations: true } } }, orderBy: { createdAt: 'desc' }, take: 200 });
     return rows.map((l) => ({ ...this.search.toCard(l), views: l.views, favorites: l._count.favorites, conversations: l._count.conversations, expiresAt: l.expiresAt, rejectReason: l.rejectReason }));
   }

@@ -17,7 +17,8 @@ export function effectiveFilters(parentSlug: string, parentFilters: unknown, sub
   const own = asFilterDefs(subFilters);
   const parent = asFilterDefs(parentFilters);
   const staticSub = CATEGORIES.find((c) => c.slug === parentSlug)?.children.find((s) => s.slug === subSlug);
-  if (!own.length && staticSub?.filters && staticSub.filters.length === 0) return [];
+  // Výchozí strom říká „bez parametrů rodiče“ (filters: []) – platí jen vlastní parametry z administrace
+  if (staticSub?.filters && staticSub.filters.length === 0) return own;
   const ownKeys = new Set(own.map((f) => f.key));
   return [...parent.filter((f) => !ownKeys.has(f.key)), ...own];
 }
