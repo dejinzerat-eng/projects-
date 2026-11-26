@@ -5,6 +5,7 @@ import { MailerService } from '../common/mailer.service';
 import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { StorageService } from '../media/storage.service';
+import { FeedImportService } from '../feeds/feed-import.service';
 import { cleanupUnsentAttachments } from '../messages/attachments-cleanup';
 import { promotionExpired } from '../search/search-query';
 import { SearchService } from '../search/search.service';
@@ -15,14 +16,15 @@ import { runRetention } from '../users/gdpr';
  * - upozornění na brzy končící inzeráty (3 dny předem) a jejich expirace,
  * - konec topování / zvýraznění (vymaže prošlá data a přeindexuje, aby inzerát nezůstal první),
  * - chytrá upozornění na nové inzeráty odpovídající uloženému hledání,
- * - jednou za hodinu úklid neodeslaných fotek ve zprávách (starších 24 h), jednou denně retence dat.
+ * - jednou za hodinu úklid neodeslaných fotek ve zprávách (starších 24 h), jednou denně retence dat,
+ * - synchronizace XML feedů partnerů, kterým uplynul interval (na Vercelu cron jednou denně, nejvýše ~35 s na běh).
  */
 @Injectable()
 export class JobsService implements OnApplicationBootstrap, OnModuleDestroy {
   private log = new Logger('Jobs');
   private timer?: NodeJS.Timeout;
 
-  constructor(private prisma: PrismaService, private redis: RedisService, private search: SearchService, private mail: MailerService, private storage: StorageService) {}
+  constructor(private prisma: PrismaService, private redis: RedisService, private search: SearchService, private mail: MailerService, private storage: StorageService, private feeds: FeedImportService) {}
 
   onApplicationBootstrap() {
     if (process.env.DISABLE_JOBS === '1') return;
@@ -36,6 +38,7 @@ export class JobsService implements OnApplicationBootstrap, OnModuleDestroy {
     try { await this.search.backfillSearchText(); await this.expiry(); await this.promotionExpiry(); await this.savedSearchAlerts(); } catch (e) { this.log.error((e as Error).stack); }
     if (await this.redis.lock('jobs:attachments', 3600)) await this.unsentAttachments().catch((e) => this.log.error((e as Error).stack));
     if (await this.redis.lock('jobs:retention', 86_400)) await runRetention(this.prisma).catch((e) => this.log.error((e as Error).stack));
+    await this.feeds.syncDue(Number(process.env.FEED_SYNC_BUDGET_MS ?? 35_000)).catch((e) => this.log.error((e as Error).stack));
   }
 
   /** Neodeslané fotky ve zprávách starší 24 h (na Vercelu běží cron jen jednou denně → až 5 dávek po 500) */

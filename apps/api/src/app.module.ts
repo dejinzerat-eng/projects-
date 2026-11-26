@@ -4,6 +4,8 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ADMIN_CONTROLLERS, ADMIN_PROVIDERS } from './admin';
 import { LegacyAdminController, LegacyPublicController } from './legacy/legacy.controller';
 import { LegacyImportService } from './legacy/legacy-import.service';
+import { FeedsAdminController } from './feeds/feeds.controller';
+import { FeedImportService } from './feeds/feed-import.service';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
 import { AuthGuard } from './common/auth.guard';
@@ -26,9 +28,9 @@ import { UsersController } from './users/users.controller';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }])],
-  controllers: [HealthController, AuthController, DiscoveryController, ListingsController, MessagesController, UsersController, MediaController, JobsController, NoticesController, NoticesAdminController, SeoController, SeoAdminController, LegacyAdminController, LegacyPublicController, ...ADMIN_CONTROLLERS],
+  controllers: [HealthController, AuthController, DiscoveryController, ListingsController, MessagesController, UsersController, MediaController, JobsController, NoticesController, NoticesAdminController, SeoController, SeoAdminController, LegacyAdminController, LegacyPublicController, FeedsAdminController, ...ADMIN_CONTROLLERS],
   providers: [
-    PrismaService, RedisService, MailerService, SmsService, StorageService, SearchService, AuthService, ListingsService, JobsService, LegacyImportService, ...ADMIN_PROVIDERS,
+    PrismaService, RedisService, MailerService, SmsService, StorageService, SearchService, AuthService, ListingsService, JobsService, LegacyImportService, FeedImportService, ...ADMIN_PROVIDERS,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],

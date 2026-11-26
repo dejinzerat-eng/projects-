@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Building2, FileText, Flag, Globe, History, Import, LayoutList, Settings, ShieldAlert, Tags, Users, Wallet } from 'lucide-react';
+import { BarChart3, Building2, FileText, Flag, Globe, Handshake, History, Import, LayoutList, Settings, ShieldAlert, Tags, Users, Wallet } from 'lucide-react';
 import type { Permission } from '@dej/shared';
 
 const ITEMS: { href: string; label: string; icon: typeof BarChart3; perm: Permission }[] = [
@@ -11,6 +11,7 @@ const ITEMS: { href: string; label: string; icon: typeof BarChart3; perm: Permis
   { href: '/admin/nezakonny-obsah', label: 'Nezákonný obsah', icon: ShieldAlert, perm: 'reports.handle' },
   { href: '/admin/uzivatele', label: 'Uživatelé', icon: Users, perm: 'users.read' },
   { href: '/admin/firmy', label: 'Firemní účty', icon: Building2, perm: 'businesses.manage' },
+  { href: '/admin/partneri', label: 'Partneři a XML import', icon: Handshake, perm: 'businesses.manage' },
   { href: '/admin/kategorie', label: 'Kategorie a SEO', icon: Tags, perm: 'categories.manage' },
   { href: '/admin/cenik', label: 'Ceník služeb', icon: Wallet, perm: 'prices.edit' },
   { href: '/admin/stranky', label: 'Texty a stránky', icon: FileText, perm: 'pages.edit' },

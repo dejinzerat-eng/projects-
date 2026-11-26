@@ -112,6 +112,8 @@ model User {
   /// Účet převzatý ze starého webu www.dejinzerat.cz (např. „dejinzerat:204“) a kdy mu odešla pozvánka
   legacyId          String?   @unique
   legacyInvitedAt   DateTime?
+  /// Kdy partner (firemní účet s XML importem) dostal pozvánku k nastavení hesla
+  partnerInvitedAt  DateTime?
 
   listings        Listing[]
   favorites       Favorite[]
@@ -130,6 +132,7 @@ model User {
   refreshTokens   RefreshToken[]
   tokens          VerificationToken[]
   auditLogs       AuditLog[]
+  partnerFeeds    PartnerFeed[]
 
   @@index([lastActiveAt])
 }
@@ -204,6 +207,13 @@ model Listing {
   /// Inzerát převzatý ze starého webu (UUID inzerátu tam) a otisk dat, která import naposledy zapsal
   legacyId         String?       @unique
   legacyHash       String?
+  /// Inzerát z XML feedu partnera: feed, ID položky ve feedu a otisk dat (zdroj:zapsáno) – import podle nich nic nezdvojí
+  feedId           String?
+  feed             PartnerFeed?  @relation(fields: [feedId], references: [id], onDelete: SetNull)
+  feedItemId       String?
+  feedHash         String?
+  /// Odkaz na nabídku na webu partnera (u inzerátu „Nabídka na webu prodejce“)
+  sourceUrl        String?
 
   images        ListingImage[]
   favorites     Favorite[]
@@ -217,6 +227,7 @@ model Listing {
   @@index([lat, lng])
   @@index([status, priceCzk])
   @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@unique([feedId, feedItemId])
 }
 
 model ListingImage {
@@ -556,4 +567,71 @@ model ModerationAppeal {
   @@index([status, createdAt])
   @@index([listingId])
 
+}
+
+/// Partner s bezplatným automatickým importem nabídek přes XML feed (autobazar, realitní kancelář, e-shop).
+/// Inzeráty se zobrazují pod firemním účtem partnera (userId). Postup: apps/api/src/feeds, docs/XML-IMPORT-PARTNERU.md
+model PartnerFeed {
+  id                String    @id @default(cuid())
+  /// Název pro administraci (např. „Autobazar Novák“)
+  name              String
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url               String
+  /// auto | heureka | google | generic (auto = rozpozná se podle obsahu)
+  format            String    @default("auto")
+  /// Ruční přiřazení polí feedu ({ title: "PRODUCTNAME", brand: "param:Značka" }) – co chybí, doplní se automaticky
+  fieldMap          Json      @default("{}")
+  /// Kategorie feedu → ID naší podkategorie ({ "Elektronika | Mobilní telefony": "<categoryId>" })
+  categoryMap       Json      @default("{}")
+  /// Kategorie pro položky, které nejde přiřadit (jinak Ostatní › Různé)
+  defaultCategoryId String?
+  /// Místo pro položky bez adresy (např. sídlo autobazaru)
+  defaultCity       String?
+  defaultZip        String?
+  /// Nové inzeráty čekají na schválení moderátorem (doporučeno, dokud partnerovi nedůvěřujete)
+  requireApproval   Boolean   @default(true)
+  /// Interval automatické synchronizace v hodinách (0 = jen ručně)
+  intervalHours     Int       @default(24)
+  /// Nejvýše tolik položek z feedu (ochrana před omylem obřím feedem)
+  maxItems          Int       @default(1000)
+  active            Boolean   @default(true)
+  lastSyncAt        DateTime?
+  /// ok | partial | error
+  lastStatus        String?
+  lastMessage       String?
+  nextSyncAt        DateTime?
+  /// Rozpracovaná synchronizace (pokračuje v další dávce)
+  currentRunId      String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  listings          Listing[]
+  runs              PartnerFeedRun[]
+
+  @@index([active, nextSyncAt])
+}
+
+/// Historie synchronizací feedu (ruční i automatické)
+model PartnerFeedRun {
+  id         String      @id @default(cuid())
+  feedId     String
+  feed       PartnerFeed @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  /// manual | schedule
+  trigger    String
+  startedAt  DateTime    @default(now())
+  finishedAt DateTime?
+  /// running | ok | partial | error
+  status     String      @default("running")
+  items      Int         @default(0)
+  created    Int         @default(0)
+  updated    Int         @default(0)
+  unchanged  Int         @default(0)
+  removed    Int         @default(0)
+  skipped    Int         @default(0)
+  errors     Int         @default(0)
+  message    String?
+  /// Ukázka problémů (nejvýše 50): [{ id, title, message }]
+  problems   Json        @default("[]")
+
+  @@index([feedId, startedAt])
 }
