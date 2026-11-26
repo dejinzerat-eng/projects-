@@ -110,10 +110,11 @@ export class AdminController {
     const status: ListingStatus = dto.action === 'approve' ? 'ACTIVE' : dto.action === 'reject' ? 'REJECTED' : 'DELETED';
     // Schválený inzerát má plnou platnost od schválení (čekání ve frontě se do platnosti nepočítá)
     const renew = status === 'ACTIVE' && (!l.publishedAt || !l.expiresAt || l.expiresAt < new Date());
-    await this.prisma.listing.update({ where: { id }, data: { status, rejectReason: dto.action === 'approve' ? null : dto.reason, publishedAt: status === 'ACTIVE' ? (l.publishedAt ?? new Date()) : l.publishedAt, ...(renew ? { expiresAt: await this.policy.expiresAt(), expiryNotifiedAt: null } : {}) } });
+    const data = { status, rejectReason: dto.action === 'approve' ? null : (dto.reason ?? null), publishedAt: status === 'ACTIVE' ? (l.publishedAt ?? new Date()) : l.publishedAt, ...(renew ? { expiresAt: await this.policy.expiresAt(), expiryNotifiedAt: null } : {}) };
+    await this.prisma.listing.update({ where: { id }, data });
     const title = { approve: `Inzerát „${l.title}“ byl schválen`, reject: `Inzerát „${l.title}“ byl zamítnut`, delete: `Inzerát „${l.title}“ byl odstraněn moderátorem` }[dto.action];
     await this.prisma.notification.create({ data: { userId: l.userId, type: 'moderation', title, body: dto.reason, link: '/muj-ucet/inzeraty' } });
-    await audit(this.prisma, u, `listing.${dto.action}`, 'listing', id, { reason: dto.reason ?? null, from: l.status, to: status, owner: l.userId });
+    await audit(this.prisma, u, `listing.${dto.action}`, 'listing', id, { reason: dto.reason ?? null, from: l.status, to: status, owner: l.userId, changes: diff(l as unknown as Record<string, unknown>, data) });
     await this.search.index(id);
     return { ok: true };
   }
@@ -145,7 +146,7 @@ export class AdminController {
     const data = { topUntil: until(dto.topDays), highlightedUntil: until(dto.highlightDays), bumpedAt: dto.bump ? new Date() : undefined };
     if (Object.values(data).every((v) => v === undefined)) throw new BadRequestException('Vyberte službu.');
     await this.prisma.listing.update({ where: { id }, data });
-    await audit(this.prisma, u, 'listing.promote', 'listing', id, { owner: l.userId, ...dto });
+    await audit(this.prisma, u, 'listing.promote', 'listing', id, { owner: l.userId, ...dto, changes: diff(l as unknown as Record<string, unknown>, data) });
     await this.search.index(id);
     return { ok: true };
   }

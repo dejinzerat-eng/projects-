@@ -7,13 +7,23 @@ export function audit(prisma: PrismaService, actor: Pick<AuthUser, 'id'>, action
   return prisma.auditLog.create({ data: { actorId: actor.id, action, targetType, targetId, meta: meta === undefined ? undefined : (meta as Prisma.InputJsonValue) } });
 }
 
-/** Rozdíl dvou objektů po polích – do auditního logu se ukládá jen to, co se změnilo. */
+/** Nejdelší text, který se do auditu uloží celý; delší se zkrátí (audit nemá nést celé popisy inzerátů). */
+export const AUDIT_TEXT_MAX = 300;
+
+/** Zkrácená hodnota pro auditní log: dlouhý text se ořízne s poznámkou o původní délce, datum jako ISO. */
+export function compactValue(v: unknown): unknown {
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === 'string' && v.length > AUDIT_TEXT_MAX) return `${v.slice(0, AUDIT_TEXT_MAX)}… (${v.length} znaků)`;
+  return v ?? null;
+}
+
+/** Rozdíl dvou objektů po polích – do auditního logu se ukládá jen to, co se změnilo (dlouhé texty zkráceně). */
 export function diff<T extends Record<string, unknown>>(before: T, after: Partial<T>) {
   const out: Record<string, { from: unknown; to: unknown }> = {};
   for (const k of Object.keys(after) as (keyof T & string)[]) {
     const a = before[k], b = after[k];
     if (b === undefined) continue;
-    if (JSON.stringify(a ?? null) !== JSON.stringify(b ?? null)) out[k] = { from: a ?? null, to: b ?? null };
+    if (JSON.stringify(a ?? null) !== JSON.stringify(b ?? null)) out[k] = { from: compactValue(a), to: compactValue(b) };
   }
   return out;
 }
