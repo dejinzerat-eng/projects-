@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { FileText } from 'lucide-react';
-import { ListingWizard, type WizardCategory } from '@/components/listing-wizard';
+import { ListingWizard } from '@/components/listing-wizard';
 import { ago } from '@/lib/format';
 import { api, getMe } from '@/lib/api';
+import { wizardCategories } from './categories';
 
 export const metadata = { title: 'Přidat inzerát', robots: { index: false } };
 
@@ -14,7 +15,7 @@ export default async function Page() {
   if (!me) redirect('/prihlaseni?zpet=/pridat');
   // Kategorie z databáze (spravuje je administrace) – vždy čerstvé, aby se změna projevila hned
   const [categories, drafts] = await Promise.all([
-    api<WizardCategory[]>('/categories', { auth: false }),
+    wizardCategories(),
     api<Draft[]>('/me/listings?status=DRAFT').catch(() => [] as Draft[]),
   ]);
   return (
@@ -33,7 +34,7 @@ export default async function Page() {
           {drafts.length > 3 && <Link href="/muj-ucet/inzeraty" className="mt-1 inline-block text-sm font-semibold text-brand-ink hover:underline">Všechny koncepty ({drafts.length})</Link>}
         </div>
       )}
-      <ListingWizard defaultCity={me.city} categories={categories} />
+      <ListingWizard defaultCity={me.city} categories={categories} userId={me.id} />
     </div>
   );
 }

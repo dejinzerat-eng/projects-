@@ -5,7 +5,7 @@ import { call } from '@/lib/client';
 import { ago, listingUrl, price, STATUS_LABEL } from '@/lib/format';
 import { useToast } from '../toast';
 
-interface Row { id: string; slug: string; title: string; price: number | null; priceNegotiable: boolean; image: string | null; status: string; spamScore: number; userEmail: string; userName: string; userId: string; description: string; createdAt: number; city: string; categoryName: string; rejectReason: string | null; riskReasons?: string[] }
+interface Row { id: string; slug: string; title: string; price: number | null; priceNegotiable: boolean; image: string | null; status: string; spamScore: number; userEmail: string; userName: string; userId: string; description: string; createdAt: number; city: string; categoryName: string; rejectReason: string | null; riskReasons?: string[]; currency?: string; offerType?: string }
 
 export function ModerationList({ rows }: { rows: Row[] }) {
   const router = useRouter(); const sp = useSearchParams()!; const toast = useToast();
@@ -33,7 +33,7 @@ export function ModerationList({ rows }: { rows: Row[] }) {
                 {r.riskReasons?.map((x) => <span key={x} className="badge bg-danger-soft text-danger">{x}</span>)}
                 <span className="text-muted">{r.categoryName} · {r.city} · {ago(r.createdAt)}</span>
               </div>
-              <Link href={listingUrl(r)} target="_blank" className="mt-1 block font-semibold hover:underline">{r.title} – {price(r.price, r.priceNegotiable)}</Link>
+              <Link href={listingUrl(r)} target="_blank" className="mt-1 block font-semibold hover:underline">{r.title} – {price(r.price, r.priceNegotiable, r.currency, r.offerType)}</Link>
               <p className="mt-1 line-clamp-2 text-sm text-muted">{r.description}</p>
               <p className="mt-1 text-xs text-muted">{r.userName} · {r.userEmail}</p>
               {r.rejectReason && <p className="mt-1 text-xs text-danger">Důvod: {r.rejectReason}</p>}

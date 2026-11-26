@@ -37,7 +37,9 @@ async function send<T>(path: string, method: string, body: unknown): Promise<T> 
   return r.json() as Promise<T>;
 }
 
-export function ListingWizard({ initial, defaultCity, categories }: { initial?: WizardInitial; defaultCity?: string | null; categories: WizardCategory[] }) {
+export function ListingWizard({ initial, defaultCity, categories, userId }: { initial?: WizardInitial; defaultCity?: string | null; categories: WizardCategory[]; userId?: string }) {
+  // Rozpracovaný inzerát v prohlížeči patří přihlášenému uživateli (sdílený počítač)
+  const draftKey = userId ? `${DRAFT_KEY}:${userId}` : DRAFT_KEY;
   const [d, setD] = useState<WizardInitial>(initial ?? { ...EMPTY, city: defaultCity ?? '' });
   const [step, setStep] = useState(0);
   const [err, setErr] = useState<string | null>(null);
@@ -60,16 +62,32 @@ export function ListingWizard({ initial, defaultCity, categories }: { initial?: 
   useEffect(() => {
     if (fromServer) return;
     try {
-      const s = localStorage.getItem(DRAFT_KEY); const v = s ? JSON.parse(s) : null;
+      if (userId) try { localStorage.removeItem(DRAFT_KEY); } catch { /* starý klíč bez uživatele */ }
+      const s = localStorage.getItem(draftKey); const v = s ? JSON.parse(s) : null;
       if (v?.title) {
         const { _startedAt, ...rest } = v;
         setD((cur) => (cur.title ? cur : { ...EMPTY, ...rest }));
         if (typeof _startedAt === 'number' && Date.now() - _startedAt < 3600e3) startedAt.current = _startedAt;
         setRestored(true);
+        // Koncept uložený na serveru mohl být mezitím zveřejněn nebo smazán (jinde, v jiném okně) –
+        // pak už ho z /pridat nesmíme přepsat, pokračujeme jako s novým inzerátem.
+        if (typeof rest.id === 'string') {
+          call<{ status: string }>(`/listings/${rest.id}/edit`)
+            .then((l) => { if (l.status !== 'DRAFT') setD((x) => (x.id === rest.id ? { ...x, id: undefined, status: undefined } : x)); })
+            .catch(() => setD((x) => (x.id === rest.id ? { ...x, id: undefined, status: undefined } : x)));
+        }
       }
     } catch { /* */ }
-  }, [fromServer]);
-  useEffect(() => { if (!fromServer && d.title) try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...d, _startedAt: startedAt.current })); } catch { /* */ } }, [d, fromServer]);
+  }, [fromServer, draftKey]);
+  useEffect(() => { if (!fromServer && d.title) try { localStorage.setItem(draftKey, JSON.stringify({ ...d, _startedAt: startedAt.current })); } catch { /* */ } }, [d, fromServer, draftKey]);
+  /** Po zveřejnění (i z úpravy konceptu) zapomeneme rozpracovanou kopii v prohlížeči, pokud patří k tomuto inzerátu. */
+  function forgetLocal(id: string) {
+    try {
+      if (!fromServer) { localStorage.removeItem(draftKey); return; }
+      const v = JSON.parse(localStorage.getItem(draftKey) ?? 'null');
+      if (v?.id === id) localStorage.removeItem(draftKey);
+    } catch { /* */ }
+  }
 
   function validate(s: number): string | null {
     if (s === 0) {
@@ -126,7 +144,7 @@ export function ListingWizard({ initial, defaultCity, categories }: { initial?: 
         setBusy(null);
         return;
       }
-      try { localStorage.removeItem(DRAFT_KEY); } catch { /* */ }
+      forgetLocal(r.id);
       toast(r.status === 'PENDING' ? 'Inzerát čeká na kontrolu moderátorem.' : live ? 'Změny uloženy' : 'Inzerát je zveřejněný!');
       router.push(`/muj-ucet/inzeraty?novy=${r.id}`); router.refresh();
     } catch (e) {
@@ -164,7 +182,7 @@ export function ListingWizard({ initial, defaultCity, categories }: { initial?: 
       {restored && step === 0 && (
         <div className="mb-6 flex items-center justify-between gap-3 rounded-2xl bg-surface-2 px-4 py-3 text-sm">
           <span>Pokračujete v rozpracovaném inzerátu.</span>
-          <button type="button" onClick={() => { try { localStorage.removeItem(DRAFT_KEY); } catch { /* */ } setD({ ...EMPTY, city: defaultCity ?? '' }); setRestored(false); startedAt.current = Date.now(); }} className="font-semibold text-brand-ink hover:underline">Začít znovu</button>
+          <button type="button" onClick={() => { try { localStorage.removeItem(draftKey); } catch { /* */ } setD({ ...EMPTY, city: defaultCity ?? '' }); setRestored(false); startedAt.current = Date.now(); }} className="font-semibold text-brand-ink hover:underline">Začít znovu</button>
         </div>
       )}
 
