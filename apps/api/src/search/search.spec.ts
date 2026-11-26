@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { Prisma } from '@prisma/client';
 import { buildSearchText, fromSearchString, haversine, normalizeSearchText, queryWords, stemCz, synonymsOf, toSearchString } from '@dej/shared';
 import { findMunicipality, municipalityByZip, nearestMunicipality, resolveLocation, suggestMunicipalities } from '@dej/shared/dist/municipalities';
-import { boundingBox, buildTerms, categoriesFor, filterSql, orderSql, termsFuzzy, termsMatch, tierSql } from './search-query';
+import { boundingBox, buildTerms, categoriesFor, filterSql, orderSql, promotionExpired, rankAt, termsFuzzy, termsMatch, tierSql } from './search-query';
 
 const sqlText = (s: Prisma.Sql) => s.sql;
 
@@ -203,5 +203,27 @@ describe('parametry v URL', () => {
     assert.match(toSearchString({ sellerType: 'private', lat: 50.1, lng: 14.4 }), /prodejce=soukromy/);
     assert.equal(fromSearchString(new URLSearchParams('lat=500&lng=14')).lat, undefined);
     assert.equal(fromSearchString(new URLSearchParams('prodejce=xyz')).sellerType, undefined);
+  });
+});
+
+describe('konec propagace', () => {
+  const now = new Date('2026-11-26T12:00:00Z');
+  const past = new Date('2026-11-25T12:00:00Z');
+  const future = new Date('2026-11-30T12:00:00Z');
+
+  it('vymaže jen prošlé topování / zvýraznění', () => {
+    assert.deepEqual(promotionExpired({ topUntil: past, highlightedUntil: future }, now), { topUntil: null });
+    assert.deepEqual(promotionExpired({ topUntil: future, highlightedUntil: past }, now), { highlightedUntil: null });
+    assert.deepEqual(promotionExpired({ topUntil: past, highlightedUntil: past }, now), { topUntil: null, highlightedUntil: null });
+    assert.deepEqual(promotionExpired({ topUntil: null, highlightedUntil: future }, now), {});
+  });
+
+  it('prošlé topování už v Meilisearch neřadí inzerát před novější', () => {
+    const base = { bumpedAt: null, createdAt: past };
+    const oldTop = rankAt({ ...base, topUntil: past, publishedAt: new Date('2026-11-01T00:00:00Z') }, now.getTime());
+    const fresh = rankAt({ ...base, topUntil: null, publishedAt: new Date('2026-11-20T00:00:00Z') }, now.getTime());
+    const activeTop = rankAt({ ...base, topUntil: future, publishedAt: new Date('2026-11-01T00:00:00Z') }, now.getTime());
+    assert.ok(fresh > oldTop);
+    assert.ok(activeTop > fresh);
   });
 });

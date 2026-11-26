@@ -183,7 +183,7 @@ export function filterSql(p: SearchParams, o: FilterOptions): Prisma.Sql[] {
   return w;
 }
 
-/** Aktivní topování (2) nebo zvýraznění (1) – jen nevypršelé. */
+/** Aktivní topování (2) nebo zvýraznění (1) – jen nevypršelé (vypršelé čistí i pravidelná úloha, viz promotionExpired). */
 export function promoSql(now: Date): Prisma.Sql {
   return Prisma.sql`(CASE WHEN l."topUntil" > ${ts(now)} THEN 2 WHEN l."highlightedUntil" > ${ts(now)} THEN 1 ELSE 0 END)`;
 }
@@ -227,4 +227,18 @@ export const FROM_SQL = Prisma.sql`FROM "Listing" l JOIN "Category" c ON c."id" 
 export function backfillSearchTextSql(onlyEmpty = true): Prisma.Sql {
   const src = Prisma.sql`concat_ws(' ', l."title", l."description", (SELECT string_agg(e.v, ' ') FROM (SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(x.value) = 'array' THEN x.value ELSE jsonb_build_array(x.value) END) AS v FROM jsonb_each(CASE WHEN jsonb_typeof(l."attributes") = 'object' THEN l."attributes" ELSE '{}'::jsonb END) x WHERE jsonb_typeof(x.value) IN ('string', 'number', 'array')) e), l."city")`;
   return Prisma.sql`UPDATE "Listing" l SET "searchText" = left(${sqlNorm(src)}, 12000) ${onlyEmpty ? Prisma.sql`WHERE l."searchText" = ''` : Prisma.empty}`;
+}
+
+/** Propagace, jejíž platnost už skončila – pravidelná úloha ji vymaže a inzerát přeindexuje. */
+export function promotionExpired(l: { topUntil: Date | null; highlightedUntil: Date | null }, now: Date): { topUntil?: null; highlightedUntil?: null } {
+  return {
+    ...(l.topUntil && l.topUntil <= now ? { topUntil: null } : {}),
+    ...(l.highlightedUntil && l.highlightedUntil <= now ? { highlightedUntil: null } : {}),
+  };
+}
+
+/** Pořadí v Meilisearch (rankAt): platné topování nad vším ostatním, jinak datum posunutí / zveřejnění. */
+export function rankAt(l: { topUntil: Date | null; bumpedAt: Date | null; publishedAt: Date | null; createdAt: Date }, now: number): number {
+  const date = (l.bumpedAt ?? l.publishedAt ?? l.createdAt).getTime();
+  return l.topUntil && l.topUntil.getTime() > now ? date + 1e12 : date;
 }
