@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { FileText } from 'lucide-react';
 import { ListingWizard } from '@/components/listing-wizard';
 import { ago } from '@/lib/format';
@@ -12,7 +11,15 @@ interface Draft { id: string; title: string; createdAt: number }
 
 export default async function Page() {
   const me = await getMe();
-  if (!me) redirect('/prihlaseni?zpet=/pridat');
+  // Bez přihlášení: inzerát se vyplní celý a účet vznikne z e-mailu zadaného v posledním kroku
+  if (!me) {
+    return (
+      <div className="container-x py-8">
+        <p className="mx-auto mb-6 max-w-3xl text-sm text-muted">Registrace předem není potřeba. Máte už účet? <Link href="/prihlaseni?zpet=/pridat" className="font-semibold text-brand-ink hover:underline">Přihlaste se</Link>.</p>
+        <ListingWizard categories={await wizardCategories()} guest />
+      </div>
+    );
+  }
   // Kategorie z databáze (spravuje je administrace) – vždy čerstvé, aby se změna projevila hned
   const [categories, drafts] = await Promise.all([
     wizardCategories(),

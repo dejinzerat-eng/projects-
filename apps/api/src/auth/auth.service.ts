@@ -13,6 +13,7 @@ import { escapeHtml } from './html';
 import type { CompanyUpdate } from '../users/company';
 import { keepsPhoneConsent } from '../users/phone-consent';
 import { checkIdTokenClaims, verifyRs256 } from './jwt';
+import { GUEST_LINK_HOURS, listingIdFromTarget, listingTarget, type PendingListing, pendingFromTarget, pendingTarget } from '../listings/guest';
 import { attemptsLeft, LOCK_MINUTES, LOCK_THRESHOLD, LOCK_WINDOW_MIN, lockedMessage, PHONE_MAX_ATTEMPTS } from './lockout';
 
 const SESSION_DAYS = 30;
@@ -90,7 +91,7 @@ export class AuthService {
   }
 
   /** Vytvoří session po přihlášení, zapíše audit a při novém zařízení pošle upozornění. */
-  async loginSession(user: User, client: ClientInfo, method: 'password' | Provider) {
+  async loginSession(user: User, client: ClientInfo, method: 'password' | 'email_link' | Provider) {
     const device = describeDevice(client.userAgent);
     const prev = await this.prisma.refreshToken.findMany({ where: { userId: user.id }, select: { userAgent: true }, orderBy: { createdAt: 'desc' }, take: 50 });
     const s = await this.createSession(user.id, client);
@@ -148,9 +149,10 @@ export class AuthService {
     return !!currentToken && hashToken(currentToken) === s.tokenHash;
   }
 
-  private async issueToken(userId: string, type: TokenType, ttlMin: number, opts: { numeric?: boolean; target?: string } = {}) {
+  /** `keepOthers`: starší nepoužité kódy stejného typu nechá platit (každý inzerát bez registrace má vlastní odkaz). */
+  private async issueToken(userId: string, type: TokenType, ttlMin: number, opts: { numeric?: boolean; target?: string; keepOthers?: boolean } = {}) {
     const code = opts.numeric ? String(randomInt(100000, 1000000)) : randomBytes(24).toString('base64url');
-    await this.prisma.verificationToken.updateMany({ where: { userId, type, usedAt: null }, data: { usedAt: new Date() } });
+    if (!opts.keepOthers) await this.prisma.verificationToken.updateMany({ where: { userId, type, usedAt: null }, data: { usedAt: new Date() } });
     await this.prisma.verificationToken.create({ data: { userId, type, codeHash: hashToken(code), target: opts.target, expiresAt: new Date(Date.now() + ttlMin * 6e4) } });
     return code;
   }
@@ -168,6 +170,69 @@ export class AuthService {
     const link = `${config.webOrigin}/overeni-emailu?token=${token}`;
     await this.send(user.email, 'Potvrďte svůj e-mail',
       `<p>Dobrý den, ${escapeHtml(user.name)},</p><p>potvrďte prosím svůj e-mail kliknutím na odkaz:</p><p><a href="${link}">${link}</a></p>`);
+  }
+
+  /**
+   * Účet založený z formuláře „Přidat inzerát“ bez registrace: bez hesla a zatím neověřený.
+   * Heslo si uživatel může nastavit po potvrzení e-mailu (nebo kdykoli přes Zapomenuté heslo).
+   */
+  async createGuestAccount(email: string, name: string, client: ClientInfo = {}) {
+    const user = await this.prisma.user.create({ data: { email: email.toLowerCase().trim(), name, termsAcceptedAt: new Date(), termsVersion: config.termsVersion } });
+    await this.audit(user.id, 'auth.register', client, { method: 'guest_listing', termsVersion: config.termsVersion });
+    return user;
+  }
+
+  /** Počet potvrzovacích odkazů poslaných na účet za poslední hodinu (limit proti zahlcení cizí schránky). */
+  recentVerificationMails(userId: string) {
+    return this.prisma.verificationToken.count({ where: { userId, type: 'EMAIL_VERIFY', createdAt: { gt: new Date(Date.now() - 3600_000) } } });
+  }
+
+  /** E-mail s odkazem, který zároveň ověří e-mail, přihlásí a zveřejní inzerát vložený bez registrace. */
+  async sendGuestListingConfirmation(user: Pick<User, 'id' | 'email' | 'name'>, listingId: string, title: string, isNewAccount: boolean) {
+    const token = await this.issueToken(user.id, 'EMAIL_VERIFY', GUEST_LINK_HOURS * 60, { target: listingTarget(listingId), keepOthers: true });
+    const link = `${config.webOrigin}/potvrzeni-inzeratu?token=${token}`;
+    await this.send(user.email, 'Potvrďte e-mail a zveřejněte inzerát',
+      `<p>Dobrý den, ${escapeHtml(user.name)},</p>` +
+      `<p>děkujeme za inzerát <b>„${escapeHtml(title)}“</b>. Zveřejníme ho, jakmile potvrdíte svůj e-mail:</p>` +
+      `<p><a href="${link}" style="display:inline-block;background:#059669;color:#fff;padding:10px 18px;border-radius:10px;text-decoration:none;font-weight:600">Potvrdit e-mail a zveřejnit inzerát</a></p>` +
+      `<p style="color:#667085;font-size:13px">Pokud tlačítko nefunguje, otevřete odkaz: <a href="${link}">${link}</a><br>Odkaz platí ${GUEST_LINK_HOURS / 24} dny a lze ho použít jen jednou.</p>` +
+      (isNewAccount ? `<p>Tímto krokem se vám zároveň založí účet pro e-mail <b>${escapeHtml(user.email)}</b>, ve kterém inzerát můžete upravit, prodloužit nebo smazat. Heslo si nastavíte po potvrzení.</p>` : '') +
+      `<p>Pokud jste inzerát nevkládali vy, e-mail ignorujte – bez potvrzení se nic nezveřejní.</p>`);
+    // Při vývoji bez Resend se e-mail jen zapíše do logu – odkaz vrátíme rovnou (v produkci nikdy)
+    return process.env.NODE_ENV !== 'production' && !config.resendKey ? { devLink: link } : {};
+  }
+
+  /**
+   * E-mail už má účet: inzerát zatím nikam nezapisujeme, čeká v tokenu. Do účtu se uloží a zveřejní až po
+   * kliknutí na odkaz – tím majitel e-mailu potvrdí, že inzerát vkládá on (nikdo cizí mu ho nepodstrčí).
+   */
+  async sendExistingAccountListingLink(user: Pick<User, 'id' | 'email' | 'name'>, pending: PendingListing, title: string) {
+    const token = await this.issueToken(user.id, 'EMAIL_VERIFY', GUEST_LINK_HOURS * 60, { target: pendingTarget(pending), keepOthers: true });
+    const link = `${config.webOrigin}/potvrzeni-inzeratu?token=${token}`;
+    await this.send(user.email, 'Zveřejnit inzerát ve vašem účtu?',
+      `<p>Dobrý den, ${escapeHtml(user.name)},</p>` +
+      `<p>na Dejinzerat.cz byl s vaším e-mailem vyplněn inzerát <b>„${escapeHtml(title)}“</b>. Protože u nás už máte účet, zveřejníme ho ve vašem účtu, jakmile to potvrdíte:</p>` +
+      `<p><a href="${link}" style="display:inline-block;background:#059669;color:#fff;padding:10px 18px;border-radius:10px;text-decoration:none;font-weight:600">Zveřejnit inzerát v mém účtu</a></p>` +
+      `<p style="color:#667085;font-size:13px">Pokud tlačítko nefunguje, otevřete odkaz: <a href="${link}">${link}</a><br>Odkaz platí ${GUEST_LINK_HOURS / 24} dny, lze ho použít jen jednou a zároveň vás přihlásí. Potvrzením souhlasíte s aktuálními podmínkami používání a pravidly inzerování.</p>` +
+      `<p>Pokud jste inzerát nevkládali vy, e-mail ignorujte – do vašeho účtu se nic neuloží.</p>`);
+    return process.env.NODE_ENV !== 'production' && !config.resendKey ? { devLink: link } : {};
+  }
+
+  /**
+   * Odkaz z e-mailu inzerátu bez registrace: ověří e-mail a vrátí účet a buď uložený koncept (`listingId`),
+   * nebo inzerát čekající na zápis do existujícího účtu (`pending`).
+   */
+  async confirmGuestListing(token: string, client: ClientInfo = {}) {
+    const t = await this.consumeToken('EMAIL_VERIFY', token);
+    const listingId = listingIdFromTarget(t.target);
+    const pending = listingId ? null : pendingFromTarget(t.target);
+    if (!listingId && !pending) throw new BadRequestException('Kód je neplatný nebo vypršel.');
+    const prev = await this.prisma.user.findUniqueOrThrow({ where: { id: t.userId } });
+    if (prev.status === 'BLOCKED') throw new BadRequestException('Účet je zablokován. Kontaktujte podporu.');
+    const user = prev.emailVerifiedAt ? prev : await this.prisma.user.update({ where: { id: prev.id }, data: { emailVerifiedAt: new Date() } });
+    await this.flushUser(user.id);
+    await this.audit(user.id, 'auth.email_verify', client, { method: pending ? 'listing_existing_account' : 'guest_listing', ...(listingId ? { listingId } : {}) });
+    return { user, listingId, pending };
   }
 
   async verifyEmail(token: string) {

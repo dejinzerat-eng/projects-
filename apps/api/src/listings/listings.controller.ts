@@ -8,6 +8,7 @@ import { Auth, AuthUser, CurrentUser } from '../common/auth.guard';
 import { PrismaService } from '../common/prisma.service';
 import { ZodPipe } from '../common/zod';
 import { LISTING_INCLUDE, SearchService } from '../search/search.service';
+import { guestOwnerOf } from './guest-listing.controller';
 import { ListingInput, ListingsService, parseListingBody } from './listings.service';
 
 /** Koncept (publish: false) se ověřuje mírněji než zveřejnění. */
@@ -80,7 +81,10 @@ export class ListingsController {
   @Auth()
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('listings')
-  create(@CurrentUser() u: AuthUser, @Body(new ListingBodyPipe()) dto: ListingInput) { return this.listings.create(u, dto); }
+  async create(@CurrentUser() u: AuthUser, @Body(new ListingBodyPipe()) dto: ListingInput, @Req() req: Request) {
+    await this.listings.claimGuestImages(guestOwnerOf(req), u.id, dto.imageIds); // fotky nahrané před přihlášením
+    return this.listings.create(u, dto);
+  }
 
   @Auth()
   @Get('listings/suggest-category')
@@ -106,7 +110,10 @@ export class ListingsController {
 
   @Auth()
   @Patch('listings/:id')
-  update(@Param('id') id: string, @CurrentUser() u: AuthUser, @Body(new ListingBodyPipe()) dto: ListingInput) { return this.listings.update(id, u, dto); }
+  async update(@Param('id') id: string, @CurrentUser() u: AuthUser, @Body(new ListingBodyPipe()) dto: ListingInput, @Req() req: Request) {
+    await this.listings.claimGuestImages(guestOwnerOf(req), u.id, dto.imageIds);
+    return this.listings.update(id, u, dto);
+  }
 
   @Auth()
   @Post('listings/:id/status')

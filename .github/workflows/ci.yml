@@ -70,6 +70,9 @@ jobs:
       - name: Import ze starého webu (falešný starý web, celý průběh)
         run: pnpm --filter @dej/api legacy:e2e
 
+      - name: Inzerát bez registrace (celý průběh s e-mailem)
+        run: pnpm --filter @dej/api guest:e2e
+
       - name: Zabalení API pro Vercel
         working-directory: apps/api
         run: node scripts/bundle.mjs

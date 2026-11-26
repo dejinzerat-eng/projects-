@@ -181,11 +181,18 @@ export class ListingsService {
     return dto.composeMs != null && dto.composeMs > 0 && dto.composeMs <= 864e5 ? Math.round(dto.composeMs / 1000) : null;
   }
 
-  async create(user: AuthUser, dto: ListingInput) {
+  /** Kontrola kategorie a parametrů jako při zveřejnění, ještě před založením účtu (inzerát bez registrace). */
+  async precheck(dto: ListingInput) {
+    const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
+    this.cleanAttributes(cat.defs, dto.attributes, true);
+  }
+
+  /** `strict`: koncept, který se má později zveřejnit bez úprav (inzerát bez registrace) – parametry se ověří naplno. */
+  async create(user: AuthUser, dto: ListingInput, opts: { strict?: boolean } = {}) {
     if (dto.publish) await this.policy.beforePublish(user.id);
     await this.checkSpam(user.id);
     const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
-    const attributes = this.cleanAttributes(cat.defs, dto.attributes, dto.publish);
+    const attributes = this.cleanAttributes(cat.defs, dto.attributes, dto.publish || !!opts.strict);
     const loc = resolveLocation(dto.city, dto.zip);
     const risk = await this.assess(user.id, null, dto, dto.publish, cat);
     const status = nextStatus({ publish: dto.publish, premoderation: await this.policy.premoderation(), score: risk.score });
@@ -206,6 +213,33 @@ export class ListingsService {
     await this.search.index(listing.id);
     await this.policy.afterSave(user.id, risk.score, dto.title);
     return { id: listing.id, slug: listing.slug, status, moderation: risk.reasons };
+  }
+
+  /**
+   * Fotky nahrané v tomto prohlížeči před přihlášením (vlastník `guest:…`, viz guest.ts) převede na účet.
+   * Převádí jen vybrané fotky, které ještě nejsou u žádného inzerátu. Vrací počet převedených.
+   */
+  async claimGuestImages(owner: string | null, userId: string, ids: string[]) {
+    if (!owner || !ids.length) return 0;
+    const r = await this.prisma.listingImage.updateMany({ where: { id: { in: ids }, ownerId: owner, listingId: null }, data: { ownerId: userId } });
+    return r.count;
+  }
+
+  /**
+   * Zveřejnění konceptu vloženého bez registrace po potvrzení e-mailu. Projde stejnými kontrolami jako
+   * ruční zveřejnění (úplnost, limity, omezený účet, moderace, duplicity). Už zveřejněný inzerát nechá být.
+   */
+  async publishDraft(id: string, user: AuthUser) {
+    const l = await this.prisma.listing.findUnique({ where: { id }, include: { images: { orderBy: { position: 'asc' }, select: { id: true } }, category: { include: { parent: true } } } });
+    if (!l || l.status === 'DELETED' || l.userId !== user.id) throw new NotFoundException('Inzerát už neexistuje.');
+    if (l.status !== 'DRAFT') return { id: l.id, slug: l.slug, status: l.status, moderation: [] as string[] };
+    const dto: ListingInput = {
+      title: l.title, description: l.description, price: l.price, priceNegotiable: l.priceNegotiable, currency: l.currency === 'EUR' ? 'EUR' : 'CZK',
+      categorySlug: l.category.parent?.slug ?? l.category.slug, subSlug: l.category.slug, condition: l.condition, offerType: l.offerType,
+      city: l.city ?? '', zip: l.zip ?? '', attributes: (l.attributes ?? {}) as ListingInput['attributes'], imageIds: l.images.map((i) => i.id),
+      videoUrl: l.videoUrl ?? '', publish: true,
+    };
+    return this.update(id, user, dto);
   }
 
   private async attachImages(listingId: string, userId: string, ids: string[]) {

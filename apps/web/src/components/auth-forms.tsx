@@ -48,7 +48,7 @@ function loadTurnstile() {
 }
 
 /** Widget „Nejsem robot“. Vykreslí se jen tehdy, když API vrátí captchaSiteKey; `resetKey` po chybě vyžádá nový token. */
-function Turnstile({ siteKey, onToken, resetKey }: { siteKey: string; onToken: (t: string) => void; resetKey: number }) {
+export function Turnstile({ siteKey, onToken, resetKey }: { siteKey: string; onToken: (t: string) => void; resetKey: number }) {
   const el = useRef<HTMLDivElement>(null);
   const id = useRef<string | null>(null);
   const cb = useRef(onToken); cb.current = onToken;
