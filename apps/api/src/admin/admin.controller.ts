@@ -7,6 +7,7 @@ import { Can } from '../common/permissions';
 import { PrismaService } from '../common/prisma.service';
 import { ZodPipe } from '../common/zod';
 import { assessListingDetailed } from '../listings/moderation';
+import { priceInCzk } from '../listings/price';
 import { LISTING_INCLUDE, SearchService } from '../search/search.service';
 import { audit, diff } from './audit';
 import { ListingPolicyService } from './listing-policy.service';
@@ -127,7 +128,8 @@ export class AdminController {
     const changes = diff(l as unknown as Record<string, unknown>, patch);
     if (!Object.keys(changes).length) throw new BadRequestException('Nic se nezměnilo.');
     const reactivate = patch.status === 'ACTIVE' && l.status !== 'ACTIVE';
-    await this.prisma.listing.update({ where: { id }, data: { ...patch, ...(reactivate && !l.publishedAt ? { publishedAt: new Date() } : {}), ...(reactivate && (!l.expiresAt || l.expiresAt < new Date()) ? { expiresAt: await this.policy.expiresAt(), expiryNotifiedAt: null } : {}) } });
+    const priceCzk = patch.price !== undefined ? { priceCzk: priceInCzk(patch.price, l.currency, await this.policy.eurRate()) } : {};
+    await this.prisma.listing.update({ where: { id }, data: { ...patch, ...priceCzk, ...(reactivate && !l.publishedAt ? { publishedAt: new Date() } : {}), ...(reactivate && (!l.expiresAt || l.expiresAt < new Date()) ? { expiresAt: await this.policy.expiresAt(), expiryNotifiedAt: null } : {}) } });
     await this.prisma.notification.create({ data: { userId: l.userId, type: 'moderation', title: `Moderátor upravil váš inzerát „${patch.title ?? l.title}“`, body: why, link: '/muj-ucet/inzeraty' } });
     await audit(this.prisma, u, 'listing.staff_edit', 'listing', id, { reason: why, owner: l.userId, changes });
     await this.search.index(id);

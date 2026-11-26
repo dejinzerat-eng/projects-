@@ -12,6 +12,7 @@ import { ZodPipe } from '../common/zod';
 import { contentHash, isWeakHash, normalizeText, PHASH_MAX_DISTANCE } from './duplicates';
 import { nextExpiry, nextStatus, REVIEW_SCORE } from './lifecycle';
 import { assessListing } from './moderation';
+import { priceInCzk } from './price';
 import { canRevealPhone } from '../users/phone-privacy';
 
 const VideoUrl = z.string().trim().max(500)
@@ -143,10 +144,11 @@ export class ListingsService {
     return { score: Math.min(100, score), reasons, hash: dup.hash };
   }
 
-  private priceFields(dto: ListingInput) {
+  private async priceFields(dto: ListingInput) {
     // Dar je vždy zdarma: cenu neukládáme, aby se nikde neukázala stará zadaná částka
-    if (dto.offerType === 'GIVE') return { price: null, priceNegotiable: false };
-    return { price: dto.price ?? null, priceNegotiable: dto.priceNegotiable };
+    if (dto.offerType === 'GIVE') return { price: null, priceCzk: null, priceNegotiable: false };
+    const price = dto.price ?? null;
+    return { price, priceCzk: priceInCzk(price, dto.currency, await this.policy.eurRate()), priceNegotiable: dto.priceNegotiable };
   }
 
   private composeSeconds(dto: ListingInput) {
@@ -164,7 +166,7 @@ export class ListingsService {
     const now = new Date();
     const listing = await this.prisma.listing.create({
       data: {
-        slug: slugify(dto.title) || 'inzerat', title: dto.title, description: dto.description, ...this.priceFields(dto),
+        slug: slugify(dto.title) || 'inzerat', title: dto.title, description: dto.description, ...(await this.priceFields(dto)),
         currency: dto.currency, categoryId: cat.id, userId: user.id, condition: dto.condition ?? null, offerType: dto.offerType,
         city: loc.city, region: loc.region, zip: loc.zip, lat: loc.lat, lng: loc.lng,
         attributes: attributes as Prisma.InputJsonValue, searchText: buildSearchText({ ...dto, attributes, city: loc.city }),
@@ -218,7 +220,7 @@ export class ListingsService {
     await this.prisma.listing.update({
       where: { id },
       data: {
-        slug: slugify(dto.title) || 'inzerat', title: dto.title, description: dto.description, ...this.priceFields(dto), currency: dto.currency,
+        slug: slugify(dto.title) || 'inzerat', title: dto.title, description: dto.description, ...(await this.priceFields(dto)), currency: dto.currency,
         categoryId: cat.id, condition: dto.condition ?? null, offerType: dto.offerType,
         city: loc.city, region: loc.region, zip: loc.zip, lat: loc.lat, lng: loc.lng,
         attributes: attributes as Prisma.InputJsonValue, searchText: buildSearchText({ ...dto, attributes, city: loc.city }),

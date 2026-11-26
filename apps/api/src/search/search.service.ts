@@ -165,8 +165,8 @@ export class SearchService implements OnModuleInit {
     const esc = (s: string) => JSON.stringify(s);
     if (p.sub) f.push(`categorySlug = ${esc(p.sub)}`);
     else if (p.category) f.push(`parentCategorySlug = ${esc(p.category)}`);
-    if (p.priceMin != null) f.push(`price >= ${Number(p.priceMin)}`);
-    if (p.priceMax != null) f.push(`price <= ${Number(p.priceMax)}`);
+    if (p.priceMin != null) f.push(`priceCzk >= ${Number(p.priceMin)}`);
+    if (p.priceMax != null) f.push(`priceCzk <= ${Number(p.priceMax)}`);
     const geo = this.geoOf(p);
     if (geo && p.radius) f.push(`_geoRadius(${geo.lat}, ${geo.lng}, ${Math.min(MAX_RADIUS_KM, Number(p.radius)) * 1000})`);
     else if (p.city) f.push(`city = ${esc(geo?.name ?? p.city)}`);
@@ -187,8 +187,8 @@ export class SearchService implements OnModuleInit {
     }
     const sort: string[] = [];
     if (p.sort === 'newest') sort.push('createdAt:desc');
-    else if (p.sort === 'price_asc') sort.push('price:asc');
-    else if (p.sort === 'price_desc') sort.push('price:desc');
+    else if (p.sort === 'price_asc') sort.push('priceCzk:asc');
+    else if (p.sort === 'price_desc') sort.push('priceCzk:desc');
     else if (p.sort === 'distance' && geo) sort.push(`_geoPoint(${geo.lat}, ${geo.lng}):asc`);
     else if (!p.q) sort.push('rankAt:desc');
     const r = await this.meili('/indexes/listings/search', 'POST', {

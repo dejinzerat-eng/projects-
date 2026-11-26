@@ -149,8 +149,9 @@ export function filterSql(p: SearchParams, o: FilterOptions): Prisma.Sql[] {
     w.push(Prisma.sql`c."slug" = ${p.sub}::text`);
     if (p.category) w.push(Prisma.sql`pc."slug" = ${p.category}::text`);
   } else if (p.category) w.push(Prisma.sql`((c."slug" = ${p.category}::text AND c."parentId" IS NULL) OR pc."slug" = ${p.category}::text)`);
-  if (p.priceMin != null && Number.isFinite(Number(p.priceMin))) w.push(Prisma.sql`l."price" >= ${Math.round(Number(p.priceMin))}::int`);
-  if (p.priceMax != null && Number.isFinite(Number(p.priceMax))) w.push(Prisma.sql`l."price" <= ${Math.round(Number(p.priceMax))}::int`);
+  // Cena v Kč (EUR přepočtené kurzem), aby filtr „do 5 000 Kč“ nevracel inzerát za 5 000 €
+  if (p.priceMin != null && Number.isFinite(Number(p.priceMin))) w.push(Prisma.sql`l."priceCzk" >= ${Math.round(Number(p.priceMin))}::int`);
+  if (p.priceMax != null && Number.isFinite(Number(p.priceMax))) w.push(Prisma.sql`l."priceCzk" <= ${Math.round(Number(p.priceMax))}::int`);
   const radius = Math.min(MAX_RADIUS_KM, Math.max(0, Number(p.radius) || 0));
   const nameMatch = o.cityKey ? Prisma.sql`${sqlNorm(Prisma.sql`l."city"`)} = ${o.cityKey}::text` : undefined;
   const cityMatch = nameMatch && o.cityRegion ? Prisma.sql`(${nameMatch} AND l."region" IN (${o.cityRegion}::text, ''))` : nameMatch;
@@ -206,8 +207,9 @@ export type Sort = NonNullable<SearchParams['sort']>;
 export function orderSql(sort: Sort | undefined, o: { now: Date; geo?: Geo; quality?: Prisma.Sql }): Prisma.Sql {
   const date = Prisma.sql`l."publishedAt" DESC NULLS LAST, l."id" DESC`;
   switch (sort) {
-    case 'price_asc': return Prisma.sql`l."price" ASC NULLS LAST, l."id" ASC`;
-    case 'price_desc': return Prisma.sql`l."price" DESC NULLS LAST, l."id" DESC`;
+    // Podle ceny v Kč – eura se přepočítají kurzem (100 € je dražší než 2 000 Kč)
+    case 'price_asc': return Prisma.sql`l."priceCzk" ASC NULLS LAST, l."id" ASC`;
+    case 'price_desc': return Prisma.sql`l."priceCzk" DESC NULLS LAST, l."id" DESC`;
     case 'newest': return date;
     case 'distance': if (o.geo) return Prisma.sql`${distanceSql(o.geo)} ASC NULLS LAST, ${date}`;
     // falls through – bez polohy řadíme podle relevance

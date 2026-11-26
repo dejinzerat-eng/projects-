@@ -80,8 +80,16 @@ describe('SQL pro vyhledávání v PostgreSQL', () => {
   });
 
   it('nejdražší dávají ceny „dohodou“ na konec', () => {
-    assert.match(sqlText(orderSql('price_desc', base)), /"price" DESC NULLS LAST/);
-    assert.match(sqlText(orderSql('price_asc', base)), /"price" ASC NULLS LAST/);
+    assert.match(sqlText(orderSql('price_desc', base)), /"priceCzk" DESC NULLS LAST/);
+    assert.match(sqlText(orderSql('price_asc', base)), /"priceCzk" ASC NULLS LAST/);
+  });
+
+  it('cena se řadí i filtruje v Kč (eura přepočtená), ne podle částky v původní měně', () => {
+    assert.doesNotMatch(sqlText(orderSql('price_asc', base)), /"price" /);
+    const w = filterSql({ priceMin: 100, priceMax: 5000 }, base).map(sqlText).join(' ');
+    assert.match(w, /"priceCzk" >= /);
+    assert.match(w, /"priceCzk" <= /);
+    assert.doesNotMatch(w, /"price" /);
   });
 
   it('relevance: kvalita shody → platné topování → datum', () => {
