@@ -55,6 +55,8 @@ export interface NotificationItem { id: string; title: string; body: string | nu
 /** Upozornění v seznamu: kliknutím se označí jako přečtené a teprve pak se otevře jeho odkaz. */
 export function NotificationRow({ n }: { n: NotificationItem }) {
   const router = useRouter();
+  // Jen odkazy v rámci webu (odkazy upozornění tvoří server, ale pro jistotu žádné přesměrování ven)
+  const link = n.link && n.link.startsWith('/') && !n.link.startsWith('//') && !n.link.startsWith('/\\') ? n.link : null;
   async function markRead() {
     if (n.readAt) return;
     await call(`/me/notifications/${n.id}/read`, 'POST').catch(() => {});
@@ -64,7 +66,7 @@ export function NotificationRow({ n }: { n: NotificationItem }) {
     // Otevření v nové kartě (Ctrl/Cmd/Shift) necháme na prohlížeči, přečtení jen odešleme
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) { void markRead().then(() => router.refresh()); return; }
     e.preventDefault();
-    void markRead().then(() => { if (n.link) router.push(n.link); router.refresh(); });
+    void markRead().then(() => { if (link) router.push(link); router.refresh(); });
   }
   const cls = `flex w-full gap-3 p-4 text-left hover:bg-surface-2 ${n.readAt ? '' : 'bg-brand-soft/30'}`;
   const content = (
@@ -73,6 +75,6 @@ export function NotificationRow({ n }: { n: NotificationItem }) {
       <div className="min-w-0"><div className="font-semibold">{n.title}</div>{n.body && <div className="truncate text-sm text-muted">{n.body}</div>}<div className="mt-0.5 text-xs text-muted">{ago(n.createdAt)}</div></div>
     </>
   );
-  if (!n.link) return <button type="button" onClick={onClick} className={cls}>{content}</button>;
-  return <Link href={n.link} onClick={onClick} onAuxClick={(e) => { if (e.button === 1) void markRead().then(() => router.refresh()); }} className={cls}>{content}</Link>;
+  if (!link) return <button type="button" onClick={onClick} className={cls}>{content}</button>;
+  return <Link href={link} onClick={onClick} onAuxClick={(e) => { if (e.button === 1) void markRead().then(() => router.refresh()); }} className={cls}>{content}</Link>;
 }

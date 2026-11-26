@@ -55,7 +55,7 @@ export async function buildExport(db: Db, userId: string, now = new Date()) {
     db.review.findMany({ where: { sellerId: userId }, select: { id: true, rating: true, text: true, createdAt: true, author: person, conversation: { select: { listing: { select: { id: true, title: true } } } } } }),
     db.block.findMany({ where: { blockerId: userId }, select: { createdAt: true, blocked: person } }),
     db.refreshToken.findMany({ where: { userId }, select: { id: true, createdAt: true, expiresAt: true, revokedAt: true, lastUsedAt: true, userAgent: true, ip: true }, orderBy: { createdAt: 'desc' } }),
-    db.verificationToken.findMany({ where: { userId }, select: { type: true, createdAt: true, expiresAt: true, usedAt: true }, orderBy: { createdAt: 'desc' } }),
+    db.verificationToken.findMany({ where: { userId }, select: { type: true, target: true, createdAt: true, expiresAt: true, usedAt: true }, orderBy: { createdAt: 'desc' } }),
     db.auditLog.findMany({ where: { actorId: userId }, select: { action: true, targetType: true, targetId: true, meta: true, createdAt: true }, orderBy: { createdAt: 'asc' } }),
     db.messageAttachment.findMany({ where: { ownerId: userId }, select: { id: true, conversationId: true, messageId: true, url: true, width: true, height: true, createdAt: true }, orderBy: { createdAt: 'asc' } }),
     db.messagePreference.findUnique({ where: { userId }, select: { emailOnMessage: true, updatedAt: true } }),
