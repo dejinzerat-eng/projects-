@@ -62,6 +62,7 @@ enum TokenType {
   EMAIL_VERIFY
   PHONE_VERIFY
   PASSWORD_RESET
+  EMAIL_CHANGE
 }
 
 model User {
@@ -86,6 +87,13 @@ model User {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
   lastSeenAt      DateTime?
+  /// Souhlas s podmínkami při registraci (čas a verze podmínek)
+  termsAcceptedAt DateTime?
+  termsVersion    String?
+  /// Uzamčení účtu po opakovaných chybných heslech (nezávisle na IP)
+  failedLogins      Int       @default(0)
+  lastFailedLoginAt DateTime?
+  lockedUntil       DateTime?
 
   listings        Listing[]
   favorites       Favorite[]
@@ -314,6 +322,12 @@ model RefreshToken {
   expiresAt DateTime
   revokedAt DateTime?
   createdAt DateTime  @default(now())
+  /// Zařízení pro přehled přihlášení v nastavení
+  userAgent  String?
+  ip         String?
+  lastUsedAt DateTime?
+
+  @@index([userId])
 }
 
 model VerificationToken {
@@ -325,6 +339,10 @@ model VerificationToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+  /// Ověřovaná hodnota (nové telefonní číslo nebo nový e-mail)
+  target    String?
+  /// Počet chybně zadaných kódů
+  attempts  Int       @default(0)
 
   @@index([userId, type])
 }

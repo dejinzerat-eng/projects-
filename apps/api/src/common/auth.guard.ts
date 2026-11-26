@@ -41,8 +41,14 @@ export class AuthGuard implements CanActivate {
     let u: AuthUser | null = null;
     if (s && !s.revokedAt && s.expiresAt > new Date() && s.user.status === 'ACTIVE') {
       u = { id: s.user.id, role: s.user.role, name: s.user.name, email: s.user.email, emailVerified: !!s.user.emailVerifiedAt, phoneVerified: !!s.user.phoneVerifiedAt };
+      // poslední použití pro přehled přihlášených zařízení (nejvýš jednou za 5 minut)
+      if (!s.lastUsedAt || Date.now() - s.lastUsedAt.getTime() > 5 * 60_000) {
+        // await: na Vercelu se funkce po odpovědi zmrazí a zápis „na pozadí“ by se nemusel provést
+        await this.prisma.refreshToken.update({ where: { id: s.id }, data: { lastUsedAt: new Date() } }).catch(() => undefined);
+      }
     }
-    await this.redis.set(`sess:${h}`, u ? JSON.stringify(u) : '-', 60);
+    // Bez Redisu má každá instance (Vercel) vlastní paměť, odhlášení se jinde projeví až po vypršení cache – držíme ji krátkou.
+    await this.redis.set(`sess:${h}`, u ? JSON.stringify(u) : '-', this.redis.client ? 60 : 10);
     return u;
   }
 }

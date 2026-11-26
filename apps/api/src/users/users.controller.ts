@@ -1,10 +1,12 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { Prisma } from '@prisma/client';
 import { CITIES, findCity } from '@dej/shared';
 import { z } from 'zod';
 import { Auth, AuthUser, CurrentUser } from '../common/auth.guard';
 import { PrismaService } from '../common/prisma.service';
 import { ZodPipe } from '../common/zod';
+import { clientInfo } from '../auth/audit';
 import { AuthService } from '../auth/auth.service';
 import { LISTING_INCLUDE, SearchService } from '../search/search.service';
 
@@ -15,7 +17,7 @@ const ProfileDto = z.object({
   isBusiness: z.boolean().optional(),
   companyName: z.string().trim().max(120).optional(),
   companyId: z.string().regex(/^\d{8}$/, 'IČO má 8 číslic.').optional().or(z.literal('')),
-  avatarUrl: z.string().max(500).optional(),
+  avatarUrl: z.null({ error: 'Profilovou fotku nahrajte v nastavení účtu.' }).optional(), // fotku nahrává POST /auth/avatar, tady jde jen odstranit
 });
 
 const SavedSearchDto = z.object({ name: z.string().trim().min(1).max(120), query: z.record(z.string(), z.unknown()), notify: z.boolean().default(true) });
@@ -73,7 +75,8 @@ export class UsersController {
   /** GDPR: export všech osobních údajů */
   @Auth()
   @Get('me/export')
-  async exportData(@CurrentUser() u: AuthUser) {
+  async exportData(@CurrentUser() u: AuthUser, @Req() req: Request) {
+    await this.auth.audit(u.id, 'account.gdpr_export', clientInfo(req));
     return this.prisma.user.findUnique({
       where: { id: u.id },
       select: { id: true, email: true, name: true, phone: true, bio: true, city: true, createdAt: true, listings: true, favorites: true, savedSearches: true, messages: true, reviewsGiven: true, following: true },
@@ -83,7 +86,9 @@ export class UsersController {
   /** GDPR: smazání účtu – anonymizace osobních údajů a odstranění inzerátů */
   @Auth()
   @Delete('me')
-  async deleteMe(@CurrentUser() u: AuthUser) {
+  async deleteMe(@CurrentUser() u: AuthUser, @Body(new ZodPipe(z.object({ password: z.string().max(200).optional() }).optional())) dto: { password?: string } | undefined, @Req() req: Request) {
+    await this.auth.assertPassword(u.id, dto?.password);
+    await this.auth.audit(u.id, 'account.delete', clientInfo(req));
     await this.prisma.$transaction([
       this.prisma.listing.updateMany({ where: { userId: u.id }, data: { status: 'DELETED' } }),
       this.prisma.user.update({ where: { id: u.id }, data: { email: `deleted-${u.id}@dejinzerat.invalid`, name: 'Smazaný uživatel', phone: null, bio: null, avatarUrl: null, passwordHash: null, googleId: null, appleId: null, status: 'BLOCKED' } }),

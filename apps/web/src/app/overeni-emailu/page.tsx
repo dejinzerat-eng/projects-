@@ -1,12 +1,15 @@
 import Link from 'next/link';
 import { CheckCircle2, XCircle } from 'lucide-react';
+import { EmailChangeConfirm } from '@/components/auth-forms';
 import { AuthShell } from '@/components/auth-shell';
 import { api } from '@/lib/api';
 
 export const metadata = { title: 'Ověření e-mailu', robots: { index: false } };
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
-  const { token } = await searchParams;
+export default async function Page({ searchParams }: { searchParams: Promise<{ token?: string; zmena?: string }> }) {
+  const { token, zmena } = await searchParams;
+  // změna e-mailu se potvrzuje až tlačítkem (POST), ne pouhým otevřením odkazu
+  if (zmena === '1') return <AuthShell title="Potvrzení nového e-mailu"><EmailChangeConfirm token={token ?? ''} /></AuthShell>;
   const ok = await api(`/auth/verify-email?token=${encodeURIComponent(token ?? '')}`, { auth: false }).then(() => true).catch(() => false);
   return (
     <AuthShell title={ok ? 'E-mail ověřen' : 'Odkaz nefunguje'}>
