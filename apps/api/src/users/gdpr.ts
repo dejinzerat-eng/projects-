@@ -1,11 +1,12 @@
 import type { PrismaClient } from '@prisma/client';
 
-type Db = Pick<PrismaClient, 'user' | 'listing' | 'listingImage' | 'favorite' | 'followSeller' | 'savedSearch' | 'conversation' | 'message' | 'notification' | 'report' | 'review' | 'block' | 'refreshToken' | 'verificationToken' | 'auditLog'>;
+type Db = Pick<PrismaClient, 'user' | 'listing' | 'listingImage' | 'favorite' | 'followSeller' | 'savedSearch' | 'conversation' | 'message' | 'notification' | 'report' | 'review' | 'block' | 'refreshToken' | 'verificationToken' | 'auditLog'
+  | 'messageAttachment' | 'messagePreference' | 'userRestriction' | 'illegalContentNotice' | 'moderationAppeal'>;
 
 /** Pole uživatele v exportu. Hesla, tokeny ani kódy se nikdy neexportují (jen informace, že existují). */
 export const EXPORT_USER_SELECT = {
   id: true, email: true, name: true, role: true, status: true, phone: true, phoneVerifiedAt: true, emailVerifiedAt: true, showPhone: true,
-  avatarUrl: true, bio: true, city: true, region: true, createdAt: true, updatedAt: true, lastSeenAt: true,
+  avatarUrl: true, bio: true, city: true, region: true, createdAt: true, updatedAt: true, lastSeenAt: true, lastActiveAt: true,
   isBusiness: true, companyName: true, companyId: true, companyAddress: true, vatId: true, companyVerifiedAt: true,
   passwordHash: true, googleId: true, appleId: true, termsAcceptedAt: true, termsVersion: true,
 } as const;
@@ -22,11 +23,20 @@ export function stripSecrets<T>(v: T): T {
 
 const person = { select: { id: true, name: true } } as const;
 
+/**
+ * Oznámení podle DSA podaná uživatelem: přihlášeným (reporterUserId), nebo bez přihlášení na jeho e-mail.
+ * Podle e-mailu jen u ověřeného e-mailu – jinak by si cizí oznámení mohl zobrazit kdokoli, kdo se na adresu zaregistruje.
+ */
+export function noticesWhere(userId: string, email: string | null, emailVerified: boolean) {
+  return { OR: [{ reporterUserId: userId }, ...(email && emailVerified ? [{ reporterEmail: { equals: email, mode: 'insensitive' as const } }] : [])] };
+}
+
 /** GDPR čl. 15 a 20: kompletní export osobních údajů uživatele ve strojově čitelné podobě. */
 export async function buildExport(db: Db, userId: string, now = new Date()) {
   const u = await db.user.findUnique({ where: { id: userId }, select: EXPORT_USER_SELECT });
   if (!u) return null;
-  const [listings, uploads, favorites, following, followers, savedSearches, conversations, notifications, reports, reviewsGiven, reviewsReceived, blocks, sessions, codes, audit] = await Promise.all([
+  const [listings, uploads, favorites, following, followers, savedSearches, conversations, notifications, reports, reviewsGiven, reviewsReceived, blocks, sessions, codes, audit,
+    attachments, messagePrefs, restrictions, notices, appeals] = await Promise.all([
     db.listing.findMany({ where: { userId }, include: { images: { select: { url: true, thumbUrl: true, width: true, height: true, position: true, createdAt: true }, orderBy: { position: 'asc' } }, category: { select: { slug: true, name: true } } }, orderBy: { createdAt: 'asc' } }),
     db.listingImage.findMany({ where: { ownerId: userId, listingId: null }, select: { url: true, thumbUrl: true, createdAt: true } }),
     db.favorite.findMany({ where: { userId }, select: { createdAt: true, listing: { select: { id: true, title: true } } } }),
@@ -44,9 +54,19 @@ export async function buildExport(db: Db, userId: string, now = new Date()) {
     db.review.findMany({ where: { authorId: userId }, select: { id: true, rating: true, text: true, createdAt: true, seller: person, conversation: { select: { listing: { select: { id: true, title: true } } } } } }),
     db.review.findMany({ where: { sellerId: userId }, select: { id: true, rating: true, text: true, createdAt: true, author: person, conversation: { select: { listing: { select: { id: true, title: true } } } } } }),
     db.block.findMany({ where: { blockerId: userId }, select: { createdAt: true, blocked: person } }),
-    db.refreshToken.findMany({ where: { userId }, select: { id: true, createdAt: true, expiresAt: true, revokedAt: true }, orderBy: { createdAt: 'desc' } }),
+    db.refreshToken.findMany({ where: { userId }, select: { id: true, createdAt: true, expiresAt: true, revokedAt: true, lastUsedAt: true, userAgent: true, ip: true }, orderBy: { createdAt: 'desc' } }),
     db.verificationToken.findMany({ where: { userId }, select: { type: true, createdAt: true, expiresAt: true, usedAt: true }, orderBy: { createdAt: 'desc' } }),
     db.auditLog.findMany({ where: { actorId: userId }, select: { action: true, targetType: true, targetId: true, meta: true, createdAt: true }, orderBy: { createdAt: 'asc' } }),
+    db.messageAttachment.findMany({ where: { ownerId: userId }, select: { id: true, conversationId: true, messageId: true, url: true, width: true, height: true, createdAt: true }, orderBy: { createdAt: 'asc' } }),
+    db.messagePreference.findUnique({ where: { userId }, select: { emailOnMessage: true, updatedAt: true } }),
+    // Omezení účtu – bez identity člena týmu, který omezení zrušil
+    db.userRestriction.findMany({ where: { userId }, select: { source: true, reason: true, createdAt: true, liftedAt: true, liftNote: true }, orderBy: { createdAt: 'asc' } }),
+    db.illegalContentNotice.findMany({
+      where: noticesWhere(userId, u.email, !!u.emailVerifiedAt),
+      select: { ref: true, category: true, targetUrl: true, explanation: true, reporterName: true, reporterEmail: true, goodFaith: true, status: true, action: true, decisionReason: true, decidedAt: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+    db.moderationAppeal.findMany({ where: { userId }, select: { ref: true, listingId: true, text: true, status: true, decisionReason: true, decidedAt: true, createdAt: true }, orderBy: { createdAt: 'asc' } }),
   ]);
   // Zásahy administrátorů do účtu a inzerátů uživatele (bez identity administrátora)
   const auditAbout = await db.auditLog.findMany({
@@ -62,8 +82,9 @@ export async function buildExport(db: Db, userId: string, now = new Date()) {
     account: { ...account, hasPassword: !!passwordHash, linkedAccounts: { google: !!googleId, apple: !!appleId } },
     company: { isBusiness, companyName, companyId, companyAddress, vatId, companyVerifiedAt },
     consents: {
-      termsAndPrivacy: { acceptedAt: u.createdAt, method: signup, note: 'Souhlas s podmínkami a zásadami ochrany osobních údajů je podmínkou registrace.' },
+      termsAndPrivacy: { acceptedAt: u.termsAcceptedAt ?? u.createdAt, version: u.termsVersion, method: signup, note: 'Souhlas s podmínkami a zásadami ochrany osobních údajů je podmínkou registrace.' },
       showPhoneOnListings: showPhone,
+      emailOnNewMessage: messagePrefs?.emailOnMessage ?? true,
       savedSearchAlerts: savedSearches.map((s) => ({ name: s.name, emailNotifications: s.notify })),
     },
     listings,
@@ -80,8 +101,13 @@ export async function buildExport(db: Db, userId: string, now = new Date()) {
       sent: conversations.reduce((n, c) => n + c.messages.filter((m) => m.senderId === userId).length, 0),
       received: conversations.reduce((n, c) => n + c.messages.filter((m) => m.senderId !== userId).length, 0),
     },
+    messagePhotos: attachments,
+    messageSettings: messagePrefs,
     notifications,
     reportsFiled: reports,
+    illegalContentNotices: notices,
+    moderationAppeals: appeals,
+    accountRestrictions: restrictions,
     reviewsGiven,
     reviewsReceived,
     blockedUsers: blocks,
@@ -92,11 +118,32 @@ export async function buildExport(db: Db, userId: string, now = new Date()) {
   });
 }
 
-/** Smazání účtu: osobní údaje se anonymizují, vazby (oblíbené, sledování, hledání…) se odstraní. */
-export function anonymizeOps(db: Db, userId: string) {
+/** Kontakt účtu potřebný k dohledání oznámení podaných bez přihlášení. */
+export interface AnonymizeTarget { id: string; email: string; emailVerifiedAt: Date | null }
+
+/** Soubory uživatele v úložišti, které se se smazáním účtu odstraní (fotky ve zprávách, nepřiřazené nahrané fotky, profilová fotka). */
+export async function userFileUrls(db: Pick<Db, 'user' | 'messageAttachment' | 'message' | 'listingImage'>, userId: string): Promise<string[]> {
+  const [u, attachments, messages, uploads] = await Promise.all([
+    db.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } }),
+    db.messageAttachment.findMany({ where: { ownerId: userId }, select: { url: true } }),
+    db.message.findMany({ where: { senderId: userId, imageUrl: { not: null } }, select: { imageUrl: true } }),
+    db.listingImage.findMany({ where: { ownerId: userId, listingId: null }, select: { url: true, thumbUrl: true } }),
+  ]);
+  const urls = [u?.avatarUrl, ...attachments.map((a) => a.url), ...messages.map((m) => m.imageUrl), ...uploads.flatMap((i) => [i.url, i.thumbUrl])];
+  return [...new Set(urls.filter((x): x is string => !!x))];
+}
+
+/**
+ * Smazání účtu: osobní údaje se anonymizují, vazby (oblíbené, sledování, hledání, nastavení…) se odstraní.
+ * Záznamy, které musíme vést (rozhodnutí o oznámeních a stížnostech podle DSA), zůstanou bez osobních údajů oznamovatele.
+ */
+export function anonymizeOps(db: Db, user: AnonymizeTarget) {
+  const userId = user.id;
   return [
     db.listing.updateMany({ where: { userId }, data: { status: 'DELETED' } }),
     db.message.updateMany({ where: { senderId: userId }, data: { body: '[Zpráva byla smazána]', imageUrl: null } }),
+    db.messageAttachment.deleteMany({ where: { ownerId: userId } }),
+    db.messagePreference.deleteMany({ where: { userId } }),
     db.favorite.deleteMany({ where: { userId } }),
     db.followSeller.deleteMany({ where: { OR: [{ followerId: userId }, { sellerId: userId }] } }),
     db.savedSearch.deleteMany({ where: { userId } }),
@@ -104,12 +151,15 @@ export function anonymizeOps(db: Db, userId: string) {
     db.block.deleteMany({ where: { OR: [{ blockerId: userId }, { blockedId: userId }] } }),
     db.verificationToken.deleteMany({ where: { userId } }),
     db.listingImage.deleteMany({ where: { ownerId: userId, listingId: null } }),
+    db.userRestriction.deleteMany({ where: { userId } }),
+    db.illegalContentNotice.updateMany({ where: noticesWhere(userId, user.email, !!user.emailVerifiedAt), data: { reporterName: null, reporterEmail: null, reporterUserId: null } }),
+    db.moderationAppeal.updateMany({ where: { userId }, data: { text: '[Text byl smazán se zrušením účtu]' } }),
     db.user.update({
       where: { id: userId },
       data: {
         email: `deleted-${userId}@dejinzerat.invalid`, name: 'Smazaný uživatel', phone: null, phoneVerifiedAt: null, emailVerifiedAt: null, showPhone: false,
-        bio: null, avatarUrl: null, passwordHash: null, googleId: null, appleId: null, city: null, region: null, lastSeenAt: null,
-        isBusiness: false, companyName: null, companyId: null, companyAddress: null, vatId: null, companyVerifiedAt: null, failedLogins: 0, lockedUntil: null, status: 'BLOCKED',
+        bio: null, avatarUrl: null, passwordHash: null, googleId: null, appleId: null, city: null, region: null, lastSeenAt: null, lastActiveAt: null,
+        isBusiness: false, companyName: null, companyId: null, companyAddress: null, vatId: null, companyVerifiedAt: null, failedLogins: 0, lastFailedLoginAt: null, lockedUntil: null, status: 'BLOCKED',
       },
     }),
   ];

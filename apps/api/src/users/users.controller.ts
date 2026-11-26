@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Header, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, Logger, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { Prisma } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
@@ -11,7 +11,8 @@ import { clientInfo } from '../auth/audit';
 import { AuthService } from '../auth/auth.service';
 import { LISTING_INCLUDE, SearchService } from '../search/search.service';
 import { resolveCompany } from './company';
-import { anonymizeOps, buildExport } from './gdpr';
+import { StorageService } from '../media/storage.service';
+import { anonymizeOps, buildExport, userFileUrls } from './gdpr';
 import { aresWebUrl } from './ico';
 import { trustScore } from './trust';
 
@@ -35,7 +36,8 @@ const HISTORY_PAGE = 12;
 
 @Controller()
 export class UsersController {
-  constructor(private prisma: PrismaService, private search: SearchService, private auth: AuthService) {}
+  private log = new Logger('Users');
+  constructor(private prisma: PrismaService, private search: SearchService, private auth: AuthService, private storage: StorageService) {}
 
   @Get('cities')
   cities() { return CITIES.map((c) => ({ name: c.name, region: c.region, zip: c.zip })); }
@@ -173,10 +175,19 @@ export class UsersController {
   async deleteMe(@CurrentUser() u: AuthUser, @Body(new ZodPipe(z.object({ password: z.string().max(200).optional() }).optional())) dto: { password?: string } | undefined, @Req() req: Request) {
     await this.auth.assertPassword(u.id, dto?.password);
     await this.auth.audit(u.id, 'account.delete', clientInfo(req));
-    const live = await this.prisma.listing.findMany({ where: { userId: u.id, status: { in: ['ACTIVE', 'RESERVED'] } }, select: { id: true } });
-    await this.prisma.$transaction(anonymizeOps(this.prisma, u.id));
+    const [live, user, files] = await Promise.all([
+      this.prisma.listing.findMany({ where: { userId: u.id, status: { in: ['ACTIVE', 'RESERVED'] } }, select: { id: true } }),
+      this.prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { id: true, email: true, emailVerifiedAt: true } }),
+      userFileUrls(this.prisma, u.id),
+    ]);
+    await this.prisma.$transaction(anonymizeOps(this.prisma, user));
     await this.auth.revokeAll(u.id);
+    // Přehled přihlášení obsahuje IP adresy a zařízení – po odhlášení všech relací už není k ničemu
+    await this.prisma.refreshToken.deleteMany({ where: { userId: u.id } });
     await Promise.all(live.map((l) => this.search.index(l.id).catch(() => undefined)));
+    // Soubory v úložišti (fotky ve zprávách, neodeslané nahrávky, profilová fotka) – chyba mazání účet neblokuje
+    const deleted = await this.storage.deleteMany(files).catch((e) => { this.log.warn(`Mazání souborů účtu ${u.id}: ${(e as Error).message}`); return 0; });
+    if (files.length) this.log.log(`Účet ${u.id}: smazáno ${deleted} z ${files.length} souborů`);
     return { ok: true };
   }
 
