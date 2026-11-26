@@ -15,6 +15,7 @@ import { StorageService } from '../media/storage.service';
 import { anonymizeOps, buildExport, userFileUrls } from './gdpr';
 import { aresWebUrl } from './ico';
 import { trustScore } from './trust';
+import { unreadCounts } from './unread';
 
 const ProfileDto = z.object({
   name: z.string().trim().min(2).max(60),
@@ -251,6 +252,20 @@ export class UsersController {
     await this.prisma.notification.updateMany({ where: { userId: u.id, readAt: null }, data: { readAt: new Date() } });
     return { ok: true };
   }
+
+  /** Jedno upozornění přečteno (kliknutí v seznamu upozornění) */
+  @Auth()
+  @Post('me/notifications/:id/read')
+  async readOne(@Param('id') id: string, @CurrentUser() u: AuthUser) {
+    await this.prisma.notification.updateMany({ where: { id, userId: u.id, readAt: null }, data: { readAt: new Date() } });
+    return { ok: true };
+  }
+
+  /** Odznaky v hlavičce – prohlížeč se ptá zhruba jednou za minutu, jen když je karta vidět */
+  @Auth()
+  @Get('me/unread')
+  @Header('Cache-Control', 'no-store')
+  unread(@CurrentUser() u: AuthUser) { return unreadCounts(this.prisma, u.id); }
 
   @Auth()
   @Get('me/blocked')

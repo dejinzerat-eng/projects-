@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { call } from '@/lib/client';
 import { shrinkImage } from '@/lib/image';
 import { listingUrl, price, STATUS_LABEL } from '@/lib/format';
+import { refreshUnread } from '@/lib/unread';
 import { Avatar } from './avatar';
 import { ChatReport } from './messages/chat-report';
 import { MessageWarning, type MessageWarningData } from './messages/message-warning';
@@ -31,6 +32,8 @@ export function Thread({ initial, meId }: { initial: ThreadData; meId: string })
   // jednoduchý polling, jen když je stránka vidět (fáze 2: WebSocket)
   useEffect(() => { const i = setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 5000); return () => clearInterval(i); }, [refresh]);
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [t.messages.length]);
+  // Otevřením konverzace se zprávy přečtou – odznak v hlavičce srovnáme hned, ne až při dalším dotazu
+  useEffect(() => { void refreshUnread(); }, [t.id, t.messages.length]);
 
   async function send(payload: { body: string; attachmentId?: string }) {
     setBusy(true);

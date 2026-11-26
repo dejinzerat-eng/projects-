@@ -34,7 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Header me={me} />
           <main id="obsah">{children}</main>
           <Footer />
-          <MobileNav unread={me?.unreadMessages} loggedIn={!!me} />
+          <MobileNav unread={me ? { messages: me.unreadMessages, notifications: me.unreadNotifications } : undefined} loggedIn={!!me} />
         </ToastProvider>
       </body>
     </html>

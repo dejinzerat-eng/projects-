@@ -3,6 +3,7 @@ import { Heart, MessageCircle, Plus, Shield, User } from 'lucide-react';
 import type { Me } from '@/lib/api';
 import { Logo } from './logo';
 import { HeaderSearch } from './header-search';
+import { UnreadBadge } from './unread-badge';
 import { UserMenu } from './user-menu';
 
 export function Header({ me }: { me: Me | null }) {
@@ -16,7 +17,7 @@ export function Header({ me }: { me: Me | null }) {
           <Link href="/muj-ucet/oblibene" className="btn btn-ghost btn-sm hidden md:inline-flex" aria-label="Oblíbené"><Heart className="size-[18px]" /></Link>
           <Link href="/zpravy" className="btn btn-ghost btn-sm relative hidden md:inline-flex" aria-label="Zprávy">
             <MessageCircle className="size-[18px]" />
-            {!!me?.unreadMessages && <span className="absolute right-1 top-1 grid min-w-4 h-4 place-items-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">{me.unreadMessages}</span>}
+            {me && <UnreadBadge initial={{ messages: me.unreadMessages, notifications: me.unreadNotifications }} kind="messages" className="absolute right-1 top-1 grid min-w-4 h-4 place-items-center rounded-full bg-brand px-1 text-[10px] font-bold text-white" />}
           </Link>
           {me ? <UserMenu me={me} /> : <Link href="/prihlaseni" className="btn btn-ghost btn-sm"><User className="size-[18px]" /><span className="hidden sm:inline">Přihlásit</span></Link>}
           <Link href="/pridat" className="btn btn-primary btn-sm ml-1 hidden sm:inline-flex"><Plus className="size-4" strokeWidth={2.5} />Přidat inzerát</Link>

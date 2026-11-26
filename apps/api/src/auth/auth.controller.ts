@@ -12,6 +12,7 @@ import { SmsService } from '../common/mailer.service';
 import { PrismaService } from '../common/prisma.service';
 import { ZodPipe } from '../common/zod';
 import { StorageService } from '../media/storage.service';
+import { unreadCounts } from '../users/unread';
 import { clientInfo } from './audit';
 import { AuthService, OAuthError } from './auth.service';
 import { packOAuthState, safeBack, sameState, unpackOAuthState } from './oauth-state';
@@ -89,10 +90,7 @@ export class AuthController {
       select: { id: true, email: true, name: true, role: true, phone: true, avatarUrl: true, city: true, region: true, bio: true, isBusiness: true, companyName: true, companyId: true, emailVerifiedAt: true, phoneVerifiedAt: true, createdAt: true, passwordHash: true, googleId: true, appleId: true },
     });
     if (!user) return { user: null };
-    const [unreadMessages, unreadNotifications] = await Promise.all([
-      this.prisma.message.count({ where: { readAt: null, senderId: { not: u.id }, conversation: { OR: [{ buyerId: u.id }, { sellerId: u.id }] } } }),
-      this.prisma.notification.count({ where: { userId: u.id, readAt: null } }),
-    ]);
+    const { messages: unreadMessages, notifications: unreadNotifications } = await unreadCounts(this.prisma, u.id);
     const { passwordHash, googleId, appleId, ...rest } = user;
     return { user: { ...rest, hasPassword: !!passwordHash, hasGoogle: !!googleId, hasApple: !!appleId, unreadMessages, unreadNotifications } };
   }

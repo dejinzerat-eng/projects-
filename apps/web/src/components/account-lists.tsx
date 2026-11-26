@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toSearchString, type SearchParams } from '@dej/shared';
 import { call } from '@/lib/client';
 import { ago } from '@/lib/format';
+import { refreshUnread } from '@/lib/unread';
 import { Avatar } from './avatar';
 import { useToast } from './toast';
 
@@ -46,5 +47,32 @@ export function Following({ items }: { items: { id: string; name: string; avatar
 
 export function MarkRead() {
   const router = useRouter();
-  return <button onClick={async () => { await call('/me/notifications/read', 'POST'); router.refresh(); }} className="btn btn-outline btn-sm">Označit vše jako přečtené</button>;
+  return <button onClick={async () => { await call('/me/notifications/read', 'POST').catch(() => {}); void refreshUnread(); router.refresh(); }} className="btn btn-outline btn-sm">Označit vše jako přečtené</button>;
+}
+
+export interface NotificationItem { id: string; title: string; body: string | null; link: string | null; readAt: string | null; createdAt: string }
+
+/** Upozornění v seznamu: kliknutím se označí jako přečtené a teprve pak se otevře jeho odkaz. */
+export function NotificationRow({ n }: { n: NotificationItem }) {
+  const router = useRouter();
+  async function markRead() {
+    if (n.readAt) return;
+    await call(`/me/notifications/${n.id}/read`, 'POST').catch(() => {});
+    void refreshUnread();
+  }
+  function onClick(e: React.MouseEvent) {
+    // Otevření v nové kartě (Ctrl/Cmd/Shift) necháme na prohlížeči, přečtení jen odešleme
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) { void markRead().then(() => router.refresh()); return; }
+    e.preventDefault();
+    void markRead().then(() => { if (n.link) router.push(n.link); router.refresh(); });
+  }
+  const cls = `flex w-full gap-3 p-4 text-left hover:bg-surface-2 ${n.readAt ? '' : 'bg-brand-soft/30'}`;
+  const content = (
+    <>
+      <span className={`mt-2 size-2 shrink-0 rounded-full ${n.readAt ? 'bg-transparent' : 'bg-brand'}`} />
+      <div className="min-w-0"><div className="font-semibold">{n.title}</div>{n.body && <div className="truncate text-sm text-muted">{n.body}</div>}<div className="mt-0.5 text-xs text-muted">{ago(n.createdAt)}</div></div>
+    </>
+  );
+  if (!n.link) return <button type="button" onClick={onClick} className={cls}>{content}</button>;
+  return <Link href={n.link} onClick={onClick} onAuxClick={(e) => { if (e.button === 1) void markRead().then(() => router.refresh()); }} className={cls}>{content}</Link>;
 }
