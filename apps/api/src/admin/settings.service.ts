@@ -7,6 +7,8 @@ import { RedisService } from '../common/redis.service';
 import { DEFAULT_EUR_RATE } from '../listings/price';
 
 const num = (v: string | undefined, d: number) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : d);
+/** Kurz eura z prostředí – celé Kč v rozsahu nastavení (1–1000), jinak výchozí. */
+const eurRateFromEnv = (v: string | undefined) => { const r = Math.round(num(v, DEFAULT_EUR_RATE)); return r >= 1 && r <= 1000 ? r : DEFAULT_EUR_RATE; };
 
 /** Schéma všech nastavení. Výchozí hodnoty pocházejí z proměnných prostředí (záloha, když v DB nic není). */
 export const SettingsSchema = z.object({
@@ -32,7 +34,8 @@ export function envDefaults(env: NodeJS.ProcessEnv = process.env): Settings {
     listingDays: config.listingDays,
     freeActiveListings: num(env.FREE_ACTIVE_LISTINGS, 0),
     maxListingsPerHour: num(env.MAX_LISTINGS_PER_HOUR, 20),
-    eurRate: num(env.EUR_RATE, DEFAULT_EUR_RATE),
+    // Kurz z prostředí jen jako platné celé číslo (jinak by uložení formuláře nastavení selhalo na validaci)
+    eurRate: eurRateFromEnv(env.EUR_RATE),
     supportEmail: env.SUPPORT_EMAIL ?? 'podpora@dejinzerat.cz',
     supportPhone: env.SUPPORT_PHONE ?? '',
     operatorName: env.OPERATOR_NAME ?? '',
@@ -63,7 +66,8 @@ export class SettingsService {
 
   async all(): Promise<Settings> {
     const cached = await this.redis.get(CACHE_KEY).catch(() => null);
-    if (cached) { try { return JSON.parse(cached) as Settings; } catch { /* poškozená cache */ } }
+    // Výchozí hodnoty pod cache: nový klíč (např. eurRate) nechybí ani v cache uložené starší verzí aplikace
+    if (cached) { try { return { ...envDefaults(), ...(JSON.parse(cached) as Partial<Settings>) }; } catch { /* poškozená cache */ } }
     const rows = await this.prisma.setting.findMany();
     const s = mergeSettings(envDefaults(), rows);
     await this.redis.set(CACHE_KEY, JSON.stringify(s), 30).catch(() => undefined);

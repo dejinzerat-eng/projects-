@@ -111,6 +111,14 @@ describe('nastavení', () => {
     const e = envDefaults({ SUPPORT_EMAIL: 'help@x.cz', FREE_ACTIVE_LISTINGS: '10', MAX_LISTINGS_PER_HOUR: 'abc' });
     assert.equal(e.supportEmail, 'help@x.cz'); assert.equal(e.freeActiveListings, 10); assert.equal(e.maxListingsPerHour, 20);
   });
+  it('kurz eura: výchozí 25, z prostředí zaokrouhlený, neplatný uložený se ignoruje', () => {
+    assert.equal(d.eurRate, 25);
+    assert.equal(envDefaults({ EUR_RATE: '24.4' }).eurRate, 24);
+    assert.equal(envDefaults({ EUR_RATE: '0' }).eurRate, 25);
+    assert.equal(mergeSettings(d, [{ key: 'eurRate', value: 24 }]).eurRate, 24);
+    assert.equal(mergeSettings(d, [{ key: 'eurRate', value: 0 }]).eurRate, 25);
+    assert.equal(mergeSettings(d, [{ key: 'eurRate', value: 24.5 }]).eurRate, 25);
+  });
 });
 
 describe('sloučení duplicitních nahlášení', () => {
