@@ -61,7 +61,8 @@ export class AuthService {
       if (user) await this.loginFailed(user, client);
       throw new UnauthorizedException('Nesprávný e-mail nebo heslo.');
     }
-    if (user.status !== 'ACTIVE') throw new UnauthorizedException('Účet je zablokován. Kontaktujte podporu.');
+    // RESTRICTED se přihlásit smí (jen nemůže zveřejňovat ani psát), BLOCKED ne
+    if (user.status === 'BLOCKED') throw new UnauthorizedException('Účet je zablokován. Kontaktujte podporu.');
     if (user.failedLogins || user.lockedUntil) await this.prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
     await this.redis.del(key);
     return user;
@@ -245,7 +246,7 @@ export class AuthService {
 
   async forgotPassword(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
-    if (!user || user.status !== 'ACTIVE') return; // neprozrazujeme existenci účtu
+    if (!user || user.status === 'BLOCKED') return; // neprozrazujeme existenci účtu
     const token = await this.issueToken(user.id, 'PASSWORD_RESET', 60);
     const link = `${config.webOrigin}/obnova-hesla?token=${token}`;
     await this.send(user.email, 'Obnova hesla', `<p>Nové heslo si nastavíte zde (platí 1 hodinu):</p><p><a href="${link}">${link}</a></p><p>Pokud jste o obnovu nežádali, e-mail ignorujte.</p>`);
@@ -296,7 +297,7 @@ export class AuthService {
       const email = p.email.toLowerCase();
       const existing = await this.prisma.user.findUnique({ where: { email } });
       if (existing) {
-        if (existing.status !== 'ACTIVE') throw new OAuthError('blokovan', 'Účet je zablokován.');
+        if (existing.status === 'BLOCKED') throw new OAuthError('blokovan', 'Účet je zablokován.');
         const takeover = !existing.emailVerifiedAt;
         user = await this.prisma.user.update({
           where: { id: existing.id },
@@ -317,7 +318,7 @@ export class AuthService {
         await this.audit(user.id, 'auth.register', client, { provider, termsVersion: config.termsVersion });
       }
     }
-    if (user.status !== 'ACTIVE') throw new OAuthError('blokovan', 'Účet je zablokován.');
+    if (user.status === 'BLOCKED') throw new OAuthError('blokovan', 'Účet je zablokován.');
     return user;
   }
 

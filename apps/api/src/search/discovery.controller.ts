@@ -1,8 +1,8 @@
-import { Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Query } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { nearestMunicipality, suggestMunicipalities } from '@dej/shared/dist/municipalities';
 import { z } from 'zod';
-import { Auth, AuthUser, CurrentUser, Roles } from '../common/auth.guard';
+import { Auth, AuthUser, CurrentUser } from '../common/auth.guard';
 import { PrismaService } from '../common/prisma.service';
 import { ZodPipe } from '../common/zod';
 import { LISTING_INCLUDE, SearchService } from './search.service';
@@ -28,10 +28,6 @@ const RecommendedQuery = z.object({
 
 const LimitQuery = z.object({ limit: z.coerce.number().int().min(1).max(24).default(8) });
 
-const PromoteDto = z.object({
-  topDays: z.number().int().min(0).max(90).optional(),
-  highlightDays: z.number().int().min(0).max(90).optional(),
-}).refine((d) => d.topDays !== undefined || d.highlightDays !== undefined, 'Zadejte počet dní topování nebo zvýraznění.');
 
 /** Lokality, prémiové a doporučené nabídky na hlavní stránce, ID oblíbených. */
 @Controller()
@@ -117,19 +113,5 @@ export class DiscoveryController {
   async favoriteIds(@CurrentUser() u: AuthUser) {
     const favs = await this.prisma.favorite.findMany({ where: { userId: u.id }, select: { listingId: true }, orderBy: { createdAt: 'desc' }, take: 2000 });
     return favs.map((f) => f.listingId);
-  }
-
-  /** Topování / zvýraznění inzerátu administrátorem (než budou platby). 0 dní = zrušit. */
-  @Roles('ADMIN')
-  @Post('admin/listings/:id/promote')
-  async promote(@Param('id') id: string, @CurrentUser() u: AuthUser, @Body(new ZodPipe(PromoteDto)) dto: z.infer<typeof PromoteDto>) {
-    const l = await this.prisma.listing.findUnique({ where: { id }, select: { id: true } });
-    if (!l) throw new NotFoundException('Inzerát neexistuje.');
-    const until = (days?: number) => (days === undefined ? undefined : days === 0 ? null : new Date(Date.now() + days * 864e5));
-    const data = { topUntil: until(dto.topDays), highlightedUntil: until(dto.highlightDays) };
-    const r = await this.prisma.listing.update({ where: { id }, data, select: { topUntil: true, highlightedUntil: true } });
-    await this.prisma.auditLog.create({ data: { actorId: u.id, action: 'listing.promote', targetType: 'LISTING', targetId: id, meta: dto as Prisma.InputJsonValue } });
-    await this.search.index(id);
-    return r;
   }
 }

@@ -9,15 +9,21 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+/// Role a jejich oprávnění: packages/shared/src/permissions.ts (ROLE_PERMISSIONS)
 enum Role {
   USER
   MODERATOR
   ADMIN
+  SUPERADMIN
+  SUPPORT
+  BUSINESS_MANAGER
 }
 
+/// RESTRICTED = automaticky nebo ručně omezený účet (nesmí zveřejňovat ani psát zprávy), čeká na kontrolu moderátorem.
 enum UserStatus {
   ACTIVE
   BLOCKED
+  RESTRICTED
 }
 
 enum ListingStatus {
@@ -101,6 +107,8 @@ model User {
   companyVerifiedAt DateTime?
   companyAddress    String?
   vatId             String? // DIČ
+  /// Poslední aktivita (zapisuje AuthGuard nejvýše jednou za 10 minut) – pro DAU/WAU/MAU
+  lastActiveAt      DateTime?
 
   listings        Listing[]
   favorites       Favorite[]
@@ -119,6 +127,8 @@ model User {
   refreshTokens   RefreshToken[]
   tokens          VerificationToken[]
   auditLogs       AuditLog[]
+
+  @@index([lastActiveAt])
 }
 
 model Category {
@@ -314,9 +324,12 @@ model Report {
   status       ReportStatus @default(OPEN)
   resolvedById String?
   resolvedAt   DateTime?
+  /// Poznámka moderátora k vyřízení (vidí ji i oznamovatel v notifikaci)
+  resolutionNote String?
   createdAt    DateTime     @default(now())
 
   @@index([status])
+  @@index([targetType, targetId])
 }
 
 /// Hodnocení je možné jen po skutečné konverzaci (vazba na Conversation).
@@ -435,4 +448,27 @@ model MessagePreference {
   userId         String   @id
   emailOnMessage Boolean  @default(true)
   updatedAt      DateTime @updatedAt
+}
+
+/// Systémová nastavení editovatelná v administraci (klíče a výchozí hodnoty: apps/api/src/admin/settings.service.ts)
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+/// Historie omezení účtů (automatických i ručních). Aktivní omezení = liftedAt je null a User.status = RESTRICTED.
+model UserRestriction {
+  id         String    @id @default(cuid())
+  userId     String
+  /// 'auto' = automat (nahlášení, rizikový obsah), 'staff' = ručně
+  source     String
+  reason     String
+  createdAt  DateTime  @default(now())
+  liftedAt   DateTime?
+  liftedById String?
+  liftNote   String?
+
+  @@index([userId, createdAt])
+  @@index([liftedAt])
 }

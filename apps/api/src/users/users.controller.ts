@@ -44,7 +44,7 @@ export class UsersController {
   @Get('users/:id')
   async profile(@Param('id') id: string, @CurrentUser() viewer?: AuthUser) {
     const u = await this.prisma.user.findUnique({ where: { id }, select: { id: true, name: true, avatarUrl: true, bio: true, city: true, createdAt: true, lastSeenAt: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, companyId: true, companyAddress: true, vatId: true, companyVerifiedAt: true, status: true } });
-    if (!u || u.status !== 'ACTIVE') throw new NotFoundException('Uživatel neexistuje.');
+    if (!u || u.status === 'BLOCKED') throw new NotFoundException('Uživatel neexistuje.');
     const [listings, rating, dist, reviews, sold, followers, following, history] = await Promise.all([
       this.prisma.listing.findMany({ where: { userId: id, status: { in: ['ACTIVE', 'RESERVED'] } }, include: LISTING_INCLUDE, orderBy: { createdAt: 'desc' }, take: 60 }),
       this.prisma.review.aggregate({ where: { sellerId: id }, _avg: { rating: true }, _count: true }),

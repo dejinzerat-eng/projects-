@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListingStatus, Prisma } from '@prisma/client';
-import { buildSearchText, cleanParams, effectiveFilters, type FilterDef, findCity, parseVideoUrl, slugify, VIDEO_URL_ERROR } from '@dej/shared';
+import { buildSearchText, can, cleanParams, effectiveFilters, type FilterDef, findCity, parseVideoUrl, slugify, VIDEO_URL_ERROR } from '@dej/shared';
 import { resolveLocation } from '@dej/shared/dist/municipalities';
 import { z } from 'zod';
 import { AuthUser } from '../common/auth.guard';
@@ -17,6 +17,7 @@ import { canRevealPhone } from '../users/phone-privacy';
 const VideoUrl = z.string().trim().max(500)
   .refine((u) => !u || !!parseVideoUrl(u), { message: VIDEO_URL_ERROR })
   .transform((u) => (u ? parseVideoUrl(u)!.url : ''));
+import { ListingPolicyService } from '../admin/listing-policy.service';
 
 export const ListingDto = z.object({
   title: z.string({ error: 'Napište název inzerátu.' }).trim().min(5, 'Název musí mít alespoň 5 znaků.').max(90, 'Název může mít nejvýše 90 znaků.'),
@@ -61,7 +62,7 @@ const DUP_STATUSES: ListingStatus[] = ['ACTIVE', 'PENDING', 'RESERVED'];
 
 @Injectable()
 export class ListingsService {
-  constructor(private prisma: PrismaService, private search: SearchService, private redis: RedisService) {}
+  constructor(private prisma: PrismaService, private search: SearchService, private redis: RedisService, private policy: ListingPolicyService) {}
 
   /** Jen aktivní podkategorie aktivní hlavní kategorie; parametry podle definic v databázi. */
   private async resolveCategory(categorySlug: string, subSlug: string) {
@@ -78,7 +79,8 @@ export class ListingsService {
 
   private async checkSpam(userId: string) {
     const n = await this.redis.incr(`newlisting:${userId}`, 3600);
-    if (n > 20) throw new BadRequestException('Za hodinu lze vložit nejvýše 20 inzerátů.');
+    const max = await this.policy.maxPerHour();
+    if (n > max) throw new BadRequestException(`Za hodinu lze vložit nejvýše ${max} inzerátů.`);
   }
 
   /** Nezveřejněný koncept smí být neúplný; zveřejněný inzerát musí projít plnou kontrolou. */
@@ -152,12 +154,13 @@ export class ListingsService {
   }
 
   async create(user: AuthUser, dto: ListingInput) {
+    if (dto.publish) await this.policy.beforePublish(user.id);
     await this.checkSpam(user.id);
     const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
     const attributes = this.cleanAttributes(cat.defs, dto.attributes, dto.publish);
     const loc = resolveLocation(dto.city, dto.zip);
     const risk = await this.assess(user.id, null, dto, dto.publish);
-    const status = nextStatus({ publish: dto.publish, premoderation: config.premoderation, score: risk.score });
+    const status = nextStatus({ publish: dto.publish, premoderation: await this.policy.premoderation(), score: risk.score });
     const now = new Date();
     const listing = await this.prisma.listing.create({
       data: {
@@ -168,11 +171,12 @@ export class ListingsService {
         videoUrl: dto.videoUrl || null, status, spamScore: risk.score, riskReasons: risk.reasons, contentHash: risk.hash,
         composeSeconds: status === 'DRAFT' ? null : this.composeSeconds(dto),
         publishedAt: status === 'ACTIVE' ? now : null,
-        expiresAt: nextExpiry({ after: status, expiresAt: null, now, days: config.listingDays }),
+        expiresAt: nextExpiry({ after: status, expiresAt: null, now, days: await this.policy.listingDays() }),
       },
     });
     await this.attachImages(listing.id, user.id, dto.imageIds);
     await this.search.index(listing.id);
+    await this.policy.afterSave(user.id, risk.score, dto.title);
     return { id: listing.id, slug: listing.slug, status, moderation: risk.reasons };
   }
 
@@ -181,10 +185,16 @@ export class ListingsService {
     await Promise.all(ids.map((id, position) => this.prisma.listingImage.updateMany({ where: { id, ownerId: userId }, data: { listingId, position } })));
   }
 
+  private async hasNewPhotos(listingId: string, ids: string[]) {
+    const prev = new Set((await this.prisma.listingImage.findMany({ where: { listingId }, select: { id: true } })).map((i) => i.id));
+    return ids.some((x) => !prev.has(x));
+  }
+
   async ownOrThrow(id: string, user: AuthUser) {
     const l = await this.prisma.listing.findUnique({ where: { id } });
     if (!l || l.status === 'DELETED') throw new NotFoundException('Inzerát neexistuje.');
-    if (l.userId !== user.id && user.role === 'USER') throw new ForbiddenException('Tento inzerát vám nepatří.');
+    // Jen vlastník; tým upravuje cizí inzeráty přes /admin/listings (s důvodem a auditem)
+    if (l.userId !== user.id) throw new ForbiddenException('Tento inzerát vám nepatří.');
     return l;
   }
 
@@ -193,14 +203,18 @@ export class ListingsService {
     // Zveřejněný (nebo zveřejňovaný) inzerát musí být úplný, i když přišel jako koncept
     const publishing = l.status !== 'DRAFT' || input.publish;
     const dto = publishing ? this.requireComplete(input) : input;
+    if (publishing) await this.policy.beforePublish(user.id, id, l.status === 'DRAFT');
     const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
     const attributes = this.cleanAttributes(cat.defs, dto.attributes, publishing);
     // Lokalita se určí vždy znovu – neznámá obec smaže kraj i souřadnice, nezůstanou ty staré
     const loc = resolveLocation(dto.city, dto.zip);
     const risk = await this.assess(l.userId, l, dto, publishing);
-    const status = nextStatus({ current: l.status, publish: dto.publish, premoderation: config.premoderation, score: risk.score });
+    const premoderation = await this.policy.premoderation();
+    let status = nextStatus({ current: l.status, publish: dto.publish, premoderation, score: risk.score });
+    // Při premoderaci jde ke schválení i změněný text nebo nové fotografie schváleného inzerátu
+    if (premoderation && l.status === 'ACTIVE' && status === 'ACTIVE' && (l.title !== dto.title || l.description !== dto.description || (await this.hasNewPhotos(id, dto.imageIds)))) status = 'PENDING';
     const now = new Date();
-    const expiresAt = nextExpiry({ before: l.status, after: status, expiresAt: l.expiresAt, now, days: config.listingDays });
+    const expiresAt = nextExpiry({ before: l.status, after: status, expiresAt: l.expiresAt, now, days: await this.policy.listingDays() });
     await this.prisma.listing.update({
       where: { id },
       data: {
@@ -218,12 +232,14 @@ export class ListingsService {
     });
     await this.attachImages(id, l.userId, dto.imageIds);
     await this.search.index(id);
+    await this.policy.afterSave(user.id, risk.score, dto.title);
     return { id, slug: slugify(dto.title) || 'inzerat', status, moderation: risk.reasons };
   }
 
   async setStatus(id: string, user: AuthUser, status: 'ACTIVE' | 'RESERVED' | 'SOLD') {
     const l = await this.ownOrThrow(id, user);
     if (!['ACTIVE', 'RESERVED', 'SOLD'].includes(l.status)) throw new BadRequestException('Stav tohoto inzerátu nelze změnit.');
+    if (status !== 'SOLD' && l.status === 'SOLD') await this.policy.beforePublish(user.id, id); // WP6: znovuzveřejnění prodaného = limit a omezení účtu
     await this.prisma.listing.update({ where: { id }, data: { status } });
     await this.search.index(id);
     return { ok: true };
@@ -232,7 +248,8 @@ export class ListingsService {
   async renew(id: string, user: AuthUser) {
     const l = await this.ownOrThrow(id, user);
     if (!['ACTIVE', 'EXPIRED', 'RESERVED'].includes(l.status)) throw new BadRequestException('Tento inzerát nelze prodloužit.');
-    await this.prisma.listing.update({ where: { id }, data: { status: l.status === 'EXPIRED' ? 'ACTIVE' : l.status, expiresAt: new Date(Date.now() + config.listingDays * 864e5), expiryNotifiedAt: null } });
+    if (l.status === 'EXPIRED') await this.policy.beforePublish(user.id, id);
+    await this.prisma.listing.update({ where: { id }, data: { status: l.status === 'EXPIRED' ? 'ACTIVE' : l.status, expiresAt: await this.policy.expiresAt(), expiryNotifiedAt: null } });
     await this.search.index(id);
     return { ok: true };
   }
@@ -252,9 +269,10 @@ export class ListingsService {
         user: { select: { id: true, name: true, avatarUrl: true, city: true, createdAt: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, companyVerifiedAt: true, lastSeenAt: true, phone: true, showPhone: true } },
       },
     });
-    const isOwner = viewer && (viewer.id === l?.userId || viewer.role !== 'USER');
-    if (!l || l.status === 'DELETED' || (!isOwner && ['DRAFT', 'PENDING', 'REJECTED'].includes(l.status))) throw new NotFoundException('Inzerát neexistuje nebo byl odstraněn.');
-    if (!isOwner && (await this.redis.lock(`view:${id}:${viewer?.id ?? ip}`, 3600))) {
+    const isOwner = !!viewer && viewer.id === l?.userId;
+    const staff = !!viewer && can(viewer.role, 'listings.read'); // WP6: tým vidí i neveřejné inzeráty, ale není vlastník (úpravy jen přes /admin)
+    if (!l || l.status === 'DELETED' || (!isOwner && !staff && ['DRAFT', 'PENDING', 'REJECTED'].includes(l.status))) throw new NotFoundException('Inzerát neexistuje nebo byl odstraněn.');
+    if (!isOwner && !staff && (await this.redis.lock(`view:${id}:${viewer?.id ?? ip}`, 3600))) {
       await this.prisma.listing.update({ where: { id }, data: { views: { increment: 1 } } });
     }
     const [rating, activeCount, favCount, isFavorite] = await Promise.all([
@@ -264,11 +282,10 @@ export class ListingsService {
       viewer ? this.prisma.favorite.findUnique({ where: { userId_listingId: { userId: viewer.id, listingId: id } } }).then(Boolean) : false,
     ]);
     const { phone, showPhone, companyVerifiedAt, ...seller } = l.user;
-    // Interní údaje automatické kontroly vidí jen moderátoři (jinak by šlo kontrolu obcházet)
-    const staff = !!viewer && viewer.role !== 'USER';
+    // Interní údaje automatické kontroly vidí jen tým (jinak by šlo kontrolu obcházet)
     const { spamScore, riskReasons, contentHash: _hash, composeSeconds, ...pub } = l;
     return {
-      ...pub, ...(staff ? { spamScore, riskReasons, composeSeconds } : {}), user: undefined,
+      ...pub, ...(staff ? { spamScore, riskReasons, composeSeconds } : {}), user: undefined, rejectReason: staff || viewer?.id === l.userId ? l.rejectReason : undefined,
       seller: { ...seller, companyName: companyVerifiedAt ? seller.companyName : null, phoneVerified: !!l.user.phoneVerifiedAt, emailVerified: !!l.user.emailVerifiedAt, phoneVerifiedAt: undefined, emailVerifiedAt: undefined, rating: rating._avg.rating, reviewCount: rating._count, activeListings: activeCount, hasPhone: canRevealPhone(l.status, { phone, phoneVerifiedAt: l.user.phoneVerifiedAt, showPhone }, false) },
       favorites: favCount, isFavorite, isOwner: !!isOwner, filters: l.category.parent ? effectiveFilters(l.category.parent.slug, l.category.parent.filters, l.category.slug, l.category.filters) : [],
     };

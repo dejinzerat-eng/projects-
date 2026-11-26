@@ -14,10 +14,11 @@ import { ListingInput, ListingsService, parseListingBody } from './listings.serv
 class ListingBodyPipe implements PipeTransform {
   transform(value: unknown) { return parseListingBody(value); }
 }
+import { ReportDto, ReportInput, ReportsService } from '../admin/reports.service';
 
 @Controller()
 export class ListingsController {
-  constructor(private listings: ListingsService, private search: SearchService, private prisma: PrismaService) {}
+  constructor(private listings: ListingsService, private search: SearchService, private prisma: PrismaService, private reports: ReportsService) {}
 
   @Get('categories')
   async categories() {
@@ -159,8 +160,8 @@ export class ListingsController {
   @Auth()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('reports')
-  async report(@CurrentUser() u: AuthUser, @Body(new ZodPipe(z.object({ targetType: z.enum(['LISTING', 'USER', 'MESSAGE']), targetId: z.string(), reason: z.string().min(2).max(80), note: z.string().max(1000).optional() }))) dto: { targetType: 'LISTING' | 'USER' | 'MESSAGE'; targetId: string; reason: string; note?: string }) {
-    await this.prisma.report.create({ data: { ...dto, reporterId: u.id } });
-    return { ok: true };
+  report(@CurrentUser() u: AuthUser, @Body(new ZodPipe(ReportDto)) dto: ReportInput) {
+    // WP6: kontrola cíle, bez duplicit a nahlášení sebe sama, vyhodnocení automatického omezení účtu
+    return this.reports.file(u, dto);
   }
 }

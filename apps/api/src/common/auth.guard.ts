@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { Role } from '@prisma/client';
 import { createHash } from 'crypto';
 import type { Request } from 'express';
+import { markActive } from './activity';
 import { PrismaService } from './prisma.service';
 import { RedisService } from './redis.service';
 
@@ -27,9 +28,10 @@ export class AuthGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest<Request & { user?: AuthUser }>();
     const token = req.cookies?.[SESSION_COOKIE] || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : undefined);
     if (token) req.user = (await this.resolve(token)) ?? undefined;
+    if (req.user) await markActive(this.prisma, this.redis, req.user.id); // WP6: lastActiveAt pro DAU/WAU/MAU (nejvýše 1× za 10 min)
     if (!meta || meta.mode === 'optional') return true;
     if (!req.user) throw new UnauthorizedException('Pro tuto akci se musíte přihlásit.');
-    if (meta.roles?.length && !meta.roles.includes(req.user.role) && req.user.role !== 'ADMIN') throw new ForbiddenException('Nemáte oprávnění.');
+    if (meta.roles?.length && !meta.roles.includes(req.user.role) && req.user.role !== 'ADMIN' && req.user.role !== 'SUPERADMIN') throw new ForbiddenException('Nemáte oprávnění.');
     return true;
   }
 
@@ -39,7 +41,7 @@ export class AuthGuard implements CanActivate {
     if (cached) return cached === '-' ? null : JSON.parse(cached);
     const s = await this.prisma.refreshToken.findUnique({ where: { tokenHash: h }, include: { user: true } });
     let u: AuthUser | null = null;
-    if (s && !s.revokedAt && s.expiresAt > new Date() && s.user.status === 'ACTIVE') {
+    if (s && !s.revokedAt && s.expiresAt > new Date() && s.user.status !== 'BLOCKED') { // RESTRICTED (omezený) účet zůstává přihlášen, jen nesmí zveřejňovat a psát
       u = { id: s.user.id, role: s.user.role, name: s.user.name, email: s.user.email, emailVerified: !!s.user.emailVerifiedAt, phoneVerified: !!s.user.phoneVerifiedAt };
       // poslední použití pro přehled přihlášených zařízení (nejvýš jednou za 5 minut)
       if (!s.lastUsedAt || Date.now() - s.lastUsedAt.getTime() > 5 * 60_000) {

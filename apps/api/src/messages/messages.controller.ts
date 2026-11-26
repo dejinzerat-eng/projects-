@@ -5,7 +5,8 @@ import { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import sharp from 'sharp';
 import { z } from 'zod';
-import { Auth, AuthUser, CurrentUser, Roles } from '../common/auth.guard';
+import { Auth, AuthUser, CurrentUser } from '../common/auth.guard';
+import { Can } from '../common/permissions';
 import { MailerService } from '../common/mailer.service';
 import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
@@ -14,6 +15,7 @@ import { config } from '../common/config';
 import { StorageService } from '../media/storage.service';
 import { assessMessageSafety, cleanPreview, escapeHtml, foreignPhones } from './link-check';
 import { directKey, isOwnMediaUrl, messageEmail, ownHosts, photosEnabled, safeName } from './messages.util';
+import { TrustService } from '../admin/trust.service';
 
 export { escapeHtml };
 
@@ -36,7 +38,7 @@ const listingOut = (l: ListingRow) => (l ? { id: l.id, title: l.title, slug: l.s
 @Controller()
 export class MessagesController {
   private log = new Logger('Messages');
-  constructor(private prisma: PrismaService, private redis: RedisService, private mail: MailerService, private storage: StorageService) {}
+  constructor(private prisma: PrismaService, private redis: RedisService, private mail: MailerService, private storage: StorageService, private trust: TrustService) {}
 
   private async blocked(a: string, b: string) {
     return !!(await this.prisma.block.findFirst({ where: { OR: [{ blockerId: a, blockedId: b }, { blockerId: b, blockedId: a }] } }));
@@ -118,6 +120,7 @@ export class MessagesController {
     const l = await this.prisma.listing.findUnique({ where: { id: listingId } });
     if (!l || !['ACTIVE', 'RESERVED'].includes(l.status)) throw new NotFoundException('Inzerát není aktivní.');
     if (l.userId === u.id) throw new BadRequestException('Nemůžete psát sami sobě.');
+    await this.trust.assertNotRestricted(u.id); // WP6: omezený účet nesmí psát
     if (await this.blocked(u.id, l.userId)) throw new ForbiddenException('Komunikace s tímto uživatelem není možná.');
     await this.newConvAllowed(u);
     const conv = await this.prisma.conversation.upsert({ where: { listingId_buyerId: { listingId, buyerId: u.id } }, create: { listingId, buyerId: u.id, sellerId: l.userId }, update: {} });
@@ -177,6 +180,7 @@ export class MessagesController {
   @Post('conversations/:id/messages')
   async send(@Param('id') id: string, @CurrentUser() u: AuthUser, @Body(new ZodPipe(MsgDto)) dto: Msg) {
     const c = await this.participantConv(id, u);
+    await this.trust.assertNotRestricted(u.id); // WP6: omezený účet nesmí psát
     const otherId = c.buyerId === u.id ? c.sellerId : c.buyerId;
     if (await this.blocked(u.id, otherId)) throw new ForbiddenException('Komunikace s tímto uživatelem byla zablokována.');
 
@@ -197,6 +201,7 @@ export class MessagesController {
       await tx.conversation.update({ where: { id }, data: { lastMessageAt: m.createdAt, buyerArchivedAt: null, sellerArchivedAt: null } });
       return m;
     });
+    if (dto.body) await this.trust.afterMessage(u.id, dto.body).catch(() => false); // WP6: podezřelé zprávy → automatické omezení
     await this.notify(c, u, otherId, dto.body, !!imageUrl).catch((e) => this.log.warn(`Notifikace se nepodařila: ${(e as Error).message}`));
     return { id: msg.id, senderId: msg.senderId, body: msg.body, imageUrl: msg.imageUrl, createdAt: msg.createdAt, readAt: msg.readAt };
   }
@@ -238,9 +243,13 @@ export class MessagesController {
     return { ok: true, archived: false };
   }
 
-  private async createReport(u: AuthUser, targetType: 'CONVERSATION' | 'MESSAGE', targetId: string, conversationId: string, dto: ReportIn) {
+  private async createReport(u: AuthUser, targetType: 'CONVERSATION' | 'MESSAGE', targetId: string, conversationId: string, dto: ReportIn, ownerId?: string) {
     const dup = await this.prisma.report.findFirst({ where: { reporterId: u.id, targetType, targetId, status: 'OPEN' }, select: { id: true } });
-    if (!dup) await this.prisma.report.create({ data: { reporterId: u.id, targetType, targetId, conversationId, reason: dto.reason, note: dto.note || undefined } });
+    if (!dup) {
+      await this.prisma.report.create({ data: { reporterId: u.id, targetType, targetId, conversationId, reason: dto.reason, note: dto.note || undefined } });
+      // WP6: nahlášení od více různých lidí vede k automatickému omezení autora zpráv
+      if (ownerId) await this.trust.afterReport(ownerId).catch(() => false);
+    }
     return { ok: true };
   }
 
@@ -258,7 +267,7 @@ export class MessagesController {
     const m = await this.prisma.message.findUnique({ where: { id }, include: { conversation: { select: { id: true, buyerId: true, sellerId: true } } } });
     if (!m || (m.conversation.buyerId !== u.id && m.conversation.sellerId !== u.id)) throw new NotFoundException('Zpráva neexistuje.');
     if (m.senderId === u.id) throw new BadRequestException('Vlastní zprávu nahlásit nelze.');
-    return this.createReport(u, 'MESSAGE', id, m.conversation.id, dto);
+    return this.createReport(u, 'MESSAGE', id, m.conversation.id, dto, m.senderId);
   }
 
   @Get('me/message-settings')
@@ -274,7 +283,7 @@ export class MessagesController {
   }
 
   /** Moderátor: nahlášená konverzace jen ke čtení. Nenahlášené konverzace zůstávají soukromé. */
-  @Roles('MODERATOR')
+  @Can('reports.read')
   @Get('admin/conversations/:id')
   async adminView(@Param('id') id: string, @CurrentUser() u: AuthUser) {
     const reports = await this.prisma.report.findMany({ where: { conversationId: id }, orderBy: { createdAt: 'desc' }, include: { reporter: { select: { id: true, name: true } } } });
