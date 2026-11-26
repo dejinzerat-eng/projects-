@@ -5,9 +5,12 @@ import { AuthUser, CurrentUser } from '../common/auth.guard';
 import { Can } from '../common/permissions';
 import { PrismaService } from '../common/prisma.service';
 import { ZodPipe } from '../common/zod';
+import { RedisService } from '../common/redis.service';
 import { SearchService } from '../search/search.service';
+import { saveRedirects } from '../seo/seo.controller';
+import { categoryRedirects } from '../seo/seo.logic';
 import { audit, diff } from './audit';
-import { SettingsSchema, SettingsService } from './settings.service';
+import { SettingsService, SystemSettingsDto } from './settings.service';
 
 const slug = z.string().trim().min(2, 'Adresa musí mít alespoň 2 znaky.').max(60).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Adresa smí obsahovat jen malá písmena bez diakritiky, číslice a pomlčky.');
 const FilterDef = z.object({
@@ -31,7 +34,7 @@ export const SYSTEM_PAGES = ['podminky', 'ochrana-udaju', 'bezpecny-nakup', 'nap
 /** Kategorie, ceník, informační stránky a systémová nastavení. */
 @Controller('admin')
 export class AdminContentController {
-  constructor(private prisma: PrismaService, private search: SearchService, private settings: SettingsService) {}
+  constructor(private prisma: PrismaService, private search: SearchService, private settings: SettingsService, private redis: RedisService) {}
 
   private async reindexCategory(ids: string[]) {
     const ls = await this.prisma.listing.findMany({ where: { categoryId: { in: ids } }, select: { id: true } });
@@ -87,10 +90,17 @@ export class AdminContentController {
     const position = moved && dto.position === c.position ? ((await this.prisma.category.aggregate({ where: { parentId }, _max: { position: true } }))._max.position ?? -1) + 1 : dto.position;
     const data = { ...dto, parentId, position, filters: dto.filters as Prisma.InputJsonValue | undefined };
     const changes = diff(c as unknown as Record<string, unknown>, data as Record<string, unknown>);
+    const children = await this.prisma.category.findMany({ where: { parentId: id }, select: { id: true, slug: true } });
+    // Změněná adresa výpisu → trvalé přesměrování ze staré adresy (i pro podkategorie), viz Správa SEO
+    const slugOf = async (pid: string | null) => (pid ? (await this.prisma.category.findUnique({ where: { id: pid }, select: { slug: true } }))?.slug ?? null : null);
+    const redirects = moved || changes.slug
+      ? categoryRedirects({ slug: c.slug, parentSlug: await slugOf(c.parentId) }, { slug: dto.slug ?? c.slug, parentSlug: await slugOf(parentId) }, children.map((x) => x.slug))
+      : [];
     await this.prisma.category.update({ where: { id }, data });
-    if (moved || changes.slug || changes.name || changes.active) await this.reindexCategory([id, ...(await this.prisma.category.findMany({ where: { parentId: id }, select: { id: true } })).map((x) => x.id)]);
-    await audit(this.prisma, u, moved ? 'category.move' : 'category.update', 'category', id, { changes });
-    return { ok: true };
+    await saveRedirects(this.prisma, this.redis, redirects);
+    if (moved || changes.slug || changes.name || changes.active) await this.reindexCategory([id, ...children.map((x) => x.id)]);
+    await audit(this.prisma, u, moved ? 'category.move' : 'category.update', 'category', id, { changes, ...(redirects.length ? { redirects } : {}) });
+    return { ok: true, redirects: redirects.length };
   }
 
   /** Posun v pořadí mezi sourozenci. */
@@ -194,7 +204,7 @@ export class AdminContentController {
 
   @Can('settings.manage')
   @Put('settings')
-  async saveSettings(@CurrentUser() u: AuthUser, @Body(new ZodPipe(SettingsSchema.partial())) dto: Partial<z.infer<typeof SettingsSchema>>) {
+  async saveSettings(@CurrentUser() u: AuthUser, @Body(new ZodPipe(SystemSettingsDto)) dto: z.infer<typeof SystemSettingsDto>) {
     const { changed, settings } = await this.settings.update(dto);
     if (Object.keys(changed).length) await audit(this.prisma, u, 'settings.update', 'settings', 'system', { changes: changed });
     return settings;

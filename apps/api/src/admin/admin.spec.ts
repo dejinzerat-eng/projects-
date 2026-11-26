@@ -1,9 +1,9 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { can, ROLE_PERMISSIONS, ROLES } from '@dej/shared';
-import { diff, validIco } from './audit';
+import { AUDIT_TEXT_MAX, compactValue, diff, validIco } from './audit';
 import { groupReports } from './reports.service';
-import { envDefaults, mergeSettings, SettingsSchema } from './settings.service';
+import { envDefaults, HomeSeoDto, mergeSettings, SettingsSchema, SystemSettingsDto } from './settings.service';
 import { checkRoleChange, checkStatusChange } from './staff-policy';
 import { autoRestrictReason } from './trust.service';
 
@@ -102,6 +102,13 @@ describe('nastavení', () => {
     assert.equal(s.listingDays, 60); assert.equal(s.premoderation, d.premoderation); assert.equal(s.freeActiveListings, 5);
     assert.equal((s as Record<string, unknown>).xyz, undefined);
   });
+  it('SEO úvodní stránky: výchozí prázdné, délka omezená, formulář nastavení ho nepřepíše', () => {
+    assert.equal(d.homeTitle, ''); assert.equal(d.homeDescription, '');
+    assert.equal(HomeSeoDto.safeParse({ homeTitle: 'x'.repeat(71), homeDescription: '' }).success, false);
+    assert.deepEqual(HomeSeoDto.parse({ homeTitle: '  Bazar  ', homeDescription: '' }), { homeTitle: 'Bazar', homeDescription: '' });
+    assert.equal('homeTitle' in SystemSettingsDto.parse({ homeTitle: 'Jiný', listingDays: 30 }), false);
+    assert.equal(mergeSettings(d, [{ key: 'homeTitle', value: 'Inzerce' }]).homeTitle, 'Inzerce');
+  });
   it('validuje IČO a e-mail podpory', () => {
     assert.equal(SettingsSchema.partial().safeParse({ operatorIco: '123' }).success, false);
     assert.equal(SettingsSchema.partial().safeParse({ supportEmail: 'neplatny' }).success, false);
@@ -139,5 +146,14 @@ describe('pomocné funkce', () => {
   });
   it('diff vrací jen změněná pole', () => {
     assert.deepEqual(diff({ a: 1, b: 'x', c: null }, { a: 1, b: 'y', c: undefined }), { b: { from: 'x', to: 'y' } });
+  });
+  it('diff do auditu zkrátí dlouhé texty a data uloží jako ISO', () => {
+    const long = 'a'.repeat(5000);
+    const d = diff({ description: long, topUntil: null as Date | null }, { description: `${long}b`, topUntil: new Date('2026-12-03T10:00:00Z') });
+    assert.equal(String(d.description.from).length < AUDIT_TEXT_MAX + 30, true);
+    assert.match(String(d.description.to), /… \(5001 znaků\)$/);
+    assert.deepEqual(d.topUntil, { from: null, to: '2026-12-03T10:00:00.000Z' });
+    assert.equal(compactValue('krátký'), 'krátký');
+    assert.equal(compactValue(undefined), null);
   });
 });

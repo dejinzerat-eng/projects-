@@ -3,6 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { Prisma, type Listing } from '@prisma/client';
 import type { Request } from 'express';
 import { z } from 'zod';
+import { diff } from '../admin/audit';
 import { Auth, AuthUser, CurrentUser } from '../common/auth.guard';
 import { Can } from '../common/permissions';
 import { verifyCaptcha } from '../common/captcha';
@@ -153,7 +154,7 @@ export class NoticesAdminController {
         <p><b>Důvod:</b> ${esc(dto.reason)}</p>
         <p><b>Rozsah opatření:</b> inzerát není veřejně dostupný. Rozhodl člověk z týmu moderace na základě oznámení třetí osoby (čl. 16 DSA).</p>
         <p>Pokud s rozhodnutím nesouhlasíte, můžete do 6 měsíců <a href="${config.webOrigin}/namitka?inzerat=${l.id}">podat námitku</a>. Máte také právo obrátit se na certifikovaný orgán mimosoudního řešení sporů nebo na soud.</p>`));
-      await this.prisma.auditLog.create({ data: { actorId: u.id, action: `listing.${action === 'delete' ? 'delete' : 'reject'}`, targetType: 'listing', targetId: l.id, meta: { notice: n.ref, reason: dto.reason } } });
+      await this.prisma.auditLog.create({ data: { actorId: u.id, action: `listing.${action === 'delete' ? 'delete' : 'reject'}`, targetType: 'listing', targetId: l.id, meta: { notice: n.ref, reason: dto.reason, owner: l.userId, from: l.status, to: status, changes: diff(l as unknown as Record<string, unknown>, { status, rejectReason: dto.reason }) } as Prisma.InputJsonValue } });
     }
     const done = { status: dto.status };
     await this.prisma.auditLog.create({ data: { actorId: u.id, action: `notice.${dto.status.toLowerCase()}`, targetType: 'notice', targetId: id, meta: { ref: n.ref, action } } });
@@ -189,8 +190,10 @@ export class NoticesAdminController {
     if (!claimed.count) throw new BadRequestException('Námitka už byla vyřízena.');
     const l = await this.prisma.listing.findUnique({ where: { id: a.listingId } });
     if (dto.status === 'UPHELD' && l && ['REJECTED', 'DELETED'].includes(l.status)) {
-      await this.prisma.listing.update({ where: { id: l.id }, data: { status: 'ACTIVE', rejectReason: null, publishedAt: l.publishedAt ?? new Date(), ...(l.expiresAt && l.expiresAt.getTime() < Date.now() + 7 * 864e5 ? { expiresAt: new Date(Date.now() + 30 * 864e5) } : {}) } });
+      const data = { status: 'ACTIVE' as const, rejectReason: null, publishedAt: l.publishedAt ?? new Date(), ...(l.expiresAt && l.expiresAt.getTime() < Date.now() + 7 * 864e5 ? { expiresAt: new Date(Date.now() + 30 * 864e5) } : {}) };
+      await this.prisma.listing.update({ where: { id: l.id }, data });
       await this.search.index(l.id);
+      await this.prisma.auditLog.create({ data: { actorId: u.id, action: 'listing.reinstate', targetType: 'listing', targetId: l.id, meta: { appeal: a.ref, reason: dto.reason, owner: l.userId, changes: diff(l as unknown as Record<string, unknown>, data) } as Prisma.InputJsonValue } });
     }
     await this.prisma.auditLog.create({ data: { actorId: u.id, action: `appeal.${dto.status.toLowerCase()}`, targetType: 'appeal', targetId: id, meta: { ref: a.ref, listingId: a.listingId } } });
     const title = dto.status === 'UPHELD' ? 'Námitce jsme vyhověli – inzerát je opět zveřejněn' : 'Námitku jsme zamítli';

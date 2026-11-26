@@ -24,9 +24,15 @@ export const SettingsSchema = z.object({
   operatorName: z.string().trim().max(120),
   operatorIco: z.string().trim().regex(/^(\d{8})?$/, 'IČO má 8 číslic.'),
   operatorAddress: z.string().trim().max(200),
+  /** SEO úvodní stránky (prázdné = výchozí text webu). Upravuje se ve Správě SEO. */
+  homeTitle: z.string().trim().max(70, 'Titulek může mít nejvýše 70 znaků.'),
+  homeDescription: z.string().trim().max(300, 'Popis může mít nejvýše 300 znaků.'),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
-export const PUBLIC_SETTING_KEYS = ['supportEmail', 'supportPhone', 'operatorName', 'operatorIco', 'operatorAddress', 'listingDays', 'freeActiveListings'] as const;
+export const PUBLIC_SETTING_KEYS = ['supportEmail', 'supportPhone', 'operatorName', 'operatorIco', 'operatorAddress', 'listingDays', 'freeActiveListings', 'homeTitle', 'homeDescription'] as const;
+/** Formulář Systémová nastavení nepřepisuje SEO úvodní stránky (to se upravuje ve Správě SEO). */
+export const SystemSettingsDto = SettingsSchema.omit({ homeTitle: true, homeDescription: true }).partial();
+export const HomeSeoDto = SettingsSchema.pick({ homeTitle: true, homeDescription: true });
 
 export function envDefaults(env: NodeJS.ProcessEnv = process.env): Settings {
   return {
@@ -41,6 +47,8 @@ export function envDefaults(env: NodeJS.ProcessEnv = process.env): Settings {
     operatorName: env.OPERATOR_NAME ?? '',
     operatorIco: env.OPERATOR_ICO ?? '',
     operatorAddress: env.OPERATOR_ADDRESS ?? '',
+    homeTitle: '',
+    homeDescription: '',
   };
 }
 
@@ -54,7 +62,7 @@ export function mergeSettings(defaults: Settings, rows: { key: string; value: un
   return out as Settings;
 }
 
-const CACHE_KEY = 'settings:v1';
+const CACHE_KEY = 'settings:v2';
 
 /**
  * Systémová nastavení z tabulky Setting (s cache 30 s v Redisu, bez Redisu v paměti instance).

@@ -10,6 +10,26 @@ function useAct() {
   return async (fn: () => Promise<unknown>, ok = 'Uloženo') => { try { await fn(); toast(ok); router.refresh(); } catch (e) { toast((e as Error).message, 'error'); } };
 }
 
+export function HomeSeo({ initial, defaults }: { initial: { homeTitle: string; homeDescription: string }; defaults: { title: string; description: string } }) {
+  const act = useAct();
+  const [v, setV] = useState(initial);
+  return (
+    <form className="card space-y-3 p-4" onSubmit={(e) => { e.preventDefault(); act(() => call('/admin/seo/home', 'PUT', v), 'SEO úvodní stránky uloženo'); }}>
+      <div>
+        <label className="label text-xs" htmlFor="h-title">Titulek (title)</label>
+        <input id="h-title" className="input" maxLength={70} placeholder={defaults.title} value={v.homeTitle} onChange={(e) => setV({ ...v, homeTitle: e.target.value })} />
+        <p className="mt-1 text-xs text-muted">{v.homeTitle.length}/70 znaků, ideálně do 60</p>
+      </div>
+      <div>
+        <label className="label text-xs" htmlFor="h-desc">Popis (meta description)</label>
+        <textarea id="h-desc" rows={2} className="input text-sm" maxLength={300} placeholder={defaults.description} value={v.homeDescription} onChange={(e) => setV({ ...v, homeDescription: e.target.value })} />
+        <p className="mt-1 text-xs text-muted">{v.homeDescription.length}/300 znaků, ideálně 120–160</p>
+      </div>
+      <div className="flex items-center justify-between gap-2"><Link href="/" target="_blank" className="text-sm text-brand-ink hover:underline">Zobrazit úvodní stránku</Link><button className="btn btn-dark btn-sm">Uložit</button></div>
+    </form>
+  );
+}
+
 type Redirect = { from: string; to: string; code: number; hits: number; createdAt: string };
 export function Redirects({ rows }: { rows: Redirect[] }) {
   const act = useAct();

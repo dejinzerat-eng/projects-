@@ -13,13 +13,20 @@ import type { Metadata } from 'next';
 import { JsonLd } from '@/components/json-ld';
 import { organization, website } from '@/lib/jsonld';
 import { getOperator } from '@/lib/operator';
-import { social } from '@/lib/seo';
+import { HOME_DESCRIPTION, HOME_TITLE, social } from '@/lib/seo';
 
-// Kanonická adresa bez parametrů (varianta ?ikony=b je jen náhled)
-export const metadata: Metadata = {
-  alternates: { canonical: '/' },
-  ...social({ title: 'Dejinzerat.cz – moderní inzerce a bazar zdarma', description: 'Inzeráty zdarma z celé České republiky. Prodávejte a nakupujte rychle a bezpečně.', path: '/' }),
-};
+// Kanonická adresa bez parametrů (varianta ?ikony=b je jen náhled). Titulek a popis lze upravit ve Správě SEO.
+export async function generateMetadata(): Promise<Metadata> {
+  const s = await api<{ homeTitle?: unknown; homeDescription?: unknown }>('/settings/public', { revalidate: 300, auth: false }).catch(() => null);
+  const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+  const title = text(s?.homeTitle) ?? HOME_TITLE, description = text(s?.homeDescription);
+  return {
+    title: { absolute: title },
+    ...(description ? { description } : {}),
+    alternates: { canonical: '/' },
+    ...social({ title, description: description ?? HOME_DESCRIPTION, path: '/' }),
+  };
+}
 
 const POPULAR = ['iPhone 15', 'Byt 2+kk Praha', 'Kočárek', 'Horské kolo do 15 000 Kč', 'Škoda Octavia'];
 

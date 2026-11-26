@@ -14,6 +14,8 @@ interface Row {
   rejectReason: string | null; topUntil: string | null; highlightedUntil: string | null; currency?: string; offerType?: string;
 }
 
+const active = (v: string | null) => !!v && new Date(v) > new Date();
+const until = (v: string) => new Date(v).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric', timeZone: 'Europe/Prague' });
 
 export function ModerationList({ rows, perms }: { rows: Row[]; perms: Permission[] }) {
   const sp = useSearchParams()!; const act = useAct(); const { ask, dialog } = useReasonDialog();
@@ -29,9 +31,9 @@ export function ModerationList({ rows, perms }: { rows: Row[]; perms: Permission
     }
     await act(() => call(`/admin/listings/${r.id}/moderate`, 'POST', { action, reason }), action === 'approve' ? 'Schváleno' : action === 'reject' ? 'Zamítnuto' : 'Smazáno');
   }
-  async function promote(r: Row, body: Record<string, unknown>, label: string) {
-    const reason = await ask({ title: label, label: 'Důvod (do auditního logu)', placeholder: 'Např. kompenzace za výpadek, firemní tarif…', confirm: 'Přidělit' });
-    if (reason !== null) await act(() => call(`/admin/listings/${r.id}/promote`, 'POST', { ...body, reason }), 'Přiděleno');
+  async function promote(r: Row, body: Record<string, unknown>, label: string, cancel = false) {
+    const reason = await ask({ title: label, label: 'Důvod (do auditního logu)', placeholder: cancel ? 'Např. reklamace, ukončený firemní tarif…' : 'Např. kompenzace za výpadek, firemní tarif…', confirm: cancel ? label : 'Přidělit', danger: cancel });
+    if (reason !== null) await act(() => call(`/admin/listings/${r.id}/promote`, 'POST', { ...body, reason }), cancel ? 'Zrušeno' : 'Přiděleno');
   }
 
   const status = sp.get('status') ?? 'PENDING';
@@ -42,14 +44,17 @@ export function ModerationList({ rows, perms }: { rows: Row[]; perms: Permission
         <form className="w-full sm:ml-auto sm:w-auto"><input type="hidden" name="status" value={status} /><input name="q" defaultValue={sp.get('q') ?? ''} placeholder="Hledat název, ID, e-mail…" aria-label="Hledat inzeráty" className="input h-9 w-full text-sm sm:w-60" /></form>
       </div>
       {!rows.length ? <div className="card p-10 text-center text-muted">Nic k zobrazení.</div> : (
-        <ul className="space-y-3">{rows.map((r) => (
+        <ul className="space-y-3">{rows.map((r) => {
+          const isTop = active(r.topUntil), isHighlighted = active(r.highlightedUntil);
+          return (
           <li key={r.id} className="card space-y-3 p-4">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="badge bg-surface-2">{STATUS_LABEL[r.status]}</span>
               {r.spamScore > 0 && <span className={`badge ${r.spamScore >= 50 ? 'bg-danger-soft text-danger' : 'bg-top-soft'}`}>Riziko {r.spamScore}</span>}
               {r.openReports > 0 && <span className="badge bg-danger-soft text-danger">Nahlášeno {r.openReports}×</span>}
               {r.userStatus !== 'ACTIVE' && <span className="badge bg-danger-soft text-danger">{r.userStatus === 'RESTRICTED' ? 'Účet omezen' : 'Účet zablokován'}</span>}
-              {r.topUntil && new Date(r.topUntil) > new Date() && <span className="badge bg-top-soft">Top</span>}
+              {isTop && <span className="badge bg-top-soft">Top do {until(r.topUntil!)}</span>}
+              {isHighlighted && <span className="badge bg-top-soft">Zvýrazněno do {until(r.highlightedUntil!)}</span>}
               <span className="text-muted">{r.categoryName} · {r.city} · {ago(r.createdAt)}</span>
             </div>
             {r.images.length > 0 ? (
@@ -69,14 +74,17 @@ export function ModerationList({ rows, perms }: { rows: Row[]; perms: Permission
               {canModerate && r.status !== 'ACTIVE' && <button onClick={() => moderate(r, 'approve')} className="btn btn-sm bg-trust text-white">Schválit</button>}
               {canModerate && r.status !== 'REJECTED' && <button onClick={() => moderate(r, 'reject')} className="btn btn-outline btn-sm">Zamítnout</button>}
               {canEdit && <button onClick={() => setEdit(r)} className="btn btn-outline btn-sm">Upravit</button>}
-              {canPromote && <button onClick={() => promote(r, { topDays: 7 }, 'Topovat na 7 dní')} className="btn btn-outline btn-sm">Top 7 dní</button>}
-              {canPromote && <button onClick={() => promote(r, { highlightDays: 7 }, 'Zvýraznit na 7 dní')} className="btn btn-outline btn-sm">Zvýraznit</button>}
+              {canPromote && <button onClick={() => promote(r, { topDays: 7 }, isTop ? 'Topovat 7 dní (od teď)' : 'Topovat 7 dní')} className="btn btn-outline btn-sm">Topovat 7 dní</button>}
+              {canPromote && isTop && <button onClick={() => promote(r, { topDays: 0 }, 'Zrušit topování', true)} className="btn btn-ghost btn-sm">Zrušit topování</button>}
+              {canPromote && <button onClick={() => promote(r, { highlightDays: 7 }, isHighlighted ? 'Zvýraznit 7 dní (od teď)' : 'Zvýraznit 7 dní')} className="btn btn-outline btn-sm">Zvýraznit 7 dní</button>}
+              {canPromote && isHighlighted && <button onClick={() => promote(r, { highlightDays: 0 }, 'Zrušit zvýraznění', true)} className="btn btn-ghost btn-sm">Zrušit zvýraznění</button>}
               {canPromote && <button onClick={() => promote(r, { bump: true }, 'Posunout na začátek')} className="btn btn-outline btn-sm">Posunout</button>}
               {canModerate && <button onClick={() => moderate(r, 'delete')} className="btn btn-danger btn-sm">Smazat</button>}
 
             </div>
           </li>
-        ))}</ul>
+          );
+        })}</ul>
       )}
       {edit && <StaffEdit row={edit} onClose={() => setEdit(null)} />}
       {dialog}

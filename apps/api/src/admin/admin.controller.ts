@@ -10,6 +10,7 @@ import { assessListingDetailed } from '../listings/moderation';
 import { priceInCzk } from '../listings/price';
 import { LISTING_INCLUDE, SearchService } from '../search/search.service';
 import { audit, diff } from './audit';
+import { AuditQuery, auditWhere, encodeCursor } from './audit-query';
 import { ListingPolicyService } from './listing-policy.service';
 
 const STATUSES = ['DRAFT', 'PENDING', 'ACTIVE', 'RESERVED', 'SOLD', 'EXPIRED', 'REJECTED', 'DELETED'] as const;
@@ -110,10 +111,11 @@ export class AdminController {
     const status: ListingStatus = dto.action === 'approve' ? 'ACTIVE' : dto.action === 'reject' ? 'REJECTED' : 'DELETED';
     // Schválený inzerát má plnou platnost od schválení (čekání ve frontě se do platnosti nepočítá)
     const renew = status === 'ACTIVE' && (!l.publishedAt || !l.expiresAt || l.expiresAt < new Date());
-    await this.prisma.listing.update({ where: { id }, data: { status, rejectReason: dto.action === 'approve' ? null : dto.reason, publishedAt: status === 'ACTIVE' ? (l.publishedAt ?? new Date()) : l.publishedAt, ...(renew ? { expiresAt: await this.policy.expiresAt(), expiryNotifiedAt: null } : {}) } });
+    const data = { status, rejectReason: dto.action === 'approve' ? null : (dto.reason ?? null), publishedAt: status === 'ACTIVE' ? (l.publishedAt ?? new Date()) : l.publishedAt, ...(renew ? { expiresAt: await this.policy.expiresAt(), expiryNotifiedAt: null } : {}) };
+    await this.prisma.listing.update({ where: { id }, data });
     const title = { approve: `Inzerát „${l.title}“ byl schválen`, reject: `Inzerát „${l.title}“ byl zamítnut`, delete: `Inzerát „${l.title}“ byl odstraněn moderátorem` }[dto.action];
     await this.prisma.notification.create({ data: { userId: l.userId, type: 'moderation', title, body: dto.reason, link: '/muj-ucet/inzeraty' } });
-    await audit(this.prisma, u, `listing.${dto.action}`, 'listing', id, { reason: dto.reason ?? null, from: l.status, to: status, owner: l.userId });
+    await audit(this.prisma, u, `listing.${dto.action}`, 'listing', id, { reason: dto.reason ?? null, from: l.status, to: status, owner: l.userId, changes: diff(l as unknown as Record<string, unknown>, data) });
     await this.search.index(id);
     return { ok: true };
   }
@@ -146,18 +148,22 @@ export class AdminController {
     const data = { topUntil: until(dto.topDays), highlightedUntil: until(dto.highlightDays), bumpedAt: dto.bump ? new Date() : undefined };
     if (Object.values(data).every((v) => v === undefined)) throw new BadRequestException('Vyberte službu.');
     await this.prisma.listing.update({ where: { id }, data });
-    await audit(this.prisma, u, 'listing.promote', 'listing', id, { owner: l.userId, ...dto });
+    await audit(this.prisma, u, 'listing.promote', 'listing', id, { owner: l.userId, ...dto, changes: diff(l as unknown as Record<string, unknown>, data) });
     await this.search.index(id);
     return { ok: true };
   }
 
+  /** Auditní log s filtry (akce, kdo, cíl, období) a stránkováním podle klíče (?cursor=). */
   @Can('audit.read')
   @Get('audit')
-  auditLog(@Query('action') action?: string, @Query('targetId') targetId?: string) {
-    return this.prisma.auditLog.findMany({
-      where: { ...(action ? { action: { startsWith: action } } : {}), ...(targetId ? { targetId } : {}) },
-      include: { actor: { select: { name: true, email: true, role: true } } }, orderBy: { createdAt: 'desc' }, take: 200,
+  async auditLog(@Query(new ZodPipe(AuditQuery)) q: AuditQuery) {
+    const rows = await this.prisma.auditLog.findMany({
+      where: auditWhere(q),
+      include: { actor: { select: { id: true, name: true, email: true, role: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: q.limit + 1,
     });
+    const items = rows.slice(0, q.limit);
+    const last = items[items.length - 1];
+    return { items, nextCursor: rows.length > q.limit && last ? encodeCursor(last.createdAt, last.id) : null };
   }
 
   @Can('search.reindex')
