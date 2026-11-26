@@ -8,6 +8,7 @@ import { call } from '@/lib/client';
 import { ago } from '@/lib/format';
 import { shrinkImage } from '@/lib/image';
 import { Avatar } from './avatar';
+import { SellerSettings } from './seller-settings';
 import { useToast } from './toast';
 
 export interface SessionItem { id: string; device: string; ip: string | null; createdAt: string; lastUsedAt: string; current: boolean }
@@ -79,6 +80,7 @@ export function Settings({ me, blocked, sessions, smsEnabled, welcome }: { me: A
           <div className="sm:col-span-2"><button className="btn btn-dark">Uložit profil</button></div>
         </form>
       </Section>
+      <SellerSettings refreshKey={me} />
 
       <Section id="overeni" title="E-mail a telefon" desc="Ověření prodejci mají u inzerátů zelený odznak a kupující jim víc důvěřují.">
         <div className="divide-y divide-line">

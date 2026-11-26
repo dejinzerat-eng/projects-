@@ -5,6 +5,7 @@ import { MailerService } from '../common/mailer.service';
 import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { SearchService } from '../search/search.service';
+import { runRetention } from '../users/gdpr';
 
 /**
  * Pravidelné úlohy (každých 5 minut, zámek v Redisu → běží jen na jedné instanci):
@@ -28,6 +29,7 @@ export class JobsService implements OnApplicationBootstrap, OnModuleDestroy {
   async tick() {
     if (!(await this.redis.lock('jobs:tick', 240))) return;
     try { await this.expiry(); await this.savedSearchAlerts(); } catch (e) { this.log.error((e as Error).stack); }
+    if (await this.redis.lock('jobs:retention', 86_400)) await runRetention(this.prisma).catch((e) => this.log.error((e as Error).stack));
   }
 
   async expiry() {
