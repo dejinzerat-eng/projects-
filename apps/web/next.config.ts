@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import type { NextConfig } from 'next';
+import { legacyRedirects } from '@dej/shared/dist/legacy';
 
 const api = process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
 /** Na Vercelu běží API přímo ve webu (src/pages/api), lokálně jako samostatný server. */
@@ -11,6 +12,10 @@ const config: NextConfig = {
   outputFileTracingRoot: join(__dirname, '../..'),
   outputFileTracingIncludes: { '/api/**': ['./.api/**', '../../node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/**'] },
   images: { remotePatterns: [{ protocol: 'https', hostname: '**' }, { protocol: 'http', hostname: 'localhost' }] },
+  // Adresy starého webu www.dejinzerat.cz (začnou platit po přepnutí domény; inzeráty řeší stránka /produkt)
+  async redirects() {
+    return legacyRedirects().map((r) => ({ source: r.from, destination: r.to, permanent: true }));
+  },
   async rewrites() {
     if (embeddedApi) return [{ source: '/uploads/:path*', destination: '/api/uploads/:path*' }];
     return [

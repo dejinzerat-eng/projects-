@@ -24,9 +24,9 @@ const PROHIBITED: Rule[] = [
   rule('padělané doklady', 80, /\b(((prod[aá]m|nab[ií]z[ií]m|za[řr][ií]d[ií]m|vyrob[ií]m)\s+((nov|česk|slovensk|evropsk|prav|origin[aá]ln|registrovan|cestovn|platn|fale[šs]n|pad[ěe]lan)\p{L}*\s+|v[aá]m\s+|ti\s+){0,2}(ob[čc]ansk\p{L}*\s+pr[ůu]kaz|[řr]idi[čc]sk\p{L}*\s+pr[ůu]kaz|[řr]idi[čc][aá]k[yu]?\b|pas[yu]?\b|ob[čc]ank[uy]\b|doklady\s+(toto[žz]nosti|na\s+(jin[ée]|cizí|libovoln))))|(za[řr][ií]d[ií]m|vyrob[ií]m)\s+(v[aá]m\s+|ti\s+)?(\p{L}+\s+)?doklady\b|([řr]idi[čc][aá]k\p{L}*|doklady|pas|ob[čc]ansk\p{L}*\s+pr[ůu]kaz)\s+na\s+prodej|[řr]idi[čc][aá]k\p{L}*\s+bez\s+(zkou[šs]ek|autoškoly)|(fale[šs]n|pad[ěe]lan)\p{L}*\s+(doklad|pas|pr[ůu]kaz|[řr]idi[čc][aá]k|bankovk|pen[ií]z|eur|dolar))/iu),
   rule('sexuální služby', 80, /\b(eskort\p{L}*\s+(služb|agentur|sleč|d[ií]v[kč]|společ)|(?<!ford\s{1,3})escort\s+(služb|agentur|sleč|d[ií]v[kč]|girl|servis|service)|sex\s?služb|sexu[aá]ln\p{L}*\s+služb|erotick[éá]\s+(služb|mas[aá]ž)|prostituc|mas[aá][žz]\p{L}*[^\n]{0,40}happy\s?end)/iu),
   rule('padělky značkového zboží', 60, /\b(pad[ěe]lek|pad[ěe]lky|replik\p{L}*\s+(zna[čc]k|rolex|louis|lv\b|gucci|chanel|prada|herm[eè]s|dior|nike|adidas|moncler|canada\s+goose|balenciaga)|fake\s+(rolex|nike|gucci|louis|adidas)|kopie\s+(zna[čc]k|rolex|louis|gucci|chanel|hodinek\s+rolex)|1\s?:\s?1\s+(kopie|replik)|aaa\s+kvalit)/iu),
-  rule('léčiva a anabolika', 60, /\b(l[ée]k\p{L}*\s+na\s+p[řr]edpis|anaboli[kc]|steroid[yůa]|xanax|rivotril|neurol\b|tramal|oxykodon|oxycontin|morfin|metadon|subutex)/iu),
+  rule('léčiva a anabolika', 60, /\b(l[ée]k\p{L}*\s+na\s+p[řr]edpis|anaboli[kc]|steroid[yůa]|xanax|rivotril|neurol\b|tramal|oxykodon|oxycontin|morfin|metadon|subutex|mounjaro|ozempic|wegovy|saxenda|semaglutid|tirzepatid|liraglutid)/iu),
   rule('kradené zboží a chráněné druhy', 60, /\b(kraden\p{L}*\s+(zbo[žz][ií]|v[ěe]c|telefon|mobil|kol[oa]|aut[oa]|notebook)|bez\s+dokladu\s+o\s+p[ůu]vodu|slonovin)/iu),
-  rule('rizikové půjčky', 60, /\b(p[ůu]j[čc]k\p{L}*\s+(i\s+)?bez\s+(registr|dolo[žz]en|ru[čc]itel)|nebankovn\p{L}*\s+p[ůu]j[čc]k|p[ůu]j[čc]k\p{L}*\s+ihned\s+na\s+ruku)/iu),
+  rule('rizikové půjčky', 60, /\b(p[ůu]j[čc]k\p{L}*\s+(i\s+)?bez\s+(registr|dolo[žz]en|ru[čc]itel)|nebankovn\p{L}*\s+p[ůu]j[čc]k|p[ůu]j[čc]k\p{L}*\s+ihned\s+na\s+ruku|(rychl|snadn|osobn|okam[žz]it|expresn)\p{L}*\s+(a\s+(rychl|snadn)\p{L}*\s+)?(finan[čc]n\p{L}*\s+|nab[ií]dk\p{L}*\s+)?p[ůu]j[čc]k|p[ůu]j[čc]k\p{L}*\s+pro\s+ka[žz]d|pen[ěe][žz]n\p{L}*\s+p[ůu]j[čc]k|pot[řr]ebujete\s+(\p{L}+\s+)?p[ůu]j[čc]k|nab[ií]dk\p{L}*\s+p[ůu]j[čc]k|bank\p{L}*\s+(\p{L}+\s+){0,4}zam[ií]tl)/iu),
 ];
 
 /** Nevinné spojení se slovem ze seznamu (nářadí, hračky) – před kontrolou zakázaného zboží se z textu vypustí. */
@@ -34,6 +34,8 @@ const BENIGN = [
   /\b(tavn|st[řr][ií]kac|lakovac|p[aá]jec|horkovzdu[šs]n|vodn|d[ěe]tsk|tlakov|myc|h[řr]eb[ií]kovac|sponkovac|n[ýy]tovac|silikonov|vzduchov|mas[aá][žz]n|p[ěe]nov|kartu[šs]ov|ofukovac|foukac|plastov|kapaln)\p{L}*\s+(pistol|zbra[nň])\p{L}*/iu,
   /\bpistol\p{L}*\s+(na|pro)\s+(silikon|lepidl|tavn|barv|lak|vod|myt|kartu[šs]|h[řr]eb[ií]k|sponk|n[ýy]t|p[ěe]n|maz|vzduch|ofuk|fouk|tmel|mont[aá][žz]n|pneu|hu[šs]t[ěe]n)\p{L}*/iu,
   /\bpistolov\p{L}*\s+(vrta[čc]k|[šs]roubov[aá]k|uchop|rukoje)\p{L}*/iu,
+  // příslušenství tlakových myček a kompresorů: „hadice 8 m + pistole“
+  /\b(hadic|trysk|kompresor|my[čc]k)\p{L}*[^\n]{0,30}?pistol\p{L}*/iu,
   /\b(nerf|airsoft\p{L}*|hra[čc]k\p{L}*|lego|playmobil|paintball\p{L}*|kuli[čc]kov\p{L}*)\s+(\p{L}+\s+)?(pistol|zbra[nň]|revolver|pu[šs]k|samopal|kala[šs]nikov|glock)\p{L}*(\s+(glock|colt|beretta|walther|ak-?47|m4|kala[šs]nikov)\p{L}*)?/iu,
   // Příslušenství (trezor na zbraně, pouzdro na pistoli, čisticí sada) – samo o sobě zakázané není
   /\b(trezor|sk[řr][ií][ňn]|pouzd[rř]|dr[žz][aá]k|kuf[rř]|ta[šs]k|stojan|[čc]ist[ií]c|sad[ay]|obal|vitr[ií]n|ter[čc]|[řr]emen|popruh)\p{L}*\s+(na|pro)\s+(\p{L}+\s+)?(zbra|pistol|pu[šs]k|brokovnic|revolver)\p{L}*/iu,
@@ -48,6 +50,8 @@ const SCAM: Rule[] = [
   rule('kontakt mimo portál na zahraniční číslo', 50, /\b(whatsapp|telegram|viber|signal)\b[^\n]{0,60}?\+(44|23[3-7]|1)(?=[\s\d(-])/iu),
   rule('komunikace jen mimo portál', 50, /\b(komunik\p{L}*|kontakt\p{L}*|pi[šs]\p{L}*|napi[šs]\p{L}*)\s+(\p{L}+\s+){0,3}(pouze|jen|v[ýy]hradn[ěe])\s+(p[řr]es|na)\s+(whatsapp|telegram|viber|signal)/iu),
   rule('platební odkaz nebo údaje z karty', 50, /\b(klikn[ěe]te\s+na\s+(tento\s+|n[ií][žz]e\s+uveden\p{L}*\s+)?odkaz|(platebn|zabezpe[čc]en|bezpe[čc]n)\p{L}*\s+odkaz|odkaz\p{L}*\s+(k|pro|na)\s+(platb|p[řr]ijet[ií]|zaplacen|p[řr]evzet[ií]\s+pen[ěe]z|vyplacen)|pro\s+p[řr]ijet[ií]\s+(platby|pen[ěe]z)|zadejte\s+(\p{L}+\s+){0,2}(kart|cvv|pin)|(č[ií]slo|ú[dď]aje|[čc][ií]sla)\s+(z\s+)?(va[šs][ií]\s+|sv[ée]\s+)?(platebn[ií]\s+)?karty|cvv\b|cvc\b|k[óo]d\s+z\s+sms|ov[ěe][řr]ovac[ií]\s+k[óo]d|(z[aá]silkovn|bal[ií]kovn|dpd|ppl|po[šs]t)\p{L}*\s+(v[aá]m\s+)?(po[šs]le|za[šs]le|p[řr]ijde)\s+(\p{L}+\s+){0,2}odkaz)/iu),
+  // Známý podvod: „štěňata/koťata zdarma k adopci“ – po zájemci se pak chce platba za dopravu nebo očkování
+  rule('zvíře zdarma k adopci (častý podvod)', 50, /\b((zdarma|bezplatn\p{L}*|d[aá]rek)\s+(\p{L}+\s+){0,4}k\s+adopci|k\s+adopci\s+(\p{L}+\s+){0,2}zdarma|k\s+bezplatn\p{L}*\s+adopci|(zdarma|bezplatn\p{L}*)\s+(\p{L}+\s+){0,3}([šs]t[ěe][nň]|ko[ťt][aá]t|ko[ťt][ěe])\p{L}*)/iu),
   rule('nereálný výdělek', 50, /\b(rychl\p{L}*\s+v[ýy]d[ěe]lek|garantovan\p{L}*\s+(v[ýy]nos|zisk)|zbohatn[eě]te|vyd[ěe]lejte\s+(si\s+)?(a[žz]\s+)?\d)/iu),
 ];
 

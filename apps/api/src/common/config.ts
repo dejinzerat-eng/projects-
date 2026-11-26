@@ -25,6 +25,8 @@ export const config = {
   turnstileSecret: process.env.TURNSTILE_SECRET?.trim() || undefined,
   turnstileSiteKey: process.env.TURNSTILE_SITE_KEY?.trim() || undefined,
   resendKey: process.env.RESEND_API_KEY,
+  /** Adresa API Resend (v testech falešný server). */
+  resendUrl: (process.env.RESEND_API_URL ?? 'https://api.resend.com').replace(/\/$/, ''),
   mailFrom: process.env.MAIL_FROM ?? 'Dejinzerat.cz <noreply@dejinzerat.cz>',
   s3: {
     endpoint: process.env.S3_ENDPOINT || undefined,

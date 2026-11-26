@@ -248,6 +248,23 @@ export class AuthService {
     await this.audit(userId, 'auth.phone_verify', client, { phone: `…${phone.slice(-3)}` });
   }
 
+  /**
+   * Pozvánka prodejci převzatému ze starého webu: odkaz na nastavení hesla (platí 14 dní, jen jednou).
+   * Heslo e-mailem neposíláme – odkaz po použití neplatí a heslo zná jen sám uživatel.
+   */
+  async sendLegacyInvite(user: { id: string; email: string; name: string }, listingCount: number) {
+    const token = await this.issueToken(user.id, 'PASSWORD_RESET', 60 * 24 * 14);
+    const link = `${config.webOrigin}/obnova-hesla?token=${token}`;
+    const site = config.webOrigin.replace(/^https?:\/\//, '');
+    await this.send(user.email, 'Váš účet na novém Dejinzerat.cz',
+      `<p>Dobrý den, ${escapeHtml(user.name)},</p>` +
+      `<p>web Dejinzerat.cz běží v nové verzi. Vaše inzeráty ze starého webu${listingCount ? ` (${listingCount})` : ''} jsme přenesli a založili jsme vám účet pro e-mail <b>${escapeHtml(user.email)}</b>.</p>` +
+      `<p>Heslo ze starého webu z bezpečnostních důvodů nepřenášíme. Nové heslo si nastavíte zde (odkaz platí 14 dní a lze ho použít jen jednou):</p>` +
+      `<p><a href="${link}">${link}</a></p>` +
+      `<p>Po přihlášení můžete inzeráty upravit, prodloužit nebo smazat. Pokud účet nechcete, můžete ho v Nastavení účtu smazat i se všemi údaji, nebo nám napište a smažeme ho za vás.</p>` +
+      `<p>Když odkaz vyprší, použijte na ${escapeHtml(site)} „Zapomenuté heslo“.</p>`);
+  }
+
   async forgotPassword(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (!user || user.status === 'BLOCKED') return; // neprozrazujeme existenci účtu

@@ -7,7 +7,7 @@ export class MailerService {
   private log = new Logger('Mailer');
   async send(to: string, subject: string, html: string) {
     if (!config.resendKey) { this.log.log(`[DEV e-mail] ${to} | ${subject}\n${html.replace(/<[^>]+>/g, ' ')}`); return; }
-    const r = await fetch('https://api.resend.com/emails', {
+    const r = await fetch(`${config.resendUrl}/emails`, {
       method: 'POST', headers: { Authorization: `Bearer ${config.resendKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: config.mailFrom, to, subject, html }),
     });
