@@ -14,7 +14,8 @@ function useSubmit() {
   return { error, busy, run };
 }
 
-const safeBack = (z: string | null) => (z && z.startsWith('/') && !z.startsWith('//') && !z.startsWith('/\\') ? z : '/');
+/** Návrat po přihlášení jen na cestu našeho webu. Řídicí znaky prohlížeč z adresy vypouští („/\t/cizi.cz“ by se změnilo na „//cizi.cz“), proto je odmítáme. */
+const safeBack = (z: string | null) => (z && z.length <= 500 && z.startsWith('/') && !z.startsWith('//') && !z.startsWith('/\\') && !/[\x00-\x1f\x7f]/.test(z) ? z : '/');
 
 type Providers = { google?: boolean; apple?: boolean; sms?: boolean; captchaSiteKey?: string | null };
 let providersPromise: Promise<Providers> | undefined;
@@ -216,5 +217,27 @@ export function ResetForm() {
       <ErrorBox error={error} />
       <button className="btn btn-primary w-full" disabled={busy}>Nastavit heslo</button>
     </form>
+  );
+}
+
+/** Potvrzení nového e-mailu až kliknutím (odkaz z e-mailu mohou otevřít i automatické kontroly v poště). */
+export function EmailChangeConfirm({ token }: { token: string }) {
+  const { error, busy, run } = useSubmit();
+  const [done, setDone] = useState(false);
+  if (!token) return <p className="text-center text-ink-2">Odkaz není úplný. Otevřete ho prosím znovu z e-mailu.</p>;
+  if (done) return (
+    <div className="flex flex-col items-center gap-4 text-center">
+      <p className="rounded-xl bg-trust-soft p-4 text-[15px] text-trust">Hotovo, nový e-mail je u vašeho účtu nastavený a ověřený.</p>
+      <Link href="/muj-ucet/nastaveni" className="btn btn-primary">Nastavení účtu</Link>
+    </div>
+  );
+  return (
+    <div className="space-y-4">
+      <p className="text-center text-ink-2">Kliknutím potvrdíte, že tuto adresu chcete používat pro svůj účet na Dejinzerat.cz.</p>
+      <ErrorBox error={error} />
+      <button className="btn btn-primary w-full" disabled={busy} onClick={() => run(async () => { await call('/auth/email/confirm', 'POST', { token }); setDone(true); })}>
+        {busy ? 'Potvrzuji…' : 'Potvrdit nový e-mail'}
+      </button>
+    </div>
   );
 }

@@ -45,7 +45,7 @@ describe('CSRF', () => {
 describe('návratová adresa a OAuth state', () => {
   it('safeBack pustí jen cesty na našem webu', () => {
     assert.equal(safeBack('/muj-ucet/nastaveni?x=1'), '/muj-ucet/nastaveni?x=1');
-    for (const bad of ['//evil.example', '/\\evil.example', 'https://evil.example', 'javascript:alert(1)', '/a\nb', '', null, undefined]) assert.equal(safeBack(bad as string), '/', String(bad));
+    for (const bad of ['//evil.example', '/\\evil.example', 'https://evil.example', 'javascript:alert(1)', '/a\nb', '/\t/evil.example', '/\x0b/evil.example', '', null, undefined]) assert.equal(safeBack(bad as string), '/', String(bad));
   });
   it('zabalí a rozbalí state, nonce a zpet', () => {
     const v = packOAuthState({ state: 'abc', nonce: 'n1', back: '/inzerat/1/kolo?a=b.c' });

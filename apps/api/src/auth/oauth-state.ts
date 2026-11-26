@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'crypto';
 /** Návratová adresa po přihlášení: jen cesta na našem webu (ne //cizi.cz ani absolutní URL). */
 export function safeBack(z?: string | null): string {
   if (!z || typeof z !== 'string' || z.length > 500) return '/';
-  if (!z.startsWith('/') || z.startsWith('//') || z.startsWith('/\\') || /[\r\n\t]/.test(z)) return '/';
+  if (!z.startsWith('/') || z.startsWith('//') || z.startsWith('/\\') || /[\x00-\x1f\x7f]/.test(z)) return '/';
   return z;
 }
 

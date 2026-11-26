@@ -106,23 +106,22 @@ export function Settings({ me, blocked, sessions, smsEnabled, welcome }: { me: A
           </div>
 
           <div className="pt-4">
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3">
               <Phone className="size-5 shrink-0 text-muted" />
               {me.phoneVerifiedAt && !phoneEdit ? <>
-                <span className="flex-1">{me.phone}</span><Verified />
-                {smsEnabled && <div className="w-full pl-8"><button onClick={() => { setPhoneEdit(true); setPhone(''); }} className="btn btn-ghost btn-sm -ml-3">Změnit číslo</button></div>}
-              </> : !smsEnabled ? (
-                <span className="flex-1 text-sm text-muted">Ověření telefonu brzy spustíme.</span>
-              ) : (
-                <form className="flex flex-1 flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); void sendCode(); }}>
-                  <input className="input max-w-56" type="tel" inputMode="tel" autoComplete="tel" placeholder="+420 777 123 456" value={phone} onChange={(e) => setPhone(e.target.value)} aria-label="Telefon" required />
-                  <button className="btn btn-outline h-11">Poslat kód</button>
-                  {me.phoneVerifiedAt && <button type="button" onClick={() => { setPhoneEdit(false); setCodeSent(null); }} className="btn btn-ghost h-11">Zrušit</button>}
-                </form>
-              )}
+                <span className="min-w-0 flex-1">{me.phone}</span><Verified />
+              </> : <span className="min-w-0 flex-1 text-sm text-muted">{smsEnabled ? 'Telefon ověříte kódem z SMS.' : 'Ověření telefonu brzy spustíme.'}</span>}
             </div>
+            {me.phoneVerifiedAt && !phoneEdit && smsEnabled && <div className="mt-2 pl-8"><button onClick={() => { setPhoneEdit(true); setPhone(''); }} className="btn btn-ghost btn-sm -ml-3">Změnit číslo</button></div>}
+            {phoneEdit && smsEnabled && (
+              <form className="mt-3 flex flex-wrap gap-2 pl-8" onSubmit={(e) => { e.preventDefault(); void sendCode(); }}>
+                <input className="input min-w-0 flex-1 sm:max-w-56" type="tel" inputMode="tel" autoComplete="tel" placeholder="+420 777 123 456" value={phone} onChange={(e) => setPhone(e.target.value)} aria-label="Telefon" required />
+                <button className="btn btn-outline h-11">Poslat kód</button>
+                {me.phoneVerifiedAt && <button type="button" onClick={() => { setPhoneEdit(false); setCodeSent(null); }} className="btn btn-ghost h-11">Zrušit</button>}
+              </form>
+            )}
             {codeSent !== null && phoneEdit && smsEnabled && (
-              <form className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-surface-2 p-3" onSubmit={async (e) => {
+              <form className="mt-3 ml-8 flex flex-wrap items-center gap-2 rounded-xl bg-surface-2 p-3" onSubmit={async (e) => {
                 e.preventDefault();
                 if (await run(() => call('/auth/phone/verify', 'POST', { code }), 'Telefon ověřen')) { setCodeSent(null); setPhoneEdit(false); }
               }}>

@@ -254,7 +254,12 @@ export class AuthService {
   async resetPassword(token: string, password: string, client: ClientInfo = {}) {
     const t = await this.consumeToken('PASSWORD_RESET', token);
     // obnova hesla přes e-mail zároveň odemkne účet uzamčený po chybných pokusech
-    const user = await this.prisma.user.update({ where: { id: t.userId }, data: { passwordHash: await bcrypt.hash(password, 12), failedLogins: 0, lockedUntil: null } });
+    // odkaz přišel e-mailem, takže vlastník adresu zároveň ověřil
+    const prev = await this.prisma.user.findUniqueOrThrow({ where: { id: t.userId }, select: { emailVerifiedAt: true } });
+    const user = await this.prisma.user.update({
+      where: { id: t.userId },
+      data: { passwordHash: await bcrypt.hash(password, 12), failedLogins: 0, lockedUntil: null, ...(prev.emailVerifiedAt ? {} : { emailVerifiedAt: new Date() }) },
+    });
     const n = await this.revokeAll(t.userId);
     await this.audit(user.id, 'auth.password_reset', client, { revokedSessions: n });
     await this.send(user.email, 'Heslo bylo změněno', `<p>Dobrý den, ${escapeHtml(user.name)},</p><p>heslo k vašemu účtu bylo právě nastaveno přes odkaz pro obnovu a všechna zařízení byla odhlášena.</p>`);

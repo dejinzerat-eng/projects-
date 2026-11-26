@@ -116,9 +116,11 @@ export class AuthController {
     return this.auth.requestEmailChange(u.id, dto.email, dto.password);
   }
 
-  @Get('email/confirm')
-  async emailConfirm(@Query('token') token: string, @Req() req: Request) {
-    await this.auth.confirmEmailChange(typeof token === 'string' ? token : '', clientInfo(req)); return { ok: true };
+  /** Potvrzení nového e-mailu tlačítkem na webu (POST, aby odkaz nepotvrdily automatické kontroly odkazů v poště). */
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('email/confirm')
+  async emailConfirm(@Body(new ZodPipe(z.object({ token: z.string().min(10).max(200) }))) dto: { token: string }, @Req() req: Request) {
+    await this.auth.confirmEmailChange(dto.token, clientInfo(req)); return { ok: true };
   }
 
   @Auth()
