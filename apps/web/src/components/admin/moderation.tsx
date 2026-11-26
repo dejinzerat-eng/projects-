@@ -32,7 +32,7 @@ export function ModerationList({ rows, perms }: { rows: Row[]; perms: Permission
     await act(() => call(`/admin/listings/${r.id}/moderate`, 'POST', { action, reason }), action === 'approve' ? 'Schváleno' : action === 'reject' ? 'Zamítnuto' : 'Smazáno');
   }
   async function promote(r: Row, body: Record<string, unknown>, label: string, cancel = false) {
-    const reason = await ask({ title: label, label: 'Důvod (do auditního logu)', placeholder: cancel ? 'Např. reklamace, ukončený firemní tarif…' : 'Např. kompenzace za výpadek, firemní tarif…', confirm: cancel ? 'Zrušit' : 'Přidělit', danger: cancel });
+    const reason = await ask({ title: label, label: 'Důvod (do auditního logu)', placeholder: cancel ? 'Např. reklamace, ukončený firemní tarif…' : 'Např. kompenzace za výpadek, firemní tarif…', confirm: cancel ? label : 'Přidělit', danger: cancel });
     if (reason !== null) await act(() => call(`/admin/listings/${r.id}/promote`, 'POST', { ...body, reason }), cancel ? 'Zrušeno' : 'Přiděleno');
   }
 
