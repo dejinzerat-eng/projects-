@@ -11,16 +11,16 @@ function useAct() {
   return async (fn: () => Promise<unknown>, ok = 'Uloženo') => { try { await fn(); toast(ok); router.refresh(); } catch (e) { toast((e as Error).message, 'error'); } };
 }
 
-export function Reports({ rows }: { rows: { id: string; targetType: string; targetId: string; reason: string; note: string | null; createdAt: string; reporter: { name: string; email: string }; listing?: { id: string; slug: string; title: string; status: string }; user?: { id: string; name: string; email: string; status: string } }[] }) {
+export function Reports({ rows }: { rows: { id: string; targetType: string; targetId: string; conversationId?: string | null; reason: string; note: string | null; createdAt: string; reporter: { name: string; email: string }; listing?: { id: string; slug: string; title: string; status: string }; user?: { id: string; name: string; email: string; status: string } }[] }) {
   const act = useAct();
   if (!rows.length) return <div className="card p-10 text-center text-muted">Žádná otevřená nahlášení. 🎉</div>;
   return (
     <ul className="space-y-3">{rows.map((r) => (
       <li key={r.id} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2 text-xs"><span className="badge bg-danger-soft text-danger">{r.reason}</span><span className="text-muted">{r.targetType === 'LISTING' ? 'Inzerát' : r.targetType === 'USER' ? 'Uživatel' : 'Zpráva'} · {ago(r.createdAt)} · nahlásil(a) {r.reporter.name}</span></div>
+          <div className="flex flex-wrap items-center gap-2 text-xs"><span className="badge bg-danger-soft text-danger">{r.reason}</span><span className="text-muted">{r.targetType === 'LISTING' ? 'Inzerát' : r.targetType === 'USER' ? 'Uživatel' : r.targetType === 'CONVERSATION' ? 'Konverzace' : 'Zpráva'} · {ago(r.createdAt)} · nahlásil(a) {r.reporter.name}</span></div>
           <div className="mt-1 font-semibold">
-            {r.listing ? <Link className="hover:underline" target="_blank" href={listingUrl(r.listing)}>{r.listing.title}</Link> : r.user ? <Link className="hover:underline" target="_blank" href={`/uzivatel/${r.user.id}`}>{r.user.name} ({r.user.email})</Link> : r.targetId}
+            {r.listing ? <Link className="hover:underline" target="_blank" href={listingUrl(r.listing)}>{r.listing.title}</Link> : r.user ? <Link className="hover:underline" target="_blank" href={`/uzivatel/${r.user.id}`}>{r.user.name} ({r.user.email})</Link> : r.conversationId ? <Link className="hover:underline" href={`/admin/konverzace/${r.conversationId}`}>Zobrazit konverzaci (jen ke čtení)</Link> : r.targetId}
           </div>
           {r.note && <p className="mt-1 text-sm text-muted">„{r.note}“</p>}
         </div>

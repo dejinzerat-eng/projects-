@@ -47,16 +47,4 @@ export class MediaController {
     const rec = await this.prisma.listingImage.create({ data: { ownerId: u.id, url, thumbUrl, width: large.info.width, height: large.info.height, phash } });
     return { id: rec.id, url, thumbUrl, width: rec.width, height: rec.height };
   }
-
-  /** Obrázek do konverzace */
-  @Auth()
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
-  @Post('message-image')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX } }))
-  async messageImage(@UploadedFile() file: Express.Multer.File) {
-    if (!file || !/^image\//.test(file.mimetype)) throw new BadRequestException('Chybí obrázek.');
-    const buf = await sharp(file.buffer).rotate().resize({ width: 1400, height: 1400, fit: 'inside', withoutEnlargement: true }).webp({ quality: 80 }).toBuffer().catch(() => { throw new BadRequestException('Soubor není platný obrázek.'); });
-    const url = await this.storage.put(`messages/${randomBytes(12).toString('hex')}.webp`, buf, 'image/webp');
-    return { url };
-  }
 }
