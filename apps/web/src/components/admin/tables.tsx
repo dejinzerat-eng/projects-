@@ -76,10 +76,10 @@ function CategoryDialog({ cat, parents, onClose }: { cat: Cat; parents: Cat[]; o
     <Modal title={`Upravit kategorii ${cat.name}`} onClose={onClose} onSubmit={() => act(() => call(`/admin/categories/${cat.id}`, 'PUT', {
       name: v.name, slug: v.slug, icon: v.icon || null, active: v.active, position: v.position, parentId: v.parentId, seoTitle: v.seoTitle || null, seoDescription: v.seoDescription || null,
       filters: filters.map((f) => ({ ...f, options: ['select', 'multiselect'].includes(f.type) ? (f.options ?? []).filter(Boolean) : undefined, unit: f.type === 'range' ? f.unit || undefined : undefined })),
-    })).then((ok) => ok && onClose())}>
+    }), v.slug !== cat.slug || v.parentId !== cat.parentId ? 'Uloženo, stará adresa se přesměruje' : 'Uloženo').then((ok) => ok && onClose())}>
       <div className="grid gap-3 sm:grid-cols-2">
         <div><label className="label" htmlFor="ce-name">Název</label><input id="ce-name" className="input" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} /></div>
-        <div><label className="label" htmlFor="ce-slug">Adresa (slug)</label><input id="ce-slug" className="input" value={v.slug} onChange={(e) => setV({ ...v, slug: e.target.value })} /></div>
+        <div><label className="label" htmlFor="ce-slug">Adresa (slug)</label><input id="ce-slug" className="input" value={v.slug} onChange={(e) => setV({ ...v, slug: e.target.value })} />{(v.slug !== cat.slug || v.parentId !== cat.parentId) && <p className="mt-1 text-xs text-muted">Ze staré adresy{cat._count.children ? ' (i u podkategorií)' : ''} se po uložení vytvoří trvalé přesměrování.</p>}</div>
         <div>
           <label className="label" htmlFor="ce-parent">Nadřazená kategorie</label>
           <select id="ce-parent" className="input" value={v.parentId ?? ''} disabled={!canMove && !cat.parentId} onChange={(e) => setV({ ...v, parentId: e.target.value || null })}>

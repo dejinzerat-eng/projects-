@@ -53,3 +53,34 @@ export const PageMetaDto = z.object({
 });
 
 export const toDate = (v: string | null | undefined) => (v ? new Date(`${v}T00:00:00Z`) : null);
+
+/** Adresa výpisu kategorie (hlavní nebo podkategorie). */
+export const categoryPath = (slug: string, parentSlug?: string | null) => (parentSlug ? `/kategorie/${parentSlug}/${slug}` : `/kategorie/${slug}`);
+
+/**
+ * Trvalá přesměrování po změně adresy kategorie (slug nebo přesun pod jinou hlavní kategorii).
+ * U hlavní kategorie se přesměrují i adresy všech jejích podkategorií.
+ */
+export function categoryRedirects(
+  before: { slug: string; parentSlug: string | null },
+  after: { slug: string; parentSlug: string | null },
+  childSlugs: string[] = [],
+): { from: string; to: string }[] {
+  const from = categoryPath(before.slug, before.parentSlug), to = categoryPath(after.slug, after.parentSlug);
+  if (from === to) return [];
+  // Podkategorie existují jen pod hlavní kategorií – když kategorie zůstala hlavní, posunou se s ní
+  const children = !before.parentSlug && !after.parentSlug ? childSlugs.map((c) => ({ from: `${from}/${c}`, to: `${to}/${c}` })) : [];
+  return [{ from, to }, ...children];
+}
+
+/**
+ * Kandidáti pro vyhledání přesměrování: nejdřív přesná adresa, u výpisů kategorií pak i kratší začátky,
+ * aby se např. /kategorie/stara/mesto/praha přesměrovala podle pravidla pro /kategorie/stara (zbytek cesty se připojí).
+ */
+export function redirectCandidates(path: string): { prefix: string; rest: string }[] {
+  const out = [{ prefix: path, rest: '' }];
+  if (!path.startsWith('/kategorie/')) return out;
+  const parts = path.split('/');
+  for (let n = parts.length - 1; n >= 3; n--) out.push({ prefix: parts.slice(0, n).join('/'), rest: `/${parts.slice(n).join('/')}` });
+  return out;
+}

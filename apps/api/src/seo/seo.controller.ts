@@ -6,7 +6,7 @@ import { Can } from '../common/permissions';
 import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { ZodPipe } from '../common/zod';
-import { isGone, normalizePath, PageMetaDto, RedirectDto, SITEMAP_CHUNK, toDate } from './seo.logic';
+import { isGone, normalizePath, PageMetaDto, redirectCandidates, RedirectDto, SITEMAP_CHUNK, toDate } from './seo.logic';
 
 const CZ_CITIES = new Set(CITIES.filter((c) => c.region.length === 3).map((c) => c.name));
 const PUBLIC_STATUSES = ['ACTIVE', 'RESERVED'] as const;
@@ -73,25 +73,31 @@ export class SeoController {
     return { gone: true, status: l.status, path };
   }
 
-  /** Přesměrování z tabulky (cache 10 min, negativní 2 min). */
+  /** Přesměrování z tabulky (cache 10 min, negativní 2 min). Výpisy kategorií se dohledají i podle začátku adresy. */
   @Get('redirect')
   async redirect(@Query('path') path = '') {
     const p = normalizePath(path);
     if (!p) throw new NotFoundException();
     const key = `redir:${p}`;
     const cached = await this.redis.get(key);
-    let hit: { to: string; code: number } | null;
+    let hit: { to: string; code: number; from?: string } | null;
     if (cached) hit = cached === '-' ? null : JSON.parse(cached);
     else {
-      const r = await this.prisma.redirect.findUnique({ where: { from: p } });
-      hit = r ? { to: r.to, code: r.code } : null;
+      hit = null;
+      const candidates = redirectCandidates(p);
+      const rows = await this.prisma.redirect.findMany({ where: { from: { in: candidates.map((c) => c.prefix) } } });
+      for (const c of candidates) {
+        const r = rows.find((x) => x.from === c.prefix);
+        // Zbytek cesty (/mesto/praha…) připojíme jen k cíli, který je sám výpisem kategorie
+        if (r && (!c.rest || /^\/kategorie\/[^?#]*$/.test(r.to))) { hit = { to: `${r.to}${c.rest}`, code: r.code, from: r.from }; break; }
+      }
       // Bez Redisu (produkce) má každá instance vlastní cache – „nenalezeno“ proto držíme jen krátce,
       // aby nově přidané přesměrování začalo platit do dvou minut
       await this.redis.set(key, hit ? JSON.stringify(hit) : '-', hit ? 600 : 120);
     }
     if (!hit) throw new NotFoundException();
-    void this.prisma.redirect.update({ where: { from: p }, data: { hits: { increment: 1 } } }).catch(() => undefined);
-    return hit;
+    void this.prisma.redirect.update({ where: { from: hit.from ?? p }, data: { hits: { increment: 1 } } }).catch(() => undefined);
+    return { to: hit.to, code: hit.code };
   }
 
   @Get('pages')
@@ -115,6 +121,21 @@ export class SeoController {
     const rows = await this.prisma.listing.groupBy({ by: ['city'], where, _count: true });
     return rows.filter((r) => CZ_CITIES.has(r.city)).map((r) => ({ city: r.city, count: r._count })).sort((a, b) => b.count - a.count);
   }
+}
+
+/**
+ * Uloží trvalá přesměrování (např. po změně adresy kategorie): starší pravidla mířící na starou adresu
+ * přesměruje rovnou na novou (bez řetězení) a odstraní pravidla, která by z nové adresy vedla jinam.
+ */
+export async function saveRedirects(prisma: PrismaService, redis: RedisService, pairs: { from: string; to: string }[]) {
+  if (!pairs.length) return;
+  const targets = pairs.map((p) => p.to);
+  await prisma.$transaction([
+    prisma.redirect.deleteMany({ where: { from: { in: targets } } }),
+    ...pairs.map((p) => prisma.redirect.updateMany({ where: { to: p.from }, data: { to: p.to } })),
+    ...pairs.map((p) => prisma.redirect.upsert({ where: { from: p.from }, create: { from: p.from, to: p.to, code: 308 }, update: { to: p.to, code: 308 } })),
+  ]);
+  await Promise.all([...pairs.map((p) => p.from), ...targets].map((k) => redis.del(`redir:${k}`).catch(() => undefined)));
 }
 
 /** Administrace SEO: přesměrování, úvodní texty kategorií, metadata informačních stránek. */

@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { isGone, normalizePath, PageMetaDto, RedirectDto } from './seo.logic';
+import { categoryRedirects, isGone, normalizePath, PageMetaDto, redirectCandidates, RedirectDto } from './seo.logic';
 
 const now = new Date('2026-06-01T12:00:00Z');
 const days = (n: number) => new Date(now.getTime() - n * 864e5);
@@ -54,5 +54,29 @@ describe('PageMetaDto', () => {
   it('přijme datum RRRR-MM-DD nebo prázdnou hodnotu', () => {
     assert.equal(PageMetaDto.safeParse({ effectiveFrom: '2026-12-01', reviewedAt: '' }).success, true);
     assert.equal(PageMetaDto.safeParse({ effectiveFrom: '1. 12. 2026' }).success, false);
+  });
+});
+
+describe('přesměrování kategorií', () => {
+  it('změna adresy hlavní kategorie přesměruje i podkategorie', () => {
+    assert.deepEqual(categoryRedirects({ slug: 'auta', parentSlug: null }, { slug: 'auto-moto', parentSlug: null }, ['osobni', 'nahradni-dily']), [
+      { from: '/kategorie/auta', to: '/kategorie/auto-moto' },
+      { from: '/kategorie/auta/osobni', to: '/kategorie/auto-moto/osobni' },
+      { from: '/kategorie/auta/nahradni-dily', to: '/kategorie/auto-moto/nahradni-dily' },
+    ]);
+  });
+  it('podkategorie: nová adresa i přesun pod jinou hlavní kategorii', () => {
+    assert.deepEqual(categoryRedirects({ slug: 'kola', parentSlug: 'sport' }, { slug: 'jizdni-kola', parentSlug: 'sport' }), [{ from: '/kategorie/sport/kola', to: '/kategorie/sport/jizdni-kola' }]);
+    assert.deepEqual(categoryRedirects({ slug: 'kola', parentSlug: 'sport' }, { slug: 'kola', parentSlug: 'doprava' }), [{ from: '/kategorie/sport/kola', to: '/kategorie/doprava/kola' }]);
+    assert.deepEqual(categoryRedirects({ slug: 'kola', parentSlug: null }, { slug: 'kola', parentSlug: 'sport' }), [{ from: '/kategorie/kola', to: '/kategorie/sport/kola' }]);
+  });
+  it('beze změny adresy žádné přesměrování', () => {
+    assert.deepEqual(categoryRedirects({ slug: 'auta', parentSlug: null }, { slug: 'auta', parentSlug: null }, ['osobni']), []);
+  });
+  it('kandidáti: přesná adresa, u kategorií i kratší začátky', () => {
+    assert.deepEqual(redirectCandidates('/stranka/stara'), [{ prefix: '/stranka/stara', rest: '' }]);
+    assert.deepEqual(redirectCandidates('/kategorie/auta/osobni/mesto/praha').map((c) => `${c.prefix}|${c.rest}`), [
+      '/kategorie/auta/osobni/mesto/praha|', '/kategorie/auta/osobni/mesto|/praha', '/kategorie/auta/osobni|/mesto/praha', '/kategorie/auta|/osobni/mesto/praha',
+    ]);
   });
 });
