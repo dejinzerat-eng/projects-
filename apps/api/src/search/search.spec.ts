@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { Prisma } from '@prisma/client';
 import { buildSearchText, fromSearchString, haversine, normalizeSearchText, queryWords, stemCz, synonymsOf, toSearchString } from '@dej/shared';
 import { findMunicipality, municipalityByZip, nearestMunicipality, resolveLocation, suggestMunicipalities } from '@dej/shared/dist/municipalities';
-import { boundingBox, buildTerms, filterSql, orderSql, termsFuzzy } from './search-query';
+import { boundingBox, buildTerms, categoriesFor, filterSql, orderSql, termsFuzzy, termsMatch, tierSql } from './search-query';
 
 const sqlText = (s: Prisma.Sql) => s.sql;
 
@@ -50,6 +50,8 @@ describe('synonyma', () => {
   it('slovo dostane synonyma i zkrácený tvar, předložky se vynechají', () => {
     const terms = buildTerms('kočárky v Brně');
     assert.deepEqual(terms.map((t) => t.word), ['kocarky', 'brne']);
+    // dotaz jen z předložek se nezahodí celý
+    assert.equal(buildTerms('a v').length, 2);
     const alts = terms[0].alts.map((a) => a[0]);
     assert.ok(alts.includes('kocar'));
     // „kocarky“ je zbytečné vedle kratšího „kocar“
@@ -107,6 +109,28 @@ describe('SQL pro vyhledávání v PostgreSQL', () => {
     assert.ok(w[1].values.includes('Škoda'));
   });
 
+  it('slovo najde i inzeráty z podkategorie stejného jména', () => {
+    assert.deepEqual(buildTerms('notebook')[0].cats, ['notebooky']);
+    assert.ok(buildTerms('laptop')[0].cats.includes('notebooky'));
+    assert.ok(buildTerms('mobil')[0].cats.includes('mobilni-telefony'));
+    // krátká slova a předložky kategorie neberou
+    assert.deepEqual(categoriesFor([['a']]), []);
+    assert.deepEqual(categoriesFor([['tv']]), []);
+    const sql = termsMatch(Prisma.sql`t`, buildTerms('notebook'), true);
+    assert.match(sqlText(sql), /c\."slug" IN/);
+    assert.doesNotMatch(sqlText(termsMatch(Prisma.sql`t`, buildTerms('notebook'))), /slug/);
+    // shoda jen v názvu kategorie má nejnižší kvalitu
+    assert.match(sqlText(tierSql(buildTerms('notebook'), 'notebook')), /THEN 0/);
+  });
+
+  it('obec v okruhu: podle názvu jen inzeráty bez souřadnic, stejná jména rozliší kraj', () => {
+    const inRadius = filterSql({ radius: 20 }, { ...base, geo: { lat: 49.3, lng: 16.6 }, cityKey: 'adamov', cityRegion: 'JHM' }).map(sqlText).join(' ');
+    assert.match(inRadius, /"lat" IS NULL AND/);
+    const only = filterSql({}, { ...base, geo: { lat: 49.3, lng: 16.6 }, cityKey: 'adamov', cityRegion: 'JHM' });
+    assert.match(only.map(sqlText).join(' '), /"region" IN/);
+    assert.ok(only.flatMap((x) => x.values).includes('JHM'));
+  });
+
   it('oprava překlepů jen pro slova od 4 znaků', () => {
     assert.equal(termsFuzzy(Prisma.sql`t`, buildTerms('tv')), undefined);
     assert.match(sqlText(termsFuzzy(Prisma.sql`t`, buildTerms('iphoen 15'))!), /<%/);
@@ -144,12 +168,16 @@ describe('obce ČR', () => {
     // stejné jméno obce jinde v republice – rozhodne PSČ
     assert.equal(resolveLocation('Chodov', '148 00').region, 'PHA');
     assert.equal(resolveLocation('Chodov', '357 35').region, 'KVK');
+    // vybrané okresní město se nepřepíše starým PSČ odjinud
+    assert.equal(resolveLocation('Brno', '32600').region, 'JHM');
+    assert.equal(resolveLocation('Brno', '32600').zip, '32600');
   });
 
   it('našeptávač podle začátku názvu, slova i PSČ', () => {
     assert.equal(suggestMunicipalities('kutna')[0].name, 'Kutná Hora');
     assert.ok(suggestMunicipalities('labem').some((m) => m.name === 'Ústí nad Labem'));
     assert.equal(suggestMunicipalities('602')[0].name, 'Brno');
+    assert.equal(suggestMunicipalities('148')[0]?.name, 'Praha');
     assert.ok(suggestMunicipalities('adamov').every((m) => m.label.includes('okres')));
   });
 

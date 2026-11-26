@@ -1,13 +1,32 @@
 import { Prisma } from '@prisma/client';
-import { DIACRITICS_FROM, DIACRITICS_TO, queryWords, SearchParams, stemCz, synonymsOf } from '@dej/shared';
+import { CATEGORIES, DIACRITICS_FROM, DIACRITICS_TO, normalizeSearchText, queryWords, SearchParams, stemCz, synonymsOf } from '@dej/shared';
 
 /**
  * Sestavení SQL pro vyhledávání v PostgreSQL (produkce běží bez Meilisearch).
  * Text se hledá ve sloupci Listing."searchText" (malá písmena bez diakritiky, GIN trigram index).
  */
 
-/** Jedno slovo dotazu: inzerát musí splnit aspoň jednu alternativu; alternativa = všechny podřetězce. */
-export interface Term { word: string; alts: string[][] }
+/**
+ * Jedno slovo dotazu: inzerát musí splnit aspoň jednu alternativu; alternativa = všechny podřetězce.
+ * `cats` = podkategorie, jejichž název slovu odpovídá („notebook“ → Notebooky, „mobil“ → Mobilní telefony).
+ */
+export interface Term { word: string; alts: string[][]; cats: string[] }
+
+/** Normalizované názvy podkategorií (slova) – hledaný výraz najde i inzeráty z podkategorie stejného jména. */
+const SUBCATEGORY_WORDS = CATEGORIES.flatMap((c) => c.children.map((s) => ({ slug: s.slug, words: normalizeSearchText(s.name).split(' ') })));
+/** Alternativy kratší než 3 znaky se s názvy kategorií neporovnávají („a“, „tv“ by našly příliš mnoho). */
+const CATEGORY_MIN_LEN = 3;
+
+/** Podkategorie, jejichž název obsahuje slovo začínající na některou alternativu (u fráze všechna slova). */
+export function categoriesFor(alts: string[][]): string[] {
+  const out = new Set<string>();
+  for (const a of alts) {
+    const parts = a.flatMap((x) => x.split(' '));
+    if (parts.some((x) => x.length < CATEGORY_MIN_LEN)) continue;
+    for (const c of SUBCATEGORY_WORDS) if (parts.every((x) => c.words.some((w) => w.startsWith(x)))) out.add(c.slug);
+  }
+  return [...out];
+}
 
 const STOPWORDS = new Set(['a', 'i', 'v', 've', 'na', 's', 'se', 'z', 'ze', 'k', 'ke', 'o', 'u', 'do', 'pro', 'po', 'za', 'od', 'the', 'and']);
 /** Slova kratší než tato délka se při opravě překlepů neporovnávají podobností (jen přesně). */
@@ -33,7 +52,9 @@ function prune(alts: string[][]): string[][] {
  */
 export function buildTerms(q: string): Term[] {
   let words = queryWords(q);
-  if (words.length > 1) words = words.filter((w) => !STOPWORDS.has(w));
+  // Předložky vynecháme, pokud dotaz nejsou jen ony („a v“ nesmí vrátit všechno)
+  const content = words.filter((w) => !STOPWORDS.has(w));
+  if (words.length > 1 && content.length) words = content;
   const terms: Term[] = [];
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
@@ -42,14 +63,16 @@ export function buildTerms(q: string): Term[] {
       const phrase = `${w} ${next}`;
       const syn = synonymsOf(phrase);
       if (syn.length > 1) {
-        terms.push({ word: phrase, alts: prune([...syn.map((s) => [s]), [stemCz(w), stemCz(next)]]) });
+        const alts = prune([...syn.map((s) => [s]), [stemCz(w), stemCz(next)]]);
+        terms.push({ word: phrase, alts, cats: categoriesFor(alts) });
         i++;
         continue;
       }
     }
     const stem = stemCz(w);
     const variants = new Set([w, stem, ...synonymsOf(w), ...synonymsOf(stem)]);
-    terms.push({ word: w, alts: prune([...variants].map((v) => [v])) });
+    const alts = prune([...variants].map((v) => [v]));
+    terms.push({ word: w, alts, cats: categoriesFor(alts) });
   }
   return terms;
 }
@@ -64,9 +87,17 @@ export function wordPrefix(expr: Prisma.Sql, p: string): Prisma.Sql {
   return Prisma.sql`(${expr} LIKE ${`${p}%`} OR ${expr} LIKE ${`% ${p}%`})`;
 }
 
-/** Podmínka: výraz obsahuje všechna slova dotazu (každé aspoň v jedné alternativě). */
-export function termsMatch(expr: Prisma.Sql, terms: Term[]): Prisma.Sql {
-  return Prisma.join(terms.map((t) => Prisma.sql`(${Prisma.join(t.alts.map((a) => Prisma.sql`(${Prisma.join(a.map((p) => wordPrefix(expr, p)), ' AND ')})`), ' OR ')})`), ' AND ');
+/**
+ * Podmínka: výraz obsahuje všechna slova dotazu (každé aspoň v jedné alternativě).
+ * S `withCategories` slovo splní i inzerát z podkategorie odpovídajícího jména (dotaz musí mít JOIN na c).
+ */
+export function termsMatch(expr: Prisma.Sql, terms: Term[], withCategories = false): Prisma.Sql {
+  return Prisma.join(terms.map((t) => {
+    const text = Prisma.join(t.alts.map((a) => Prisma.sql`(${Prisma.join(a.map((p) => wordPrefix(expr, p)), ' AND ')})`), ' OR ');
+    return withCategories && t.cats.length
+      ? Prisma.sql`(${text} OR c."slug" IN (${Prisma.join(t.cats.map((x) => Prisma.sql`${x}::text`))}))`
+      : Prisma.sql`(${text})`;
+  }), ' AND ');
 }
 
 /** Podmínka pro opravu překlepů: delší slova stačí podobná (operátor <% používá trigram index). */
@@ -102,6 +133,8 @@ export interface FilterOptions {
   geo?: Geo;
   /** Normalizovaný název města pro filtr „jen město“ */
   cityKey?: string;
+  /** Kraj rozpoznané obce – odliší obce stejného jména (Adamov u Blanska × Adamov u Českých Budějovic) */
+  cityRegion?: string;
   publishedAfter?: Date;
   attrKeys: string[];
   now: Date;
@@ -119,11 +152,13 @@ export function filterSql(p: SearchParams, o: FilterOptions): Prisma.Sql[] {
   if (p.priceMin != null && Number.isFinite(Number(p.priceMin))) w.push(Prisma.sql`l."price" >= ${Math.round(Number(p.priceMin))}::int`);
   if (p.priceMax != null && Number.isFinite(Number(p.priceMax))) w.push(Prisma.sql`l."price" <= ${Math.round(Number(p.priceMax))}::int`);
   const radius = Math.min(MAX_RADIUS_KM, Math.max(0, Number(p.radius) || 0));
-  const cityMatch = o.cityKey ? Prisma.sql`${sqlNorm(Prisma.sql`l."city"`)} = ${o.cityKey}::text` : undefined;
+  const nameMatch = o.cityKey ? Prisma.sql`${sqlNorm(Prisma.sql`l."city"`)} = ${o.cityKey}::text` : undefined;
+  const cityMatch = nameMatch && o.cityRegion ? Prisma.sql`(${nameMatch} AND l."region" IN (${o.cityRegion}::text, ''))` : nameMatch;
   if (o.geo && radius > 0) {
     const b = boundingBox(o.geo, radius);
     const inCircle = Prisma.sql`(l."lat" BETWEEN ${b.minLat}::float8 AND ${b.maxLat}::float8 AND l."lng" BETWEEN ${b.minLng}::float8 AND ${b.maxLng}::float8 AND ${distanceSql(o.geo)} <= ${radius}::float8)`;
-    w.push(cityMatch ? Prisma.sql`(${inCircle} OR ${cityMatch})` : inCircle);
+    // Podle názvu obce jen inzeráty bez souřadnic (ostatní rozhodne vzdálenost)
+    w.push(cityMatch ? Prisma.sql`(${inCircle} OR (l."lat" IS NULL AND ${cityMatch}))` : inCircle);
   } else if (cityMatch) w.push(cityMatch);
   if (p.region) w.push(Prisma.sql`l."region" = ${p.region}::text`);
   if (p.condition?.length) w.push(Prisma.sql`l."condition"::text IN (${Prisma.join(p.condition.map((c) => Prisma.sql`${c}::text`))})`);
@@ -151,9 +186,13 @@ export function promoSql(now: Date): Prisma.Sql {
   return Prisma.sql`(CASE WHEN l."topUntil" > ${ts(now)} THEN 2 WHEN l."highlightedUntil" > ${ts(now)} THEN 1 ELSE 0 END)`;
 }
 
-/** Kvalita shody: 3 = celá fráze v názvu, 2 = všechna slova v názvu, 1 = shoda v popisu/parametrech/městě. */
+/**
+ * Kvalita shody: 3 = celá fráze v názvu, 2 = všechna slova v názvu, 1 = shoda v popisu/parametrech/městě,
+ * 0 = jen podle názvu podkategorie.
+ */
 export function tierSql(terms: Term[], phrase: string): Prisma.Sql {
-  return Prisma.sql`(CASE WHEN ${wordPrefix(NORM_TITLE, phrase)} THEN 3 WHEN ${termsMatch(NORM_TITLE, terms)} THEN 2 ELSE 1 END)`;
+  const catOnly = terms.some((t) => t.cats.length) ? Prisma.sql` WHEN NOT (${termsMatch(SEARCH_TEXT, terms)}) THEN 0` : Prisma.empty;
+  return Prisma.sql`(CASE WHEN ${wordPrefix(NORM_TITLE, phrase)} THEN 3 WHEN ${termsMatch(NORM_TITLE, terms)} THEN 2${catOnly} ELSE 1 END)`;
 }
 
 /** Skóre podobnosti pro výsledky s opravou překlepů. */

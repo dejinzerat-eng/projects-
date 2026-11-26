@@ -27,7 +27,7 @@ export class JobsService implements OnApplicationBootstrap, OnModuleDestroy {
 
   async tick() {
     if (!(await this.redis.lock('jobs:tick', 240))) return;
-    try { await this.expiry(); await this.savedSearchAlerts(); } catch (e) { this.log.error((e as Error).stack); }
+    try { await this.search.backfillSearchText(); await this.expiry(); await this.savedSearchAlerts(); } catch (e) { this.log.error((e as Error).stack); }
   }
 
   async expiry() {

@@ -126,8 +126,10 @@ export interface ResolvedLocation {
 export function resolveLocation(city: string, zip?: string | null): ResolvedLocation {
   const z = cleanZip(zip) ?? null;
   let byName = findMunicipality(city, z);
-  // Obec stejného jména jinde v republice než PSČ (např. „Chodov“ + 148 00 = Praha) → věříme PSČ
-  if (byName && z && byName.zip[0] !== z[0] && municipalityByZip(z)) byName = undefined;
+  // Obec stejného jména jinde v republice než PSČ (např. „Chodov“ + 148 00 = Praha-Chodov) → věříme PSČ.
+  // U okresních měst (Brno, Plzeň…) ale věříme názvu – jejich jméno část jiného města nenese, spíš je PSČ omylem staré.
+  const seat = !!byName && (key(byName.district) === key(byName.name) || key(byName.district).startsWith(`${key(byName.name)} `));
+  if (byName && !seat && z && byName.zip[0] !== z[0] && municipalityByZip(z)) byName = undefined;
   if (byName) return { city: byName.name, region: byName.region, zip: z ?? byName.zip, lat: byName.lat, lng: byName.lng, matched: 'name' };
   const byZip = z ? municipalityByZip(z) : undefined;
   if (byZip) return { city: city.trim(), region: byZip.region, zip: z, lat: byZip.lat, lng: byZip.lng, matched: 'zip' };
@@ -146,7 +148,8 @@ export function suggestMunicipalities(q: string, limit = 8): MunicipalitySuggest
   const digits = q.replace(/\s/g, '');
   if (/^\d{2,5}$/.test(digits)) {
     const hits = ALL!.filter((m) => m.zip.startsWith(digits));
-    if (!hits.length && digits.length === 5) { const z = municipalityByZip(digits); return z ? [toSuggestion(z)] : []; }
+    // Pražská PSČ (1xx xx) mají v datech jediný záznam 110 00
+    if (!hits.length && (digits.length === 5 || (digits.length >= 3 && digits[0] === '1'))) { const z = municipalityByZip(digits.padEnd(5, '0')); return z ? [toSuggestion(z)] : []; }
     return hits.sort((a, b) => a.zip.localeCompare(b.zip)).slice(0, limit).map(toSuggestion);
   }
   const k = key(q);

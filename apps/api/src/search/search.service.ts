@@ -32,6 +32,8 @@ export interface SearchOptions {
   /** Jen inzeráty zveřejněné po tomto okamžiku (upozornění na uložená hledání) */
   publishedAfter?: Date;
   limit?: number;
+  /** Když přesná shoda nic nenajde, zkusit podobná slova (výchozí ano, u upozornění ne) */
+  fuzzy?: boolean;
 }
 
 export interface SearchResponse {
@@ -141,11 +143,11 @@ export class SearchService implements OnModuleInit {
   }
 
   /** Bod pro vzdálenost: poloha uživatele, nebo obec z filtru (kterákoli obec ČR). */
-  private geoOf(p: SearchParams): (Geo & { name?: string }) | undefined {
+  private geoOf(p: SearchParams): (Geo & { name?: string; region?: string }) | undefined {
     if (p.lat != null && p.lng != null) return { lat: Number(p.lat), lng: Number(p.lng) };
     if (!p.city) return undefined;
     const m = findMunicipality(p.city);
-    return m ? { lat: m.lat, lng: m.lng, name: m.name } : undefined;
+    return m ? { lat: m.lat, lng: m.lng, name: m.name, region: m.region } : undefined;
   }
 
   async search(p: SearchParams, opts: SearchOptions = {}): Promise<SearchResponse> {
@@ -154,7 +156,8 @@ export class SearchService implements OnModuleInit {
     if (this.enabled) {
       try { return await this.searchMeili(p, page, limit, opts.publishedAfter); } catch (e) { this.log.error((e as Error).message); }
     }
-    return this.searchDb(p, page, limit, opts.publishedAfter);
+    // Upozornění na uložená hledání posílají jen přesné shody, ne „podobné výsledky“
+    return this.searchDb(p, page, limit, opts.publishedAfter, opts.fuzzy ?? !opts.publishedAfter);
   }
 
   private async searchMeili(p: SearchParams, page: number, limit: number, publishedAfter?: Date): Promise<SearchResponse> {
@@ -199,11 +202,11 @@ export class SearchService implements OnModuleInit {
     return { hits, total: r.totalHits as number, page, pages: r.totalPages as number, facets: r.facetDistribution as Record<string, Record<string, number>>, engine: 'meilisearch', ...(geo ? { origin: geo } : {}) };
   }
 
-  private async searchDb(p: SearchParams, page: number, limit: number, publishedAfter?: Date): Promise<SearchResponse> {
+  private async searchDb(p: SearchParams, page: number, limit: number, publishedAfter?: Date, allowFuzzy = true): Promise<SearchResponse> {
     const now = new Date();
     const geo = this.geoOf(p);
     const cityKey = p.city && !(p.lat != null && p.lng != null) ? normalizeSearchText(geo?.name ?? p.city) : undefined;
-    const where = filterSql(p, { geo, cityKey, publishedAfter, attrKeys: ATTR_KEYS, now });
+    const where = filterSql(p, { geo, cityKey, cityRegion: geo?.region, publishedAfter, attrKeys: ATTR_KEYS, now });
     const terms = p.q ? buildTerms(p.q) : [];
     const phrase = p.q ? queryWords(p.q).join(' ') : '';
     const sort = p.sort === 'distance' && !geo ? undefined : p.sort;
@@ -211,30 +214,43 @@ export class SearchService implements OnModuleInit {
     const offset = (page - 1) * limit;
     type Row = { id: string; total: bigint };
 
-    let rows: Row[] = [];
+    /** Jedna stránka výsledků a celkový počet (COUNT(*) OVER(); za poslední stránkou zvlášť). */
+    const fetchPage = async (conds: Prisma.Sql[], order: Prisma.Sql, fuzzyThreshold = false): Promise<{ rows: Row[]; total: number }> => {
+      const cond = Prisma.join(conds, ' AND ');
+      const pageSql = Prisma.sql`SELECT ${select} ${FROM_SQL} WHERE ${cond} ORDER BY ${order} LIMIT ${limit} OFFSET ${offset}`;
+      const countSql = Prisma.sql`SELECT COUNT(*) AS n ${FROM_SQL} WHERE ${cond}`;
+      let rows: Row[];
+      let counted: { n: bigint }[] | undefined;
+      if (fuzzyThreshold) {
+        // Oprava překlepů: nižší práh podobnosti jen pro tuto transakci (funguje i přes PgBouncer)
+        const setThreshold = this.prisma.$queryRaw`SELECT set_config('pg_trgm.word_similarity_threshold', ${String(FUZZY_THRESHOLD)}, true)`;
+        const [, r] = await this.prisma.$transaction([setThreshold, this.prisma.$queryRaw<Row[]>(pageSql)]);
+        rows = r as Row[];
+        if (!rows.length && page > 1) {
+          const [, c] = await this.prisma.$transaction([this.prisma.$queryRaw`SELECT set_config('pg_trgm.word_similarity_threshold', ${String(FUZZY_THRESHOLD)}, true)`, this.prisma.$queryRaw<{ n: bigint }[]>(countSql)]);
+          counted = c as { n: bigint }[];
+        }
+      } else {
+        rows = await this.prisma.$queryRaw<Row[]>(pageSql);
+        if (!rows.length && page > 1) counted = await this.prisma.$queryRaw<{ n: bigint }[]>(countSql);
+      }
+      return { rows, total: rows.length ? Number(rows[0].total) : Number(counted?.[0]?.n ?? 0) };
+    };
+
+    let res: { rows: Row[]; total: number };
     let fuzzy = false;
     if (!terms.length) {
-      rows = await this.prisma.$queryRaw<Row[]>(Prisma.sql`SELECT ${select} ${FROM_SQL} WHERE ${Prisma.join(where, ' AND ')} ORDER BY ${orderSql(sort, { now, geo })} LIMIT ${limit} OFFSET ${offset}`);
+      res = await fetchPage(where, orderSql(sort, { now, geo }));
     } else {
-      const exact = Prisma.join([...where, termsMatch(SEARCH_TEXT, terms)], ' AND ');
-      rows = await this.prisma.$queryRaw<Row[]>(Prisma.sql`SELECT ${select} ${FROM_SQL} WHERE ${exact} ORDER BY ${orderSql(sort, { now, geo, quality: tierSql(terms, phrase) })} LIMIT ${limit} OFFSET ${offset}`);
-      const fz = termsFuzzy(SEARCH_TEXT, terms);
-      if (!rows.length && page === 1 && fz) {
-        // Oprava překlepů: nižší práh podobnosti jen pro tuto transakci (funguje i přes PgBouncer)
-        const [, r] = await this.prisma.$transaction([
-          this.prisma.$queryRaw`SELECT set_config('pg_trgm.word_similarity_threshold', ${String(FUZZY_THRESHOLD)}, true)`,
-          this.prisma.$queryRaw<Row[]>(Prisma.sql`SELECT ${select} ${FROM_SQL} WHERE ${Prisma.join([...where, fz], ' AND ')} ORDER BY ${orderSql(sort, { now, geo, quality: fuzzyScoreSql(terms, phrase) })} LIMIT ${limit} OFFSET ${offset}`),
-        ]);
-        rows = r as Row[];
-        fuzzy = rows.length > 0;
+      res = await fetchPage([...where, termsMatch(SEARCH_TEXT, terms, true)], orderSql(sort, { now, geo, quality: tierSql(terms, phrase) }));
+      const fz = allowFuzzy ? termsFuzzy(SEARCH_TEXT, terms) : undefined;
+      if (res.total === 0 && fz) {
+        const f = await fetchPage([...where, fz], orderSql(sort, { now, geo, quality: fuzzyScoreSql(terms, phrase) }), true);
+        if (f.total > 0) { res = f; fuzzy = true; }
       }
     }
+    const { rows, total } = res;
 
-    let total = rows.length ? Number(rows[0].total) : 0;
-    if (!rows.length && page > 1) {
-      const c = await this.prisma.$queryRaw<{ n: bigint }[]>(Prisma.sql`SELECT COUNT(*) AS n ${FROM_SQL} WHERE ${Prisma.join(terms.length ? [...where, termsMatch(SEARCH_TEXT, terms)] : where, ' AND ')}`);
-      total = Number(c[0]?.n ?? 0);
-    }
     const ids = rows.map((r) => r.id);
     const list = ids.length ? await this.prisma.listing.findMany({ where: { id: { in: ids } }, include: LISTING_INCLUDE }) : [];
     const byId = new Map(list.map((l) => [l.id, l]));
