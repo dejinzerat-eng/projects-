@@ -54,6 +54,24 @@ describe('assessListing', () => {
   });
 });
 
+describe('assessListing – podvody ze starého webu', () => {
+  it('pošle ke kontrole „štěňata zdarma k adopci“, ale ne obyčejné darování', () => {
+    for (const title of ['Dárek štěňata rotvajlera k adopci zdarma', 'Rozkošná bezplatná štěňata pomeranianů na dárek', 'Volná štěňata bišonka k adopci', 'Zdarma Dobře vycvičená štěňata buldočka']) {
+      const description = title.includes('Volná') ? 'Máme štěňátka, které dáváme k bezplatné adopci.' : 'Krásná štěňátka.';
+      assert.ok(assessListing({ title, description }).score >= 50, title);
+    }
+    assert.equal(assessListing({ title: 'Darujeme 3 štěňátka', description: 'Pouliční směs, do dobrých rukou.' }).score, 0);
+  });
+  it('pozná nabídky rychlých půjček a léky na předpis', () => {
+    for (const title of ['Rychlá půjčka pro každého', 'Snadná a rychlá nabídka půjčky', 'Osobní finanční půjčka s pojištěním', 'Mounjaro Injekcie']) assert.ok(assessListing({ title, description: 'Napište nám.' }).score >= 50, title);
+    assert.ok(assessListing({ title: 'Pomoc', description: 'Pokud potřebujete půjčku, ale banky vás zamítly, napište.' }).score >= 50);
+    assert.equal(assessListing({ title: 'Splátky půjčky za auto převezmu', description: 'Auto po leasingu.' }).score, 0);
+  });
+  it('nebere pistoli u tlakové myčky jako zbraň', () => {
+    assert.equal(assessListing({ title: 'Vysokotlaký čistič', description: 'mám k ní hadici originál 8 metrů + pistole' }).score, 0);
+  });
+});
+
 describe('assessMessage', () => {
   it('varuje u podezřelé zprávy', () => {
     assert.match(assessMessage('Pošlete peníze přes Western Union') ?? '', /podvod/);

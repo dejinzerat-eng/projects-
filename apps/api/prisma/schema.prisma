@@ -109,6 +109,9 @@ model User {
   vatId             String? // DIČ
   /// Poslední aktivita (zapisuje AuthGuard nejvýše jednou za 10 minut) – pro DAU/WAU/MAU
   lastActiveAt      DateTime?
+  /// Účet převzatý ze starého webu www.dejinzerat.cz (např. „dejinzerat:204“) a kdy mu odešla pozvánka
+  legacyId          String?   @unique
+  legacyInvitedAt   DateTime?
 
   listings        Listing[]
   favorites       Favorite[]
@@ -198,6 +201,9 @@ model Listing {
   /// Normalizovaný text pro hledání (malá písmena bez diakritiky: název + popis + parametry + město),
   /// udržuje aplikace (buildSearchText v @dej/shared); GIN trigram index pro hledání v PostgreSQL
   searchText       String        @default("")
+  /// Inzerát převzatý ze starého webu (UUID inzerátu tam) a otisk dat, která import naposledy zapsal
+  legacyId         String?       @unique
+  legacyHash       String?
 
   images        ListingImage[]
   favorites     Favorite[]

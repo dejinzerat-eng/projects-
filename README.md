@@ -7,7 +7,7 @@ Moderní inzertní portál pro ČR a SR. Monorepo:
 | `apps/web` | Web – Next.js 16 (App Router), React 19, Tailwind CSS 4 |
 | `apps/api` | Backend – NestJS 11, Prisma 6, PostgreSQL, Meilisearch, Redis, S3 |
 | `packages/shared` | Sdílený kód: kategorie a jejich filtry, lokality, parser chytrého hledání |
-| `docs/` | Architektura a plán rozvoje |
+| `docs/` | Architektura a plán rozvoje, import ze starého webu (`docs/IMPORT-STAREHO-WEBU.md`) |
 
 ## Rychlý start (vývoj)
 

@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Building2, FileText, Flag, Globe, History, LayoutList, Settings, ShieldAlert, Tags, Users, Wallet } from 'lucide-react';
+import { BarChart3, Building2, FileText, Flag, Globe, History, Import, LayoutList, Settings, ShieldAlert, Tags, Users, Wallet } from 'lucide-react';
 import type { Permission } from '@dej/shared';
 
 const ITEMS: { href: string; label: string; icon: typeof BarChart3; perm: Permission }[] = [
@@ -16,6 +16,7 @@ const ITEMS: { href: string; label: string; icon: typeof BarChart3; perm: Permis
   { href: '/admin/stranky', label: 'Texty a stránky', icon: FileText, perm: 'pages.edit' },
   { href: '/admin/seo', label: 'SEO', icon: Globe, perm: 'pages.edit' },
   { href: '/admin/nastaveni', label: 'Nastavení', icon: Settings, perm: 'settings.manage' },
+  { href: '/admin/import', label: 'Import ze starého webu', icon: Import, perm: 'settings.manage' },
   { href: '/admin/audit', label: 'Auditní log', icon: History, perm: 'audit.read' },
 ];
 
