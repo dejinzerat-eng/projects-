@@ -25,7 +25,7 @@ export function SettingsForm({ initial, canReindex }: { initial: Settings; canRe
           </label>
           <div className="grid gap-3 sm:grid-cols-3">
             <div><label className="label" htmlFor="s-days">Platnost inzerátu (dní)</label><input id="s-days" className="input" {...num('listingDays')} /></div>
-            <div><label className="label" htmlFor="s-free">Aktivních inzerátů zdarma</label><input id="s-free" className="input" {...num('freeActiveListings')} /><p className="mt-1 text-xs text-muted">Pro soukromé osoby, 0 = bez omezení</p></div>
+            <div><label className="label" htmlFor="s-free">Aktivních inzerátů zdarma</label><input id="s-free" className="input" {...num('freeActiveListings')} /><p className="mt-1 text-xs text-muted">Pro soukromé osoby a neověřené firmy, 0 = bez omezení</p></div>
             <div><label className="label" htmlFor="s-hour">Nových inzerátů za hodinu</label><input id="s-hour" className="input" {...num('maxListingsPerHour')} /><p className="mt-1 text-xs text-muted">Ochrana proti spamu</p></div>
           </div>
         </section>

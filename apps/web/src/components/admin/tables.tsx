@@ -9,6 +9,8 @@ const toSlug = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLower
 
 type Filter = { key: string; label: string; type: 'select' | 'multiselect' | 'range' | 'boolean'; options?: string[]; unit?: string; min?: number; max?: number };
 type Cat = { id: string; slug: string; name: string; icon: string | null; parentId: string | null; position: number; active: boolean; seoTitle: string | null; seoDescription: string | null; filters: Filter[]; _count: { listings: number; children: number } };
+/** Klíč filtru z názvu: „Typ karoserie“ → typKaroserie (dokud ho správce nepřepíše ručně). */
+const keyOf = (label: string) => toSlug(label).replace(/^[0-9-]+/, '').replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 const TYPE_LABEL = { select: 'Výběr', multiselect: 'Více možností', range: 'Rozsah (číslo)', boolean: 'Ano / ne' };
 
 export function CategoriesEditor({ rows }: { rows: Cat[] }) {
@@ -96,7 +98,7 @@ function CategoryDialog({ cat, parents, onClose }: { cat: Cat; parents: Cat[]; o
         <legend className="label">Filtry a parametry</legend>
         {filters.map((f, i) => (
           <div key={i} className="grid gap-2 rounded-xl border border-line p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
-            <input aria-label="Název filtru" className="input h-9 text-sm" placeholder="Název (např. Značka)" value={f.label} onChange={(e) => setF(i, { label: e.target.value, key: f.key || toSlug(e.target.value).replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase()) })} />
+            <input aria-label="Název filtru" className="input h-9 text-sm" placeholder="Název (např. Značka)" value={f.label} onChange={(e) => setF(i, { label: e.target.value, key: !f.key || f.key === keyOf(f.label) ? keyOf(e.target.value) : f.key })} />
             <input aria-label="Klíč filtru" className="input h-9 font-mono text-sm" placeholder="klíč (brand)" value={f.key} onChange={(e) => setF(i, { key: e.target.value })} />
             <select aria-label="Typ filtru" className="input h-9 text-sm" value={f.type} onChange={(e) => setF(i, { type: e.target.value as Filter['type'] })}>{Object.entries(TYPE_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
             <button type="button" onClick={() => setFilters(filters.filter((_, j) => j !== i))} className="btn btn-ghost btn-sm text-danger" aria-label="Odebrat filtr"><Trash2 className="size-4" /></button>

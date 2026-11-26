@@ -42,6 +42,7 @@ export function UsersTable({ rows, perms, meId }: { rows: U[]; perms: Permission
 
   if (!rows.length) return <div className="card p-10 text-center text-muted">Nikoho jsme nenašli.</div>;
   return (
+    <>
     <ul className="card divide-y divide-line">
       {rows.map((u) => {
         const d = open[u.id];
@@ -66,7 +67,7 @@ export function UsersTable({ rows, perms, meId }: { rows: U[]; perms: Permission
                     {(assignable.includes(u.role) ? assignable : [u.role, ...assignable]).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                   </select>
                 )}
-                {mayTouch(u) && u.status === 'ACTIVE' && can('users.restrict') && <button onClick={() => status(u, 'RESTRICTED')} className="btn btn-outline btn-sm">Omezit</button>}
+                {mayTouch(u) && u.status === 'ACTIVE' && !isAdminRole(u.role) && can('users.restrict') && <button onClick={() => status(u, 'RESTRICTED')} className="btn btn-outline btn-sm">Omezit</button>}
                 {mayTouch(u) && u.status === 'RESTRICTED' && can('users.restrict') && <button onClick={() => status(u, 'ACTIVE')} className="btn btn-dark btn-sm">Zrušit omezení</button>}
                 {mayTouch(u) && u.status !== 'BLOCKED' && can('users.block') && <button onClick={() => status(u, 'BLOCKED')} className="btn btn-danger btn-sm">Zablokovat</button>}
                 {mayTouch(u) && u.status === 'BLOCKED' && can('users.unblock') && <button onClick={() => status(u, 'ACTIVE')} className="btn btn-outline btn-sm">Odblokovat</button>}
@@ -76,9 +77,9 @@ export function UsersTable({ rows, perms, meId }: { rows: U[]; perms: Permission
             </div>
             {d === 'loading' && <p className="text-sm text-muted">Načítám…</p>}
             {d && d !== 'loading' && (
-              <div className="grid gap-4 rounded-xl bg-surface-2 p-3 text-sm sm:grid-cols-2">
+              <div className="grid gap-4 rounded-xl bg-surface-2 p-3 text-sm sm:grid-cols-2 [&>div]:min-w-0">
                 <div>
-                  <p className="text-muted">Telefon: {d.phone ?? '—'} · Město: {d.city ?? '—'} · Přihlášení: {d.activeSessions}</p>
+                  <p className="break-words text-muted">Telefon: {d.phone ?? '—'} · Město: {d.city ?? '—'} · Přihlášení: {d.activeSessions}</p>
                   <p className="text-muted">Nahlášení účtu: {d.reportsAgainst} · různých oznamovatelů za 7 dní: {d.reporters7}</p>
                   <h3 className="mt-2 font-semibold">Inzeráty</h3>
                   <ul className="mt-1 space-y-0.5">{d.listings.length ? d.listings.map((l) => <li key={l.id} className="truncate"><Link href={listingUrl(l)} target="_blank" className="hover:underline">{l.title}</Link> <span className="text-muted">· {STATUS_LABEL[l.status]}{l.spamScore ? ` · riziko ${l.spamScore}` : ''}</span></li>) : <li className="text-muted">Žádné</li>}</ul>
@@ -92,7 +93,8 @@ export function UsersTable({ rows, perms, meId }: { rows: U[]; perms: Permission
           </li>
         );
       })}
-      {dialog}
     </ul>
+    {dialog}
+    </>
   );
 }
