@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Que
 import { CITIES } from '@dej/shared';
 import { z } from 'zod';
 import { AuthUser, CurrentUser } from '../common/auth.guard';
+import { HomeSeoDto, SettingsService } from '../admin/settings.service';
 import { Can } from '../common/permissions';
 import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
@@ -141,10 +142,26 @@ export async function saveRedirects(prisma: PrismaService, redis: RedisService, 
 /** Administrace SEO: přesměrování, úvodní texty kategorií, metadata informačních stránek. */
 @Controller('admin/seo')
 export class SeoAdminController {
-  constructor(private prisma: PrismaService, private redis: RedisService) {}
+  constructor(private prisma: PrismaService, private redis: RedisService, private settings: SettingsService) {}
 
   private audit(u: AuthUser, action: string, targetId: string, meta?: object) {
     return this.prisma.auditLog.create({ data: { actorId: u.id, action, targetType: 'seo', targetId, meta } });
+  }
+
+  /** Titulek a popis úvodní stránky (prázdné = výchozí text webu). */
+  @Can('pages.edit')
+  @Get('home')
+  async home() {
+    const s = await this.settings.all();
+    return { homeTitle: s.homeTitle, homeDescription: s.homeDescription };
+  }
+
+  @Can('pages.edit')
+  @Put('home')
+  async saveHome(@CurrentUser() u: AuthUser, @Body(new ZodPipe(HomeSeoDto)) dto: z.infer<typeof HomeSeoDto>) {
+    const { changed, settings } = await this.settings.update(dto);
+    if (Object.keys(changed).length) await this.audit(u, 'seo.home', 'home', { changes: changed });
+    return { homeTitle: settings.homeTitle, homeDescription: settings.homeDescription };
   }
 
   @Can('pages.edit')

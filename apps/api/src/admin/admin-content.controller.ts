@@ -10,7 +10,7 @@ import { SearchService } from '../search/search.service';
 import { saveRedirects } from '../seo/seo.controller';
 import { categoryRedirects } from '../seo/seo.logic';
 import { audit, diff } from './audit';
-import { SettingsSchema, SettingsService } from './settings.service';
+import { SettingsService, SystemSettingsDto } from './settings.service';
 
 const slug = z.string().trim().min(2, 'Adresa musí mít alespoň 2 znaky.').max(60).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Adresa smí obsahovat jen malá písmena bez diakritiky, číslice a pomlčky.');
 const FilterDef = z.object({
@@ -204,7 +204,7 @@ export class AdminContentController {
 
   @Can('settings.manage')
   @Put('settings')
-  async saveSettings(@CurrentUser() u: AuthUser, @Body(new ZodPipe(SettingsSchema.partial())) dto: Partial<z.infer<typeof SettingsSchema>>) {
+  async saveSettings(@CurrentUser() u: AuthUser, @Body(new ZodPipe(SystemSettingsDto)) dto: z.infer<typeof SystemSettingsDto>) {
     const { changed, settings } = await this.settings.update(dto);
     if (Object.keys(changed).length) await audit(this.prisma, u, 'settings.update', 'settings', 'system', { changes: changed });
     return settings;

@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { can, ROLE_PERMISSIONS, ROLES } from '@dej/shared';
 import { AUDIT_TEXT_MAX, compactValue, diff, validIco } from './audit';
 import { groupReports } from './reports.service';
-import { envDefaults, mergeSettings, SettingsSchema } from './settings.service';
+import { envDefaults, HomeSeoDto, mergeSettings, SettingsSchema, SystemSettingsDto } from './settings.service';
 import { checkRoleChange, checkStatusChange } from './staff-policy';
 import { autoRestrictReason } from './trust.service';
 
@@ -101,6 +101,13 @@ describe('nastavení', () => {
     const s = mergeSettings(d, [{ key: 'listingDays', value: 60 }, { key: 'premoderation', value: 'ano' }, { key: 'xyz', value: 1 }, { key: 'freeActiveListings', value: 5 }]);
     assert.equal(s.listingDays, 60); assert.equal(s.premoderation, d.premoderation); assert.equal(s.freeActiveListings, 5);
     assert.equal((s as Record<string, unknown>).xyz, undefined);
+  });
+  it('SEO úvodní stránky: výchozí prázdné, délka omezená, formulář nastavení ho nepřepíše', () => {
+    assert.equal(d.homeTitle, ''); assert.equal(d.homeDescription, '');
+    assert.equal(HomeSeoDto.safeParse({ homeTitle: 'x'.repeat(71), homeDescription: '' }).success, false);
+    assert.deepEqual(HomeSeoDto.parse({ homeTitle: '  Bazar  ', homeDescription: '' }), { homeTitle: 'Bazar', homeDescription: '' });
+    assert.equal('homeTitle' in SystemSettingsDto.parse({ homeTitle: 'Jiný', listingDays: 30 }), false);
+    assert.equal(mergeSettings(d, [{ key: 'homeTitle', value: 'Inzerce' }]).homeTitle, 'Inzerce');
   });
   it('validuje IČO a e-mail podpory', () => {
     assert.equal(SettingsSchema.partial().safeParse({ operatorIco: '123' }).success, false);
