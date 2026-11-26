@@ -46,20 +46,21 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ i
   return (
     <>
       <JsonLd data={[website(), organization(operator)]} />
+      {/* Kompaktní úvod: na běžném notebooku musí být hned vidět i dlaždice kategorií pod ním. */}
       <section className="border-b border-line bg-surface">
-        <div className="container-x py-12 sm:py-20">
+        <div className="container-x py-5 sm:py-6">
           <div className="mx-auto max-w-2xl text-center">
-            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl">Co hledáte?</h1>
-            <p className="mt-3 text-muted sm:text-lg">Inzeráty z celé České republiky. Vložení zdarma.</p>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Co hledáte?</h1>
+            <p className="mt-1 text-sm text-muted sm:text-base">Inzeráty z celé České republiky. Vložení zdarma.</p>
           </div>
-          <div className="mx-auto mt-8 max-w-2xl"><SearchBox size="lg" /></div>
-          <div className="mx-auto mt-4 flex max-w-2xl justify-start gap-2 overflow-x-auto scrollbar-none pb-1 sm:justify-center">
+          <div className="mx-auto mt-4 max-w-2xl sm:mt-5"><SearchBox size="lg" /></div>
+          <div className="mx-auto mt-3 flex max-w-2xl justify-start gap-2 overflow-x-auto scrollbar-none pb-1 sm:justify-center">
             {POPULAR.map((p) => <Link key={p} href={`/hledat?q=${encodeURIComponent(p)}&chytre=1`} className="chip shrink-0">{p}</Link>)}
           </div>
         </div>
       </section>
 
-      <Section id="kat" title="Kategorie">
+      <Section id="kat" title="Kategorie" compact>
         <div className="grid grid-cols-4 gap-x-2 gap-y-5 sm:grid-cols-5 lg:grid-cols-10">
           {cats.map((c) => (
             <Link key={c.slug} href={`/kategorie/${c.slug}`} className="group flex flex-col items-center gap-2 text-center">

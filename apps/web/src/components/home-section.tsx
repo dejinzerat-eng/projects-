@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 
-/** Sekce hlavní stránky: nadpis, volitelný podtitulek a odkaz „Zobrazit vše“. */
-export function HomeSection({ id, title, subtitle, href, children }: { id: string; title: string; subtitle?: React.ReactNode; href?: string; children: React.ReactNode }) {
+/** Sekce hlavní stránky: nadpis, volitelný podtitulek a odkaz „Zobrazit vše“. `compact` = menší odstup shora (sekce hned pod úvodem). */
+export function HomeSection({ id, title, subtitle, href, compact, children }: { id: string; title: string; subtitle?: React.ReactNode; href?: string; compact?: boolean; children: React.ReactNode }) {
   return (
-    <section className="container-x pt-12 sm:pt-16" aria-labelledby={id}>
-      <div className="mb-5 flex items-end justify-between gap-4">
+    <section className={`container-x ${compact ? 'pt-6' : 'pt-12 sm:pt-16'}`} aria-labelledby={id}>
+      <div className={`${compact ? 'mb-4' : 'mb-5'} flex items-end justify-between gap-4`}>
         <div className="min-w-0">
           <h2 id={id} className="text-xl font-bold tracking-tight sm:text-2xl">{title}</h2>
           {subtitle && <div className="mt-1 text-sm text-muted">{subtitle}</div>}
