@@ -100,12 +100,26 @@ export function termsMatch(expr: Prisma.Sql, terms: Term[], withCategories = fal
   }), ' AND ');
 }
 
+/**
+ * Funkce a operátory pg_trgm se volají se schématem rozšíření. Prisma nastavuje search_path jen na schéma
+ * aplikace (?schema=app), takže rozšíření v jiném schématu (Supabase: „extensions“) by jinak nenašla.
+ * Schéma zjistí SearchService při startu (setTrgmSchema); do té doby se volá bez schématu.
+ */
+let trgm = Prisma.empty;
+export function setTrgmSchema(schema: string | null | undefined) {
+  trgm = schema ? Prisma.raw(`"${schema.replace(/"/g, '""')}".`) : Prisma.empty;
+}
+/** word_similarity(a, b) z pg_trgm. */
+export const wordSimilarity = (a: Prisma.Sql, b: Prisma.Sql) => Prisma.sql`${trgm}word_similarity(${a}, ${b})`;
+/** a <% b z pg_trgm (využije trigram index). */
+export const wordSimilar = (a: Prisma.Sql, b: Prisma.Sql) => Prisma.sql`${a} OPERATOR(${trgm}<%) ${b}`;
+
 /** Podmínka pro opravu překlepů: delší slova stačí podobná (operátor <% používá trigram index). */
 export function termsFuzzy(expr: Prisma.Sql, terms: Term[]): Prisma.Sql | undefined {
   if (!terms.some((t) => t.word.length >= FUZZY_MIN_LEN)) return undefined;
   return Prisma.join(terms.map((t) => {
     const exact = termsMatch(expr, [t]);
-    return t.word.length >= FUZZY_MIN_LEN ? Prisma.sql`(${exact} OR ${t.word}::text <% ${expr})` : exact;
+    return t.word.length >= FUZZY_MIN_LEN ? Prisma.sql`(${exact} OR ${wordSimilar(Prisma.sql`${t.word}::text`, expr)})` : exact;
   }), ' AND ');
 }
 
@@ -199,7 +213,7 @@ export function tierSql(terms: Term[], phrase: string): Prisma.Sql {
 
 /** Skóre podobnosti pro výsledky s opravou překlepů. */
 export function fuzzyScoreSql(terms: Term[], phrase: string): Prisma.Sql {
-  return Prisma.sql`(word_similarity(${phrase}::text, ${NORM_TITLE}) * 2 + ${Prisma.join(terms.map((t) => Prisma.sql`word_similarity(${t.word}::text, l."searchText")`), ' + ')})`;
+  return Prisma.sql`(${wordSimilarity(Prisma.sql`${phrase}::text`, NORM_TITLE)} * 2 + ${Prisma.join(terms.map((t) => wordSimilarity(Prisma.sql`${t.word}::text`, SEARCH_TEXT)), ' + ')})`;
 }
 
 export type Sort = NonNullable<SearchParams['sort']>;
