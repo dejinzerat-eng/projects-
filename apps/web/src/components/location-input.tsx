@@ -52,8 +52,9 @@ export function LocationInput({ id, value, onChange, onSelect, placeholder = 'M�
   function blur() {
     // Přesně napsaný název obce bereme jako výběr (bez klikání do seznamu)
     const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-    const exact = opts.find((o) => norm(o.name) === norm(value) || norm(o.label) === norm(value) || o.zip === value.replace(/\s/g, ''));
-    if (typed.current && exact) setTimeout(() => choose(exact), 0);
+    // U nejednoznačného názvu (Říčany u Prahy × u Brna) nevybíráme za uživatele – musí zvolit ze seznamu
+    const exact = opts.filter((o) => norm(o.name) === norm(value) || norm(o.label) === norm(value) || o.zip === value.replace(/\s/g, ''));
+    if (typed.current && exact.length === 1) setTimeout(() => choose(exact[0]), 0);
   }
 
   const show = open && opts.length > 0;

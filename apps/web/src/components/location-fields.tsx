@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fetchLocations, LocationInput, type LocationOption } from './location-input';
 
 const fmtZip = (z: string) => (/^\d{5}$/.test(z) ? `${z.slice(0, 3)} ${z.slice(3)}` : z);
@@ -12,6 +12,9 @@ const digits = (z: string) => z.replace(/\s/g, '');
 export function LocationFields({ city, zip, onChange }: { city: string; zip: string; onChange: (v: { city?: string; zip?: string }) => void }) {
   // PSČ, které jsme doplnili sami; dokud se rovná poli PSČ, smíme ho měnit
   const autoZip = useRef<string | null>(null);
+  // PSČ obce vybrané ze seznamu – pro upozornění, když ručně zadané PSČ patří úplně jinam
+  const [chosenZip, setChosenZip] = useState<string | null>(null);
+  const zipMismatch = !!chosenZip && /^\d{5}$/.test(digits(zip)) && digits(zip)[0] !== chosenZip[0];
   const isAuto = (z: string) => !digits(z) || (autoZip.current !== null && digits(z) === autoZip.current);
 
   // U rozpracovaného/upravovaného inzerátu: odpovídá PSČ obci? Pak ho bereme jako doplněné automaticky.
@@ -23,10 +26,12 @@ export function LocationFields({ city, zip, onChange }: { city: string; zip: str
   }, []); // jen při načtení
 
   function select(o: LocationOption) {
+    setChosenZip(o.zip);
     if (isAuto(zip)) { autoZip.current = o.zip; onChange({ city: o.label, zip: fmtZip(o.zip) }); }
     else onChange({ city: o.label });
   }
   function type(v: string) {
+    setChosenZip(null);
     // Jiné město než to, ke kterému jsme PSČ doplnili → automatické PSČ smažeme, doplní se po výběru
     if (autoZip.current && digits(zip) === autoZip.current) { autoZip.current = null; onChange({ city: v, zip: '' }); }
     else onChange({ city: v });
@@ -43,6 +48,7 @@ export function LocationFields({ city, zip, onChange }: { city: string; zip: str
         <label className="label" htmlFor="zip">PSČ</label>
         <input id="zip" inputMode="numeric" className="input" maxLength={6} value={zip} placeholder="110 00" autoComplete="postal-code"
           onChange={(e) => { autoZip.current = null; onChange({ zip: e.target.value.replace(/[^\d\s]/g, '') }); }} />
+        {zipMismatch && <p className="mt-1.5 text-xs text-danger" role="alert">PSČ nepatří k vybrané obci, zkontrolujte ho.</p>}
       </div>
     </div>
   );

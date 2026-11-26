@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { ChevronLeft, ChevronRight, SearchX, Sparkles, SpellCheck } from 'lucide-react';
 import { filtersFor, toSearchString, type SearchParams } from '@dej/shared';
 import { api } from '@/lib/api';
-import { getFavoriteIds } from '@/lib/favorites';
+import { getFavoriteIds, getSavedSearchKeys, savedSearchKey } from '@/lib/favorites';
 import { plural } from '@/lib/format';
 import type { Category, SearchResult } from '@/lib/types';
 import { CompareBar } from './compare';
@@ -19,10 +19,11 @@ export async function SearchView({ searchParams, category, sub, basePath }: { se
   for (const [k, v] of Object.entries(searchParams)) if (typeof v === 'string') qs.set(k, v);
   if (category) qs.set('kategorie', category);
   if (sub) qs.set('pod', sub);
-  const [cats, res, favorites] = await Promise.all([
+  const [cats, res, favorites, savedKeys] = await Promise.all([
     api<Category[]>('/categories', { revalidate: 60, auth: false }),
     api<SearchResult & { params: SearchParams }>(`/search?${qs}`, { auth: false }),
     getFavoriteIds(),
+    getSavedSearchKeys(),
   ]);
   const p = res.params;
   // Chytré hledání: přesměrujeme na URL s rozpoznanými filtry, ať je panel filtrů vyplněný a odkaz sdílitelný
@@ -53,7 +54,7 @@ export async function SearchView({ searchParams, category, sub, basePath }: { se
           <h1 className="h-display text-3xl font-bold sm:text-4xl">{title}</h1>
           <p className="mt-1 text-muted">{plural(res.total, 'inzerát', 'inzeráty', 'inzerátů')}</p>
         </div>
-        <SaveSearch params={p} label={[p.q, subCat?.name ?? cat?.name, p.city ?? (p.lat != null ? 'v okolí mé polohy' : ''), p.priceMax ? `do ${p.priceMax} Kč` : ''].filter(Boolean).join(', ') || 'Všechny inzeráty'} />
+        <SaveSearch key={savedSearchKey(p)} params={p} initialSaved={savedKeys.has(savedSearchKey(p))} label={[p.q, subCat?.name ?? cat?.name, p.city ?? (p.lat != null ? 'v okolí mé polohy' : ''), p.priceMax ? `do ${p.priceMax} Kč` : ''].filter(Boolean).join(', ') || 'Všechny inzeráty'} />
       </div>
       {recognized.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-brand-soft bg-brand-soft/50 px-4 py-3 text-sm">
