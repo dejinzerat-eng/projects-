@@ -172,6 +172,12 @@ model Listing {
   bumpedAt         DateTime?
   highlightedUntil DateTime?
   topUntil         DateTime?
+  /// Doba vyplnění průvodce od otevření po zveřejnění (s)
+  composeSeconds   Int?
+  /// Otisk normalizovaného názvu a popisu pro hledání duplicit
+  contentHash      String?
+  /// Důvody automatické kontroly (pro moderátora)
+  riskReasons      Json          @default("[]")
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -182,6 +188,7 @@ model Listing {
   @@index([status, categoryId])
   @@index([userId, status])
   @@index([expiresAt])
+  @@index([contentHash])
 }
 
 model ListingImage {
@@ -194,9 +201,12 @@ model ListingImage {
   width     Int
   height    Int
   position  Int     @default(0)
+  /// Percepční otisk fotky (dHash, 64 bitů) pro hledání znovu použitých fotek
+  phash     BigInt?
   createdAt DateTime @default(now())
 
   @@index([listingId])
+  @@index([phash])
 }
 
 model Favorite {

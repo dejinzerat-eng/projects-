@@ -9,7 +9,7 @@ import type { ListingCard } from '@/lib/types';
 import { useToast } from './toast';
 
 type Mine = ListingCard & { views: number; favorites: number; conversations: number; expiresAt: string | null; rejectReason: string | null };
-const TABS = [['', 'Vše'], ['ACTIVE', 'Aktivní'], ['RESERVED', 'Rezervované'], ['SOLD', 'Prodané'], ['DRAFT', 'Koncepty'], ['PENDING', 'Ke schválení'], ['EXPIRED', 'Vypršelé']] as const;
+const TABS = [['', 'Vše'], ['ACTIVE', 'Aktivní'], ['RESERVED', 'Rezervované'], ['SOLD', 'Prodané'], ['DRAFT', 'Koncepty'], ['PENDING', 'Ke schválení'], ['REJECTED', 'Zamítnuté'], ['EXPIRED', 'Vypršelé']] as const;
 const TONE: Record<string, string> = { ACTIVE: 'bg-trust-soft text-trust', RESERVED: 'bg-top-soft text-ink', SOLD: 'bg-surface-2 text-ink-2', DRAFT: 'bg-surface-2 text-ink-2', PENDING: 'bg-top-soft text-ink', EXPIRED: 'bg-danger-soft text-danger', REJECTED: 'bg-danger-soft text-danger' };
 
 export function MyListings({ items }: { items: Mine[] }) {
@@ -46,7 +46,7 @@ export function MyListings({ items }: { items: Mine[] }) {
                     {days != null && ['ACTIVE', 'RESERVED'].includes(l.status) && <span className={`text-xs ${days <= 3 ? 'font-semibold text-danger' : 'text-muted'}`}>{days > 0 ? `končí za ${days} d.` : 'končí dnes'}</span>}
                   </div>
                   <Link href={listingUrl(l)} className="mt-1 block truncate font-semibold hover:underline">{l.title}</Link>
-                  <div className="text-[15px] font-bold">{price(l.price, l.priceNegotiable, l.currency)}</div>
+                  <div className="text-[15px] font-bold">{price(l.price, l.priceNegotiable, l.currency, l.offerType)}</div>
                   {l.rejectReason && <p className="mt-1 text-sm text-danger">Důvod: {l.rejectReason}</p>}
                   <div className="mt-1.5 flex gap-4 text-sm text-muted">
                     <span className="inline-flex items-center gap-1"><Eye className="size-4" />{l.views}</span>
@@ -55,7 +55,7 @@ export function MyListings({ items }: { items: Mine[] }) {
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-2">
-                  <Link href={`/inzerat/${l.id}/upravit`} className="btn btn-outline btn-sm"><Pencil className="size-4" /><span className="hidden sm:inline">Upravit</span></Link>
+                  <Link href={`/inzerat/${l.id}/upravit`} className="btn btn-outline btn-sm"><Pencil className="size-4" /><span className="hidden sm:inline">{l.status === 'DRAFT' ? 'Dokončit' : l.status === 'REJECTED' ? 'Opravit' : 'Upravit'}</span></Link>
                   <details className="relative">
                     <summary className="btn btn-ghost btn-sm list-none" aria-label="Další akce"><MoreHorizontal className="size-4" /></summary>
                     <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-pop">

@@ -1,7 +1,7 @@
 import { api } from '@/lib/api';
 import { price } from '@/lib/format';
 
-interface Stats { users: number; users7: number; listings: number; active: number; listings24: number; listings7: number; pending: number; reports: number; messages7: number; revenue30: number; byCategory: { name: string; count: number }[]; daily: { date: string; listings: number; users: number }[]; searchEngine: string }
+interface Stats { users: number; users7: number; listings: number; active: number; listings24: number; listings7: number; pending: number; reports: number; messages7: number; revenue30: number; byCategory: { name: string; count: number }[]; daily: { date: string; listings: number; users: number }[]; searchEngine: string; composeTime?: { count: number; median: number | null; p90: number | null; under60Share: number | null } }
 
 export default async function Page() {
   const s = await api<Stats>('/admin/stats');
@@ -10,6 +10,7 @@ export default async function Page() {
   const tiles = [
     ['Aktivní inzeráty', s.active, `${s.listings7} nových za 7 dní`], ['Uživatelé', s.users, `${s.users7} nových za 7 dní`],
     ['Ke schválení', s.pending, 'inzerátů čeká'], ['Nahlášení', s.reports, 'otevřených'], ['Zprávy', s.messages7, 'za 7 dní'], ['Tržby (30 dní)', price(s.revenue30), 'platby ve fázi 2'],
+    ['Doba vložení (medián)', s.composeTime?.median != null ? `${s.composeTime.median} s` : '–', s.composeTime?.count ? `p90 ${s.composeTime.p90} s · do 60 s ${Math.round((s.composeTime.under60Share ?? 0) * 100)} % z ${s.composeTime.count}` : 'cíl do 60 s, zatím bez dat'],
   ] as const;
   return (
     <div className="space-y-6">

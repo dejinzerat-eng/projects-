@@ -1,3 +1,5 @@
 export * from './categories';
 export * from './locations';
 export * from './query';
+export * from './params';
+export * from './video';

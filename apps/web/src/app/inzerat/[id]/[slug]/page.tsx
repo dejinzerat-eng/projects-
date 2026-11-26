@@ -10,6 +10,7 @@ import { Gallery } from '@/components/gallery';
 import { ListingGrid } from '@/components/listing-card';
 import { ReportButton } from '@/components/report-button';
 import { ShareButton } from '@/components/share-button';
+import { parseVideoUrl } from '@dej/shared';
 import { api, ApiError, getMe } from '@/lib/api';
 import { ago, CONDITION_LABEL, OFFER_LABEL, plural, price, STATUS_LABEL } from '@/lib/format';
 import type { FilterDef, ListingCard } from '@/lib/types';
@@ -31,21 +32,16 @@ async function load(id: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const l = await load(id);
-  const desc = `${price(l.price, l.priceNegotiable, l.currency)} · ${l.city} · ${l.description.slice(0, 140).replace(/\s+/g, ' ')}`;
+  const desc = `${price(l.price, l.priceNegotiable, l.currency, l.offerType)} · ${l.city} · ${l.description.slice(0, 140).replace(/\s+/g, ' ')}`;
   return {
-    title: `${l.title} – ${price(l.price, l.priceNegotiable, l.currency)}, ${l.city}`, description: desc,
+    title: `${l.title} – ${price(l.price, l.priceNegotiable, l.currency, l.offerType)}, ${l.city}`, description: desc,
     alternates: { canonical: `/inzerat/${l.id}/${l.slug}` },
     openGraph: { title: l.title, description: desc, images: l.images[0] ? [{ url: l.images[0].url }] : undefined, type: 'article' },
     robots: ['ACTIVE', 'RESERVED'].includes(l.status) ? undefined : { index: false },
   };
 }
 
-function videoEmbed(url: string) {
-  const yt = url.match(/(?:youtu\.be\/|v=)([\w-]{11})/);
-  if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}`;
-  const vm = url.match(/vimeo\.com\/(\d+)/);
-  return vm ? `https://player.vimeo.com/video/${vm[1]}` : null;
-}
+const videoEmbed = (url: string) => parseVideoUrl(url)?.embed ?? null;
 
 export default async function Page({ params }: Props) {
   const { id, slug } = await params;
@@ -158,7 +154,7 @@ function Summary({ l }: { l: Detail }) {
       {l.status !== 'ACTIVE' && <div className="badge mb-2 bg-ink text-paper">{STATUS_LABEL[l.status]}</div>}
       <h1 className="h-display text-2xl font-bold leading-tight sm:text-[28px]">{l.title}</h1>
       <div className="mt-3 flex items-baseline gap-2">
-        <span className="text-3xl font-bold tracking-tight">{price(l.price, l.priceNegotiable, l.currency)}</span>
+        <span className="text-3xl font-bold tracking-tight">{price(l.price, l.priceNegotiable, l.currency, l.offerType)}</span>
         {l.priceNegotiable && l.price != null && <span className="text-sm text-muted">· k jednání</span>}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">

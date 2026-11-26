@@ -1,56 +1,78 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListingStatus, Prisma } from '@prisma/client';
-import { filtersFor, findCity, slugify } from '@dej/shared';
+import { cleanParams, effectiveFilters, type FilterDef, findCity, parseVideoUrl, slugify, VIDEO_URL_ERROR } from '@dej/shared';
 import { z } from 'zod';
 import { AuthUser } from '../common/auth.guard';
 import { config } from '../common/config';
 import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { LISTING_INCLUDE, SearchService } from '../search/search.service';
+import { ZodPipe } from '../common/zod';
+import { contentHash, isWeakHash, normalizeText, PHASH_MAX_DISTANCE } from './duplicates';
+import { nextExpiry, nextStatus, REVIEW_SCORE } from './lifecycle';
 import { assessListing } from './moderation';
 import { canRevealPhone } from '../users/phone-privacy';
 
+const VideoUrl = z.string().trim().max(500)
+  .refine((u) => !u || !!parseVideoUrl(u), { message: VIDEO_URL_ERROR })
+  .transform((u) => (u ? parseVideoUrl(u)!.url : ''));
+
 export const ListingDto = z.object({
-  title: z.string().trim().min(5, 'Název musí mít alespoň 5 znaků.').max(90, 'Název může mít nejvýše 90 znaků.'),
-  description: z.string().trim().min(20, 'Popis musí mít alespoň 20 znaků.').max(8000),
+  title: z.string({ error: 'Napište název inzerátu.' }).trim().min(5, 'Název musí mít alespoň 5 znaků.').max(90, 'Název může mít nejvýše 90 znaků.'),
+  description: z.string({ error: 'Napište popis inzerátu.' }).trim().min(10, 'Popis musí mít alespoň 10 znaků.').max(8000, 'Popis může mít nejvýše 8000 znaků.'),
   price: z.number().int().min(0).max(2_000_000_000).nullable().optional(),
   priceNegotiable: z.boolean().default(false),
   currency: z.enum(['CZK', 'EUR']).default('CZK'),
-  categorySlug: z.string().min(1, 'Vyberte kategorii.'),
-  subSlug: z.string().min(1, 'Vyberte podkategorii.'),
+  categorySlug: z.string({ error: 'Vyberte kategorii.' }).min(1, 'Vyberte kategorii.'),
+  subSlug: z.string({ error: 'Vyberte podkategorii.' }).min(1, 'Vyberte podkategorii.'),
   condition: z.enum(['NEW', 'LIKE_NEW', 'USED', 'DAMAGED']).nullable().optional(),
   offerType: z.enum(['SELL', 'BUY', 'EXCHANGE', 'GIVE', 'RENT']).default('SELL'),
-  city: z.string().trim().min(2, 'Zadejte lokalitu.').max(80),
+  city: z.string({ error: 'Zadejte lokalitu.' }).trim().min(2, 'Zadejte lokalitu.').max(80),
   zip: z.string().regex(/^\d{3}\s?\d{2}$/, 'PSČ má 5 číslic.').optional().or(z.literal('')),
   attributes: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string())])).default({}),
   imageIds: z.array(z.string()).max(20, 'Nejvýše 20 fotografií.').default([]),
-  videoUrl: z.string().url().regex(/^https:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\//, 'Video vložte jako odkaz na YouTube nebo Vimeo.').optional().or(z.literal('')),
+  videoUrl: VideoUrl.optional(),
   publish: z.boolean().default(true),
+  /** Jak dlouho trvalo vyplnění průvodce (ms) – měření cíle „inzerát do 60 sekund“ */
+  composeMs: z.number().int().min(0).optional(),
 });
 export type ListingInput = z.infer<typeof ListingDto>;
+
+/** Koncept: stačí název a kategorie, ostatní se doplní před zveřejněním. */
+export const ListingDraftDto = ListingDto.extend({
+  title: z.string({ error: 'Pro uložení konceptu napište název.' }).trim().min(1, 'Pro uložení konceptu napište název.').max(90, 'Název může mít nejvýše 90 znaků.'),
+  description: z.string().trim().max(8000, 'Popis může mít nejvýše 8000 znaků.').default(''),
+  categorySlug: z.string({ error: 'Pro uložení konceptu vyberte kategorii.' }).min(1, 'Pro uložení konceptu vyberte kategorii.'),
+  subSlug: z.string({ error: 'Pro uložení konceptu vyberte podkategorii.' }).min(1, 'Pro uložení konceptu vyberte podkategorii.'),
+  city: z.string().trim().max(80).default(''),
+  // Neúplné PSČ v konceptu nevadí – uložíme jen platné, jinak ho vynecháme
+  zip: z.string().trim().max(10).optional().transform((z) => (z && /^\d{3}\s?\d{2}$/.test(z) ? z : undefined)),
+  publish: z.literal(false),
+});
+
+/** Validace těla podle toho, jestli jde o koncept (publish: false), nebo o zveřejnění. */
+export function parseListingBody(body: unknown): ListingInput {
+  const draft = !!body && typeof body === 'object' && (body as { publish?: unknown }).publish === false;
+  return new ZodPipe<ListingInput>((draft ? ListingDraftDto : ListingDto) as z.ZodType<ListingInput>).transform(body);
+}
+
+const DUP_STATUSES: ListingStatus[] = ['ACTIVE', 'PENDING', 'RESERVED'];
 
 @Injectable()
 export class ListingsService {
   constructor(private prisma: PrismaService, private search: SearchService, private redis: RedisService) {}
 
+  /** Jen aktivní podkategorie aktivní hlavní kategorie; parametry podle definic v databázi. */
   private async resolveCategory(categorySlug: string, subSlug: string) {
-    const cat = await this.prisma.category.findFirst({ where: { slug: subSlug, parent: { slug: categorySlug } }, include: { parent: true } });
-    if (!cat) throw new BadRequestException('Neplatná kategorie.');
-    return cat;
+    const cat = await this.prisma.category.findFirst({ where: { slug: subSlug, active: true, parent: { slug: categorySlug, active: true, parentId: null } }, include: { parent: true } });
+    if (!cat) throw new BadRequestException({ message: 'Vybraná kategorie neexistuje nebo už není v nabídce. Vyberte prosím jinou.', field: 'subSlug' });
+    return { ...cat, defs: effectiveFilters(categorySlug, cat.parent?.filters, subSlug, cat.filters) };
   }
 
-  private cleanAttributes(categorySlug: string, subSlug: string, attrs: ListingInput['attributes']) {
-    const defs = filtersFor(categorySlug, subSlug);
-    const out: Record<string, unknown> = {};
-    for (const d of defs) {
-      const v = attrs[d.key];
-      if (v === undefined || v === '' || v === null) continue;
-      if (d.type === 'range') { const n = Number(v); if (Number.isFinite(n)) out[d.key] = n; }
-      else if (d.type === 'boolean') { if (v === true || v === 'true') out[d.key] = true; }
-      else if (d.type === 'multiselect') { const arr = (Array.isArray(v) ? v : [String(v)]).filter((x) => d.options?.includes(x)); if (arr.length) out[d.key] = arr.length === 1 ? arr[0] : arr; }
-      else if (d.options?.includes(String(v))) out[d.key] = String(v);
-    }
-    return out;
+  private cleanAttributes(defs: FilterDef[], attrs: ListingInput['attributes'], strict: boolean) {
+    const r = cleanParams(defs, attrs, strict);
+    if (r.error) throw new BadRequestException({ message: r.error, field: 'attributes' });
+    return r.values;
   }
 
   private async checkSpam(userId: string) {
@@ -58,21 +80,94 @@ export class ListingsService {
     if (n > 20) throw new BadRequestException('Za hodinu lze vložit nejvýše 20 inzerátů.');
   }
 
+  /** Nezveřejněný koncept smí být neúplný; zveřejněný inzerát musí projít plnou kontrolou. */
+  private requireComplete(dto: ListingInput): ListingInput {
+    const r = ListingDto.safeParse({ ...dto, publish: true });
+    if (!r.success) {
+      const issue = r.error.issues[0];
+      throw new BadRequestException({ message: issue?.message ?? 'Neplatná data', field: issue?.path.join('.') });
+    }
+    return { ...r.data, publish: dto.publish };
+  }
+
+  /**
+   * Kontrola duplicit. Stejný text u vlastního aktivního inzerátu zablokuje, shoda s cizím inzerátem
+   * (text nebo znovu použitá fotka) pošle inzerát ke schválení. U cizích inzerátů porovnáváme jen se staršími
+   * (`before` = vznik posuzovaného inzerátu), aby původního autora nepotrestal ten, kdo od něj text či fotky zkopíroval.
+   */
+  private async findDuplicates(ownerId: string, listingId: string | null, before: Date, title: string, description: string, imageIds: string[]) {
+    const hash = contentHash(title, description);
+    const norm = `${normalizeText(title)}\n${normalizeText(description)}`;
+    const notSelf = listingId ? { id: { not: listingId } } : {};
+    const candidates = await this.prisma.listing.findMany({
+      where: { ...notSelf, status: { in: DUP_STATUSES }, OR: [{ contentHash: hash }, { contentHash: null, title: { equals: title, mode: 'insensitive' } }] },
+      select: { id: true, slug: true, title: true, description: true, userId: true, contentHash: true, createdAt: true }, take: 20,
+    });
+    const same = candidates.filter((c) => c.contentHash === hash || `${normalizeText(c.title)}\n${normalizeText(c.description)}` === norm);
+    const own = same.find((c) => c.userId === ownerId) ?? null;
+    // U velmi krátkých textů může jít o náhodu – cizí shodu hlásíme jen u popisu s nějakým obsahem
+    const otherText = normalizeText(description).length >= 30 && same.some((c) => c.userId !== ownerId && c.createdAt < before);
+
+    let otherPhoto = false;
+    if (imageIds.length) {
+      const imgs = await this.prisma.listingImage.findMany({ where: { id: { in: imageIds }, ownerId, phash: { not: null } }, select: { phash: true } });
+      const hashes = imgs.map((i) => i.phash!).filter((h) => !isWeakHash(h));
+      if (hashes.length) {
+        const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+          SELECT li.id FROM "ListingImage" li
+          JOIN "Listing" l ON l.id = li."listingId"
+          JOIN unnest(${hashes}::bigint[]) AS h(v) ON length(replace(((li.phash # h.v)::bit(64))::text, '0', '')) <= ${PHASH_MAX_DISTANCE}
+          WHERE li.phash IS NOT NULL AND li."ownerId" <> ${ownerId} AND l."userId" <> ${ownerId}
+            AND l.status IN ('ACTIVE', 'RESERVED', 'PENDING') AND l."createdAt" < ${before}
+          LIMIT 1`;
+        otherPhoto = rows.length > 0;
+      }
+    }
+    return { hash, own, otherText, otherPhoto };
+  }
+
+  /** Riziko z pravidel obsahu + z duplicit. Vlastní duplicitu odmítne s vysvětlením. */
+  private async assess(ownerId: string, listing: { id: string; createdAt: Date } | null, dto: ListingInput, publishing: boolean) {
+    const risk = assessListing({ title: dto.title, description: dto.description, price: dto.price, categorySlug: dto.categorySlug });
+    const dup = await this.findDuplicates(ownerId, listing?.id ?? null, listing?.createdAt ?? new Date(), dto.title, dto.description, dto.imageIds);
+    if (publishing && dup.own) {
+      throw new ConflictException({ message: `Stejný inzerát už máte vložený („${dup.own.title}“). Upravte nebo prodlužte ten původní.`, field: 'title', duplicateOf: { id: dup.own.id, slug: dup.own.slug } });
+    }
+    let score = risk.score;
+    const reasons = [...risk.reasons];
+    if (dup.otherText) { score += REVIEW_SCORE; reasons.push('Shodný text s inzerátem jiného uživatele'); }
+    if (dup.otherPhoto) { score += REVIEW_SCORE; reasons.push('Fotka z inzerátu jiného uživatele'); }
+    return { score: Math.min(100, score), reasons, hash: dup.hash };
+  }
+
+  private priceFields(dto: ListingInput) {
+    // Dar je vždy zdarma: cenu neukládáme, aby se nikde neukázala stará zadaná částka
+    if (dto.offerType === 'GIVE') return { price: null, priceNegotiable: false };
+    return { price: dto.price ?? null, priceNegotiable: dto.priceNegotiable };
+  }
+
+  private composeSeconds(dto: ListingInput) {
+    return dto.composeMs != null && dto.composeMs > 0 && dto.composeMs <= 864e5 ? Math.round(dto.composeMs / 1000) : null;
+  }
+
   async create(user: AuthUser, dto: ListingInput) {
     await this.checkSpam(user.id);
     const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
-    const city = findCity(dto.city);
-    const risk = assessListing({ title: dto.title, description: dto.description, price: dto.price, categorySlug: dto.categorySlug });
-    const status: ListingStatus = !dto.publish ? 'DRAFT' : risk.score >= 50 || config.premoderation ? 'PENDING' : 'ACTIVE';
+    const attributes = this.cleanAttributes(cat.defs, dto.attributes, dto.publish);
+    const city = dto.city ? findCity(dto.city) : undefined;
+    const risk = await this.assess(user.id, null, dto, dto.publish);
+    const status = nextStatus({ publish: dto.publish, premoderation: config.premoderation, score: risk.score });
+    const now = new Date();
     const listing = await this.prisma.listing.create({
       data: {
-        slug: slugify(dto.title), title: dto.title, description: dto.description, price: dto.price ?? null, priceNegotiable: dto.priceNegotiable,
+        slug: slugify(dto.title) || 'inzerat', title: dto.title, description: dto.description, ...this.priceFields(dto),
         currency: dto.currency, categoryId: cat.id, userId: user.id, condition: dto.condition ?? null, offerType: dto.offerType,
         city: city?.name ?? dto.city, region: city?.region ?? '', zip: dto.zip?.replace(/\s/g, '') || city?.zip, lat: city?.lat, lng: city?.lng,
-        attributes: this.cleanAttributes(dto.categorySlug, dto.subSlug, dto.attributes) as Prisma.InputJsonValue,
-        videoUrl: dto.videoUrl || null, status, spamScore: risk.score,
-        publishedAt: status === 'ACTIVE' ? new Date() : null,
-        expiresAt: new Date(Date.now() + config.listingDays * 864e5),
+        attributes: attributes as Prisma.InputJsonValue,
+        videoUrl: dto.videoUrl || null, status, spamScore: risk.score, riskReasons: risk.reasons, contentHash: risk.hash,
+        composeSeconds: status === 'DRAFT' ? null : this.composeSeconds(dto),
+        publishedAt: status === 'ACTIVE' ? now : null,
+        expiresAt: nextExpiry({ after: status, expiresAt: null, now, days: config.listingDays }),
       },
     });
     await this.attachImages(listing.id, user.id, dto.imageIds);
@@ -92,27 +187,36 @@ export class ListingsService {
     return l;
   }
 
-  async update(id: string, user: AuthUser, dto: ListingInput) {
+  async update(id: string, user: AuthUser, input: ListingInput) {
     const l = await this.ownOrThrow(id, user);
+    // Zveřejněný (nebo zveřejňovaný) inzerát musí být úplný, i když přišel jako koncept
+    const publishing = l.status !== 'DRAFT' || input.publish;
+    const dto = publishing ? this.requireComplete(input) : input;
     const cat = await this.resolveCategory(dto.categorySlug, dto.subSlug);
-    const city = findCity(dto.city);
-    const risk = assessListing({ title: dto.title, description: dto.description, price: dto.price, categorySlug: dto.categorySlug });
-    let status = l.status;
-    if (l.status === 'DRAFT' && dto.publish) status = risk.score >= 50 || config.premoderation ? 'PENDING' : 'ACTIVE';
-    else if (risk.score >= 50 && l.status === 'ACTIVE') status = 'PENDING';
+    const attributes = this.cleanAttributes(cat.defs, dto.attributes, publishing);
+    const city = dto.city ? findCity(dto.city) : undefined;
+    const risk = await this.assess(l.userId, l, dto, publishing);
+    const status = nextStatus({ current: l.status, publish: dto.publish, premoderation: config.premoderation, score: risk.score });
+    const now = new Date();
+    const expiresAt = nextExpiry({ before: l.status, after: status, expiresAt: l.expiresAt, now, days: config.listingDays });
     await this.prisma.listing.update({
       where: { id },
       data: {
-        slug: slugify(dto.title), title: dto.title, description: dto.description, price: dto.price ?? null, priceNegotiable: dto.priceNegotiable, currency: dto.currency,
+        slug: slugify(dto.title) || 'inzerat', title: dto.title, description: dto.description, ...this.priceFields(dto), currency: dto.currency,
         categoryId: cat.id, condition: dto.condition ?? null, offerType: dto.offerType,
         city: city?.name ?? dto.city, region: city?.region ?? l.region, zip: dto.zip?.replace(/\s/g, '') || city?.zip, lat: city?.lat ?? l.lat, lng: city?.lng ?? l.lng,
-        attributes: this.cleanAttributes(dto.categorySlug, dto.subSlug, dto.attributes) as Prisma.InputJsonValue,
-        videoUrl: dto.videoUrl || null, status, spamScore: risk.score, publishedAt: status === 'ACTIVE' && !l.publishedAt ? new Date() : l.publishedAt,
+        attributes: attributes as Prisma.InputJsonValue,
+        videoUrl: dto.videoUrl || null, status, spamScore: risk.score, riskReasons: risk.reasons, contentHash: risk.hash,
+        publishedAt: status === 'ACTIVE' && !l.publishedAt ? now : l.publishedAt,
+        // Oprava zamítnutého inzerátu: starý důvod zamítnutí už neplatí
+        rejectReason: status === 'REJECTED' ? l.rejectReason : null,
+        expiresAt, ...(expiresAt?.getTime() !== l.expiresAt?.getTime() ? { expiryNotifiedAt: null } : {}),
+        ...(l.status === 'DRAFT' && status !== 'DRAFT' && l.composeSeconds == null ? { composeSeconds: this.composeSeconds(dto) } : {}),
       },
     });
     await this.attachImages(id, l.userId, dto.imageIds);
     await this.search.index(id);
-    return { id, status };
+    return { id, slug: slugify(dto.title) || 'inzerat', status, moderation: risk.reasons };
   }
 
   async setStatus(id: string, user: AuthUser, status: 'ACTIVE' | 'RESERVED' | 'SOLD') {
@@ -158,10 +262,13 @@ export class ListingsService {
       viewer ? this.prisma.favorite.findUnique({ where: { userId_listingId: { userId: viewer.id, listingId: id } } }).then(Boolean) : false,
     ]);
     const { phone, showPhone, companyVerifiedAt, ...seller } = l.user;
+    // Interní údaje automatické kontroly vidí jen moderátoři (jinak by šlo kontrolu obcházet)
+    const staff = !!viewer && viewer.role !== 'USER';
+    const { spamScore, riskReasons, contentHash: _hash, composeSeconds, ...pub } = l;
     return {
-      ...l, user: undefined,
+      ...pub, ...(staff ? { spamScore, riskReasons, composeSeconds } : {}), user: undefined,
       seller: { ...seller, companyName: companyVerifiedAt ? seller.companyName : null, phoneVerified: !!l.user.phoneVerifiedAt, emailVerified: !!l.user.emailVerifiedAt, phoneVerifiedAt: undefined, emailVerifiedAt: undefined, rating: rating._avg.rating, reviewCount: rating._count, activeListings: activeCount, hasPhone: canRevealPhone(l.status, { phone, phoneVerifiedAt: l.user.phoneVerifiedAt, showPhone }, false) },
-      favorites: favCount, isFavorite, isOwner: !!isOwner, filters: filtersFor(l.category.parent?.slug ?? l.category.slug, l.category.slug),
+      favorites: favCount, isFavorite, isOwner: !!isOwner, filters: l.category.parent ? effectiveFilters(l.category.parent.slug, l.category.parent.filters, l.category.slug, l.category.filters) : [],
     };
   }
 
@@ -205,7 +312,8 @@ export class ListingsService {
   }
 
   async mine(userId: string, status?: string) {
-    const where: Prisma.ListingWhereInput = { userId, status: status ? (status as ListingStatus) : { not: 'DELETED' } };
+    const known = !!status && status !== 'DELETED' && (Object.values(ListingStatus) as string[]).includes(status);
+    const where: Prisma.ListingWhereInput = { userId, status: known ? (status as ListingStatus) : { not: 'DELETED' } };
     const rows = await this.prisma.listing.findMany({ where, include: { ...LISTING_INCLUDE, _count: { select: { favorites: true, conversations: true } } }, orderBy: { createdAt: 'desc' }, take: 200 });
     return rows.map((l) => ({ ...this.search.toCard(l), views: l.views, favorites: l._count.favorites, conversations: l._count.conversations, expiresAt: l.expiresAt, rejectReason: l.rejectReason }));
   }

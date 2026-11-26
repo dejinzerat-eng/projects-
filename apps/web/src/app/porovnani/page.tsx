@@ -32,7 +32,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
               </th>
             ))}</tr></thead>
             <tbody className="[&_td]:border-t [&_td]:border-line [&_td]:p-3 [&_th]:border-t [&_th]:border-line [&_th]:p-3 [&_th]:text-left [&_th]:font-medium [&_th]:text-muted">
-              <tr><th>Cena</th>{items.map((i) => <td key={i.id} className={`font-bold ${i.price === minPrice ? 'text-trust' : ''}`}>{price(i.price, i.priceNegotiable)}{i.price === minPrice && <span className="ml-1 text-xs font-medium">nejlevnější</span>}</td>)}</tr>
+              <tr><th>Cena</th>{items.map((i) => <td key={i.id} className={`font-bold ${i.price === minPrice ? 'text-trust' : ''}`}>{price(i.price, i.priceNegotiable, i.currency, i.offerType)}{i.price === minPrice && <span className="ml-1 text-xs font-medium">nejlevnější</span>}</td>)}</tr>
               <tr><th>Stav</th>{items.map((i) => <td key={i.id}>{i.condition ? CONDITION_LABEL[i.condition] : '–'}</td>)}</tr>
               <tr><th>Lokalita</th>{items.map((i) => <td key={i.id}>{i.city}</td>)}</tr>
               <tr><th>Zveřejněno</th>{items.map((i) => <td key={i.id}>{ago(i.publishedAt ?? i.createdAt)}</td>)}</tr>
