@@ -9,6 +9,7 @@ import { ZodPipe } from '../common/zod';
 import { assessListingDetailed } from '../listings/moderation';
 import { LISTING_INCLUDE, SearchService } from '../search/search.service';
 import { audit, diff } from './audit';
+import { AuditQuery, auditWhere, encodeCursor } from './audit-query';
 import { ListingPolicyService } from './listing-policy.service';
 
 const STATUSES = ['DRAFT', 'PENDING', 'ACTIVE', 'RESERVED', 'SOLD', 'EXPIRED', 'REJECTED', 'DELETED'] as const;
@@ -149,13 +150,17 @@ export class AdminController {
     return { ok: true };
   }
 
+  /** Auditní log s filtry (akce, kdo, cíl, období) a stránkováním podle klíče (?cursor=). */
   @Can('audit.read')
   @Get('audit')
-  auditLog(@Query('action') action?: string, @Query('targetId') targetId?: string) {
-    return this.prisma.auditLog.findMany({
-      where: { ...(action ? { action: { startsWith: action } } : {}), ...(targetId ? { targetId } : {}) },
-      include: { actor: { select: { name: true, email: true, role: true } } }, orderBy: { createdAt: 'desc' }, take: 200,
+  async auditLog(@Query(new ZodPipe(AuditQuery)) q: AuditQuery) {
+    const rows = await this.prisma.auditLog.findMany({
+      where: auditWhere(q),
+      include: { actor: { select: { id: true, name: true, email: true, role: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: q.limit + 1,
     });
+    const items = rows.slice(0, q.limit);
+    const last = items[items.length - 1];
+    return { items, nextCursor: rows.length > q.limit && last ? encodeCursor(last.createdAt, last.id) : null };
   }
 
   @Can('search.reindex')

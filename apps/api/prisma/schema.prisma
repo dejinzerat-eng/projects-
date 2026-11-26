@@ -409,6 +409,8 @@ model AuditLog {
   createdAt  DateTime @default(now())
 
   @@index([createdAt])
+  @@index([targetType, targetId])
+  @@index([actorId, createdAt])
 }
 
 /// Informační stránky (Podmínky, GDPR, Nápověda…) – editovatelné v administraci
