@@ -5,19 +5,17 @@ import { Header } from '@/components/header';
 import { MobileNav } from '@/components/mobile-nav';
 import { ToastProvider } from '@/components/toast';
 import { getMe } from '@/lib/api';
-import { SITE, SITE_NAME, social } from '@/lib/seo';
+import { HOME_TITLE, SITE, SITE_DESCRIPTION, SITE_NAME, social } from '@/lib/seo';
 import './globals.css';
 
 const body = Onest({ subsets: ['latin', 'latin-ext'], variable: '--font-body', display: 'swap' });
 
-const DESCRIPTION = 'Prodávejte a nakupujte rychle a bezpečně. Inzeráty zdarma z celé České republiky: auta, reality, elektronika, mobily, nábytek, oblečení a další.';
-
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
-  title: { default: 'Dejinzerat.cz – moderní inzerce a bazar zdarma', template: '%s | Dejinzerat.cz' },
-  description: DESCRIPTION,
+  title: { default: HOME_TITLE, template: '%s | Dejinzerat.cz' },
+  description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
-  ...social({ title: 'Dejinzerat.cz – moderní inzerce a bazar zdarma', description: DESCRIPTION }),
+  ...social({ title: HOME_TITLE, description: SITE_DESCRIPTION }),
   formatDetection: { telephone: false },
   robots: process.env.NOINDEX === '1' ? { index: false, follow: false } : undefined,
 };
