@@ -136,6 +136,8 @@ export class MessagesController {
     if (userId === u.id) throw new BadRequestException('Nemůžete psát sami sobě.');
     const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, status: true } });
     if (!target || target.status !== 'ACTIVE') throw new NotFoundException('Uživatel neexistuje.');
+    // před založením konverzace, ať po odmítnuté zprávě nezůstane prázdná konverzace
+    await this.trust.assertMayPost(u.id);
     if (await this.blocked(u.id, userId)) throw new ForbiddenException('Komunikace s tímto uživatelem není možná.');
     const key = directKey(u.id, userId);
     let conv = await this.prisma.conversation.findUnique({ where: { directKey: key } });
