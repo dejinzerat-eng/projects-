@@ -7,7 +7,7 @@ Moderní inzertní portál pro ČR a SR. Monorepo:
 | `apps/web` | Web – Next.js 16 (App Router), React 19, Tailwind CSS 4 |
 | `apps/api` | Backend – NestJS 11, Prisma 6, PostgreSQL, Meilisearch, Redis, S3 |
 | `packages/shared` | Sdílený kód: kategorie a jejich filtry, lokality, parser chytrého hledání |
-| `docs/` | Architektura a plán rozvoje, import ze starého webu (`docs/IMPORT-STAREHO-WEBU.md`) |
+| `docs/` | Architektura a plán rozvoje, import ze starého webu (`docs/IMPORT-STAREHO-WEBU.md`), vložení inzerátu bez registrace (`docs/VKLADANI-BEZ-REGISTRACE.md`) |
 
 ## Rychlý start (vývoj)
 
@@ -28,6 +28,7 @@ Skripty API (`dev`, `start`, `seed`, `smoke`) si samy načtou `apps/api/.env`, p
 pnpm --filter @dej/shared build && pnpm --filter @dej/api build
 pnpm test                         # jednotkové testy (apps/api/src/**/*.spec.ts)
 pnpm --filter @dej/api smoke      # zkušební spuštění API nad databází s výchozími daty
+pnpm --filter @dej/api guest:e2e  # celý průběh „inzerát bez registrace“ (falešný Resend, po sobě uklidí)
 ```
 
 GitHub Actions (`.github/workflows/ci.yml`) spustí u každého pull requestu a pushe do `main`: instalaci, sestavení, testy, migrace a seed nad čistou databází, zkušební spuštění API, zabalení API pro Vercel a sestavení webu. Nepotřebuje žádné tajné klíče.

@@ -1,11 +1,13 @@
 'use client';
 import { cleanParams, CONDITIONS, type FilterDef, OFFER_TYPES, parseVideoUrl, VIDEO_URL_ERROR } from '@dej/shared';
-import { ArrowLeft, ArrowRight, Camera, Check, ChevronLeft, ChevronRight, ImagePlus, Lightbulb, Loader2, MapPin, Save, Sparkles, Star, Trash2, Wand2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Camera, Check, ChevronLeft, ChevronRight, ImagePlus, Lightbulb, Loader2, MailCheck, MapPin, Save, Sparkles, Star, Trash2, Wand2 } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { isImageFile, MAX_UPLOAD_BYTES, shrinkImage } from '@/lib/image';
 import { useEffect, useRef, useState } from 'react';
 import { call } from '@/lib/client';
 import { CONDITION_LABEL, price as fmtPrice } from '@/lib/format';
+import { Turnstile, useProviders } from './auth-forms';
 import { CategoryIcon } from './icons';
 import { LocationFields } from './location-fields';
 import { useToast } from './toast';
@@ -24,23 +26,41 @@ const EMPTY: WizardInitial = { title: '', description: '', price: null, priceNeg
 const STEPS = ['Co nabízíte', 'Fotky', 'Popis a cena', 'Místo', 'Náhled'];
 const DRAFT_KEY = 'dej_wizard_draft';
 /** Pole ze serverové chyby → krok průvodce, kde ho uživatel opraví */
-const FIELD_STEP: Record<string, number> = { title: 0, categorySlug: 0, subSlug: 0, offerType: 0, imageIds: 1, videoUrl: 1, description: 2, price: 2, currency: 2, condition: 2, attributes: 2, city: 3, zip: 3 };
+const FIELD_STEP: Record<string, number> = { title: 0, categorySlug: 0, subSlug: 0, offerType: 0, imageIds: 1, videoUrl: 1, description: 2, price: 2, currency: 2, condition: 2, attributes: 2, city: 3, zip: 3, email: 4, name: 4, terms: 4, captcha: 4 };
+/** Kontakt při vkládání bez přihlášení (z e-mailu se po potvrzení založí účet). */
+interface GuestContact { email: string; name: string; terms: boolean }
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-class SendError extends Error { constructor(message: string, public field?: string, public status?: number) { super(message); } }
+class SendError extends Error { constructor(message: string, public field?: string, public status?: number, public code?: string) { super(message); } }
 async function send<T>(path: string, method: string, body: unknown): Promise<T> {
   const r = await fetch(`/api${path}`, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!r.ok) {
-    let msg = 'Něco se pokazilo. Zkuste to prosím znovu.'; let field: string | undefined;
-    try { const j = await r.json(); msg = (Array.isArray(j.message) ? j.message[0] : j.message) ?? msg; field = typeof j.field === 'string' ? j.field.split('.')[0] : undefined; } catch { /* */ }
-    if (r.status === 429) msg = 'Příliš mnoho požadavků. Chvíli počkejte.';
-    throw new SendError(msg, field, r.status);
+    let msg = 'Něco se pokazilo. Zkuste to prosím znovu.'; let field: string | undefined; let code: string | undefined; let own = false;
+    try {
+      const j = await r.json(); own = typeof j.message === 'string' && j.message !== 'ThrottlerException: Too Many Requests';
+      msg = (Array.isArray(j.message) ? j.message[0] : j.message) ?? msg; field = typeof j.field === 'string' ? j.field.split('.')[0] : undefined; code = typeof j.code === 'string' ? j.code : undefined;
+    } catch { /* */ }
+    // Obecný limit požadavků nahradíme srozumitelnou větou, vlastní vysvětlení z API (limit inzerátů) necháme
+    if (r.status === 429 && !own) msg = 'Příliš mnoho požadavků. Chvíli počkejte.';
+    throw new SendError(msg, field, r.status, code);
   }
   return r.json() as Promise<T>;
 }
 
-export function ListingWizard({ initial, defaultCity, categories, userId }: { initial?: WizardInitial; defaultCity?: string | null; categories: WizardCategory[]; userId?: string }) {
+/**
+ * Průvodce vložením a úpravou inzerátu. `guest` = návštěvník bez přihlášení: v náhledu vyplní e-mail,
+ * po odeslání dostane odkaz, který e-mail ověří, založí účet a inzerát zveřejní (API /listings/guest).
+ */
+export function ListingWizard({ initial, defaultCity, categories, userId, guest = false }: { initial?: WizardInitial; defaultCity?: string | null; categories: WizardCategory[]; userId?: string; guest?: boolean }) {
   // Rozpracovaný inzerát v prohlížeči patří přihlášenému uživateli (sdílený počítač)
   const draftKey = userId ? `${DRAFT_KEY}:${userId}` : DRAFT_KEY;
+  const [contact, setContact] = useState<GuestContact>({ email: '', name: '', terms: false });
+  const [captcha, setCaptcha] = useState('');
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const [sentTo, setSentTo] = useState<{ email: string; devLink?: string } | null>(null);
+  const [accountExists, setAccountExists] = useState(false);
+  const providers = useProviders();
+  const siteKey = guest ? providers?.captchaSiteKey ?? null : null;
   const [d, setD] = useState<WizardInitial>(initial ?? { ...EMPTY, city: defaultCity ?? '' });
   const [step, setStep] = useState(0);
   const [err, setErr] = useState<string | null>(null);
@@ -63,10 +83,16 @@ export function ListingWizard({ initial, defaultCity, categories, userId }: { in
   useEffect(() => {
     if (fromServer) return;
     try {
-      if (userId) try { localStorage.removeItem(DRAFT_KEY); } catch { /* starý klíč bez uživatele */ }
+      // Inzerát rozepsaný před přihlášením (např. e-mail už měl účet) převezme přihlášený uživatel
+      if (userId) try {
+        const anon = localStorage.getItem(DRAFT_KEY);
+        if (anon && !localStorage.getItem(draftKey)) localStorage.setItem(draftKey, anon);
+        localStorage.removeItem(DRAFT_KEY);
+      } catch { /* */ }
       const s = localStorage.getItem(draftKey); const v = s ? JSON.parse(s) : null;
       if (v?.title) {
-        const { _startedAt, ...rest } = v;
+        const { _startedAt, _contact, ...rest } = v;
+        if (guest && _contact && typeof _contact === 'object') setContact((c) => ({ ...c, email: String(_contact.email ?? ''), name: String(_contact.name ?? '') }));
         setD((cur) => (cur.title ? cur : { ...EMPTY, ...rest }));
         if (typeof _startedAt === 'number' && Date.now() - _startedAt < 3600e3) startedAt.current = _startedAt;
         setRestored(true);
@@ -80,7 +106,11 @@ export function ListingWizard({ initial, defaultCity, categories, userId }: { in
       }
     } catch { /* */ }
   }, [fromServer, draftKey]);
-  useEffect(() => { if (!fromServer && d.title) try { localStorage.setItem(draftKey, JSON.stringify({ ...d, _startedAt: startedAt.current })); } catch { /* */ } }, [d, fromServer, draftKey]);
+  useEffect(() => {
+    if (!fromServer && d.title && !sentTo) try {
+      localStorage.setItem(draftKey, JSON.stringify({ ...d, _startedAt: startedAt.current, ...(guest ? { _contact: { email: contact.email, name: contact.name } } : {}) }));
+    } catch { /* */ }
+  }, [d, fromServer, draftKey, guest, contact.email, contact.name, sentTo]);
   /** Po zveřejnění (i z úpravy konceptu) zapomeneme rozpracovanou kopii v prohlížeči, pokud patří k tomuto inzerátu. */
   function forgetLocal(id: string) {
     try {
@@ -104,6 +134,13 @@ export function ListingWizard({ initial, defaultCity, categories, userId }: { in
     if (s === 3) { if (!d.city.trim()) return 'Zadejte lokalitu.'; if (d.zip && !/^\d{3}\s?\d{2}$/.test(d.zip)) return 'PSČ má 5 číslic.'; }
     return null;
   }
+  function validateContact(): string | null {
+    if (!EMAIL_RE.test(contact.email.trim())) return 'Zadejte svůj e-mail – pošleme na něj odkaz pro zveřejnění inzerátu.';
+    if (contact.name.trim().length < 2) return 'Napište své jméno (zobrazí se u inzerátu).';
+    if (!contact.terms) return 'Pro zveřejnění je potřeba souhlasit s podmínkami a pravidly inzerování.';
+    if (siteKey && !captcha) return 'Potvrďte prosím, že nejste robot.';
+    return null;
+  }
   const ready = [0, 1, 2, 3].every((s) => !validate(s));
   const canGo = (i: number) => i <= step || fromServer || [...Array(i).keys()].every((s) => !validate(s));
   function go(i: number) { setErr(null); setStep(i); window.scrollTo({ top: 0, behavior: 'smooth' }); }
@@ -119,7 +156,12 @@ export function ListingWizard({ initial, defaultCity, categories, userId }: { in
       if (!d.subSlug || !sub) { setStep(0); setErr('Pro uložení konceptu vyberte kategorii a podkategorii.'); return; }
       if (d.videoUrl.trim() && !parseVideoUrl(d.videoUrl)) { setStep(1); setErr(VIDEO_URL_ERROR); return; }
     }
-    setBusy(publish ? 'publish' : 'draft'); setErr(null);
+    if (guest) {
+      // Bez přihlášení: kontakt se vyplňuje v náhledu – z dřívějšího kroku tam uživatele jen přesuneme
+      const e = validateContact();
+      if (e) { if (step === 4) setErr(e); else go(4); return; }
+    }
+    setBusy(publish ? 'publish' : 'draft'); setErr(null); setAccountExists(false);
     const free = d.offerType === 'GIVE';
     const body = {
       title: d.title, description: d.description, price: free ? null : d.price, priceNegotiable: free ? false : d.priceNegotiable, currency: d.currency,
@@ -128,6 +170,18 @@ export function ListingWizard({ initial, defaultCity, categories, userId }: { in
       ...(publish && isDraft ? { composeMs: Date.now() - startedAt.current } : {}),
     };
     try {
+      if (guest) {
+        try {
+          const g = await send<{ email: string; devLink?: string }>('/listings/guest', 'POST', { ...body, publish: true, email: contact.email.trim(), name: contact.name.trim(), terms: true, ...(captcha ? { captcha } : {}) });
+          try { localStorage.removeItem(draftKey); } catch { /* */ }
+          setSentTo(g); setBusy(null); window.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (e) {
+          if (siteKey) setCaptchaReset((n) => n + 1);
+          if (e instanceof SendError && e.code === 'ACCOUNT_EXISTS') setAccountExists(true);
+          throw e;
+        }
+        return;
+      }
       type Res = { id: string; slug: string; status: string };
       let r: Res;
       if (d.id) {
@@ -157,7 +211,10 @@ export function ListingWizard({ initial, defaultCity, categories, userId }: { in
 
   const uploadingLabel = <><Loader2 className="size-4 animate-spin" />Nahrávám fotky…</>;
   const saveLabel = live ? (d.status === 'REJECTED' ? 'Odeslat ke kontrole' : 'Uložit změny') : 'Zveřejnit';
-  const showDraft = isDraft && d.title.trim().length > 0;
+  // Koncept na serveru potřebuje účet – bez přihlášení si rozepsaný inzerát pamatuje jen prohlížeč
+  const showDraft = isDraft && d.title.trim().length > 0 && !guest;
+
+  if (sentTo) return <GuestSent email={sentTo.email} devLink={sentTo.devLink} title={d.title} />;
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -192,10 +249,21 @@ export function ListingWizard({ initial, defaultCity, categories, userId }: { in
       {step === 2 && <StepDetails d={d} up={up} fields={fields} />}
       {step === 3 && <StepPrice d={d} up={up} />}
       {step === 4 && <StepPreview d={d} categories={categories} />}
-      {step === 4 && <p className="mt-6 text-sm text-muted">Zveřejněním souhlasíte s <a href="/stranka/pravidla-inzerovani" target="_blank" className="font-medium text-brand-ink underline">Pravidly inzerování</a> a <a href="/stranka/podminky" target="_blank" className="underline">podmínkami používání</a>.</p>}
+      {step === 4 && guest && <GuestContactForm contact={contact} setContact={setContact} siteKey={siteKey} onCaptcha={setCaptcha} captchaReset={captchaReset} />}
+      {step === 4 && !guest && <p className="mt-6 text-sm text-muted">Zveřejněním souhlasíte s <a href="/stranka/pravidla-inzerovani" target="_blank" className="font-medium text-brand-ink underline">Pravidly inzerování</a> a <a href="/stranka/podminky" target="_blank" className="underline">podmínkami používání</a>.</p>}
 
 
-      {err && <p role="alert" className="mt-6 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-danger">{err}</p>}
+      {err && (
+        <div role="alert" className="mt-6 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
+          <p>{err}</p>
+          {accountExists && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link href="/prihlaseni?zpet=/pridat" className="btn btn-primary btn-sm">Přihlásit se</Link>
+              <Link href="/zapomenute-heslo" className="btn btn-outline btn-sm bg-surface">Nemám heslo / zapomněl jsem ho</Link>
+            </div>
+          )}
+        </div>
+      )}
       {ready && isDraft && step < 4 && !err && (
         <p className="mt-6 flex items-center gap-2 text-sm text-muted"><Check className="size-4 text-brand" />Máte vyplněno vše potřebné – můžete zveřejnit hned, nebo pokračovat a inzerát doladit.</p>
       )}
@@ -449,6 +517,55 @@ function StepPreview({ d, categories }: { d: WizardInitial; categories: WizardCa
         <div className="flex flex-wrap gap-2 text-sm"><span className="inline-flex items-center gap-1"><MapPin className="size-4 text-muted" />{d.city}</span>{d.condition && <span className="rounded-md bg-surface-2 px-2">{CONDITION_LABEL[d.condition]}</span>}<span className="text-muted">· {d.images.length} fotek</span></div>
         <p className="whitespace-pre-line border-t border-line pt-3 text-ink-2">{d.description}</p>
         {video && <VideoFrame src={video.embed} />}
+      </div>
+    </div>
+  );
+}
+
+/** Kontakt v náhledu při vkládání bez přihlášení: e-mail (z něj vznikne účet), jméno, souhlas a CAPTCHA. */
+function GuestContactForm({ contact, setContact, siteKey, onCaptcha, captchaReset }: {
+  contact: GuestContact; setContact: React.Dispatch<React.SetStateAction<GuestContact>>; siteKey: string | null; onCaptcha: (t: string) => void; captchaReset: number;
+}) {
+  const set = (p: Partial<GuestContact>) => setContact((c) => ({ ...c, ...p }));
+  return (
+    <section className="card mt-6 space-y-4 p-6" aria-labelledby="guest-contact">
+      <div>
+        <h2 id="guest-contact" className="text-lg font-bold">Kam vám máme poslat potvrzení?</h2>
+        <p className="mt-1 text-sm text-muted">Registrovat se nemusíte. Na e-mail vám pošleme odkaz – po kliknutí inzerát zveřejníme a zároveň vám založíme účet, ve kterém ho můžete upravit, prodloužit nebo smazat.</p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="label" htmlFor="g-email">E-mail</label>
+          <input id="g-email" type="email" inputMode="email" autoComplete="email" className="input" maxLength={200} value={contact.email} onChange={(e) => set({ email: e.target.value })} placeholder="vas@email.cz" />
+          <p className="mt-1.5 text-xs text-muted">Nezobrazí se. Kupující vám píšou přes zprávy na webu.</p>
+        </div>
+        <div>
+          <label className="label" htmlFor="g-name">Jméno</label>
+          <input id="g-name" autoComplete="name" className="input" maxLength={60} value={contact.name} onChange={(e) => set({ name: e.target.value })} placeholder="Např. Jana" />
+          <p className="mt-1.5 text-xs text-muted">Zobrazí se u inzerátu.</p>
+        </div>
+      </div>
+      <label className="flex items-start gap-3 text-sm">
+        <input type="checkbox" className="mt-0.5 size-5 shrink-0 accent-[var(--brand)]" checked={contact.terms} onChange={(e) => set({ terms: e.target.checked })} />
+        <span>Souhlasím s <a href="/stranka/podminky" target="_blank" className="font-medium text-brand-ink underline">podmínkami používání</a> a <a href="/stranka/pravidla-inzerovani" target="_blank" className="font-medium text-brand-ink underline">pravidly inzerování</a> a beru na vědomí <a href="/stranka/ochrana-udaju" target="_blank" className="underline">zpracování osobních údajů</a>.</span>
+      </label>
+      {siteKey && <Turnstile siteKey={siteKey} onToken={onCaptcha} resetKey={captchaReset} />}
+      <p className="text-sm text-muted">Už máte účet? <Link href="/prihlaseni?zpet=/pridat" className="font-semibold text-brand-ink hover:underline">Přihlaste se</Link> – rozepsaný inzerát vám zůstane.</p>
+    </section>
+  );
+}
+
+/** Po odeslání bez přihlášení: inzerát čeká na potvrzení e-mailu. */
+function GuestSent({ email, title, devLink }: { email: string; title: string; devLink?: string }) {
+  return (
+    <div className="mx-auto max-w-xl">
+      <div className="card flex flex-col items-center gap-4 p-8 text-center">
+        <span className="grid size-16 place-items-center rounded-2xl bg-brand-soft text-brand"><MailCheck className="size-8" /></span>
+        <h1 className="h-display text-2xl font-bold">Zkontrolujte svůj e-mail</h1>
+        <p className="text-ink-2">Inzerát <b>„{title}“</b> máme uložený. Na adresu <b>{email}</b> jsme poslali odkaz – klikněte na něj a inzerát zveřejníme. Tím se vám zároveň založí účet.</p>
+        <p className="text-sm text-muted">E-mail nepřišel? Podívejte se i do složky Spam nebo Hromadné. Odkaz platí 3 dny.</p>
+        {devLink && <a href={devLink} className="text-sm font-semibold text-brand-ink underline">Vývoj: odkaz z e-mailu (e-maily se neodesílají)</a>}
+        <Link href="/" className="btn btn-outline">Zpět na hlavní stranu</Link>
       </div>
     </div>
   );
