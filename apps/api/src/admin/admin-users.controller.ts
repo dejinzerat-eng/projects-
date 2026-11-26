@@ -164,7 +164,9 @@ export class AdminUsersController {
     const verifiedAt = verified === undefined ? undefined : verified ? (b.companyVerifiedAt ?? new Date()) : null;
     const data = { ...rest, ...(verifiedAt !== undefined ? { companyVerifiedAt: verifiedAt } : {}), ...(dto.companyId && dto.companyId !== b.companyId ? { companyVerifiedAt: null } : {}) };
     await this.prisma.user.update({ where: { id }, data });
-    const action = verified === true && !b.companyVerifiedAt ? 'business.verify' : verified === false && b.companyVerifiedAt ? 'business.unverify' : 'business.update';
+    // Akce podle výsledného stavu (změna IČO spolu s ověřením ověření zruší, nejde tedy o ověření)
+    const after = 'companyVerifiedAt' in data ? data.companyVerifiedAt : b.companyVerifiedAt;
+    const action = !b.companyVerifiedAt && after ? 'business.verify' : b.companyVerifiedAt && !after ? 'business.unverify' : 'business.update';
     await audit(this.prisma, u, action, 'user', id, { ...dto, changes: diff(b as unknown as Record<string, unknown>, data) });
     return { ok: true };
   }
