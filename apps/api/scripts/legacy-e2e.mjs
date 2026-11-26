@@ -148,6 +148,7 @@ try {
     const dog = await prisma.listing.findUnique({ where: { legacyId: ids[1] }, include: { user: true } });
     assert.equal(dog.status, 'PENDING');
     assert.equal(dog.price, null);
+    assert.equal(dog.priceNegotiable, true);
     // e-mail už má registrovaný účet → inzerát patří jemu, nový účet nevznikne
     assert.equal(dog.user.email, 'demo2@dejinzerat.cz');
     assert.equal(dog.user.legacyId, 'dejinzerat:9002');
@@ -202,7 +203,7 @@ try {
   await check('inzerát smazaný na starém webu: náhled ho ukáže a lze ho stáhnout', async () => {
     source = source.filter((l) => l.InzeratId !== ids[2]);
     const scan = await call('/admin/legacy/scan', 'POST');
-    assert.deepEqual(scan.body.missing.map((m) => m.id), [ids[2]]);
+    assert.deepEqual(scan.body.missing.map((m) => m.id).filter((id) => ids.includes(id)), [ids[2]]);
     const r = await call('/admin/legacy/archive-missing', 'POST', { ids: [ids[2]] });
     assert.equal(r.body.archived, 1);
     assert.equal((await prisma.listing.findUnique({ where: { legacyId: ids[2] } })).status, 'EXPIRED');

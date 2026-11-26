@@ -20,7 +20,7 @@ import {
 import { LegacySource } from './legacy-source';
 
 /** Jedna dávka importu smí běžet nejvýše tolik (funkce na Vercelu má limit 60 s). */
-const BATCH_BUDGET_MS = 35_000;
+const BATCH_BUDGET_MS = 30_000;
 const VISIBLE: ListingStatus[] = ['ACTIVE', 'PENDING', 'RESERVED'];
 
 export type ScanAction = 'new' | 'changed' | 'unchanged';
@@ -120,7 +120,7 @@ export class LegacyImportService {
   }
 
   /** Prodejce: podle legacyId, jinak podle e-mailu (už registrovaný účet se jen propojí), jinak nový účet bez hesla. */
-  private async seller(u: LegacyUser) {
+  private async seller(u: LegacyUser, since: Date) {
     const legacyId = legacyUserId(u.UserId);
     const email = cleanEmail(u.Email);
     const name = sellerName(u);
@@ -143,7 +143,7 @@ export class LegacyImportService {
     }
     const created = await this.prisma.user.create({
       data: {
-        email: email ?? `stary-web-${u.UserId}@dejinzerat.invalid`, name, phone, legacyId, status: u.Banned ? 'BLOCKED' : 'ACTIVE',
+        email: email ?? `stary-web-${u.UserId}@dejinzerat.invalid`, name, phone, legacyId, status: u.Banned ? 'BLOCKED' : 'ACTIVE', createdAt: since,
         // Údaje převzaté ze starého webu – e-mail ani telefon nejsou ověřené, telefon se proto u inzerátů nezobrazí
         emailVerifiedAt: null, phoneVerifiedAt: null, showPhone: false,
       },
@@ -155,19 +155,19 @@ export class LegacyImportService {
     const l = await src.listing(id);
     if (!l) return { result: 'gone', message: 'Inzerát už na starém webu není.' };
     if (l.Active === false || l.Approved === false) return { result: 'gone', message: 'Inzerát není na starém webu zveřejněný.' };
-    const userId = await this.seller(l.user ?? { UserId: l.UserId });
-    const m = this.mapped(l, cats);
     const now = new Date();
+    const created = l.DateCreated ? new Date(l.DateCreated) : now;
+    const createdAt = Number.isNaN(created.getTime()) || created > now ? now : created;
+    const userId = await this.seller(l.user ?? { UserId: l.UserId }, createdAt);
+    const m = this.mapped(l, cats);
     const days = await this.policy.listingDays();
     const fresh = new Date(now.getTime() + days * 864e5);
     const srcHash = sourceHash(l);
     const written = writtenHash({ title: m.title, description: m.description, price: m.price, categoryId: m.cat.id });
-    const created = l.DateCreated ? new Date(l.DateCreated) : now;
-    const createdAt = Number.isNaN(created.getTime()) || created > now ? now : created;
     const existing = await this.prisma.listing.findUnique({ where: { legacyId: id }, include: { user: { select: { passwordHash: true, googleId: true, appleId: true } }, images: { select: { id: true, url: true, thumbUrl: true } } } });
 
     const base = {
-      slug: slugify(m.title) || 'inzerat', title: m.title, description: m.description, price: m.price, priceCzk: m.price, priceNegotiable: false, currency: 'CZK',
+      slug: slugify(m.title) || 'inzerat', title: m.title, description: m.description, price: m.price, priceCzk: m.price, priceNegotiable: m.price == null, currency: 'CZK',
       categoryId: m.cat.id, offerType: m.offerType, city: m.loc.city, region: m.loc.region, zip: null, lat: m.loc.lat, lng: m.loc.lng,
       searchText: buildSearchText({ title: m.title, description: m.description, attributes: {}, city: m.loc.city }),
       spamScore: m.risk.score, riskReasons: m.risk.reasons as Prisma.InputJsonValue, contentHash: contentHash(m.title, m.description),

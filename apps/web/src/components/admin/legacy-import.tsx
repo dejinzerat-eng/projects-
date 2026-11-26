@@ -95,7 +95,7 @@ export function LegacyImport() {
                     <td className="text-muted">{i.oldCategory}</td>
                     <td>{i.newCategory}</td>
                     <td className="text-muted">{i.place}</td>
-                    <td className="whitespace-nowrap text-right tabular-nums">{formatPrice(i.price)}</td>
+                    <td className="whitespace-nowrap text-right tabular-nums">{formatPrice(i.price, i.price == null)}</td>
                     <td className="text-right tabular-nums">{i.images}</td>
                     <td className="space-y-1">
                       <span className="badge bg-surface-2">{ACTION_LABEL[i.action]}</span>
