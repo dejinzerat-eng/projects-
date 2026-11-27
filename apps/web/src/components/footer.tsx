@@ -4,6 +4,7 @@ import { api } from '@/lib/api';
 import { getOperator, isPlaceholder } from '@/lib/operator';
 import { citySlug } from '@/lib/seo';
 import type { Category } from '@/lib/types';
+import { CookieSettingsLink } from './cookie-bar';
 import { Wordmark } from './logo';
 import { ThemeToggle } from './theme-toggle';
 
@@ -50,7 +51,7 @@ export async function Footer() {
           <Col title="Právní" links={LEGAL as [string, string][]} />
         </div>
       </div>
-      <div className="border-t border-line"><div className="container-x flex items-center justify-between gap-4 py-5 text-xs text-muted"><span>© {new Date().getFullYear()} Dejinzerat.cz</span><ThemeToggle /></div></div>
+      <div className="border-t border-line"><div className="container-x flex items-center justify-between gap-4 py-5 text-xs text-muted"><span>© {new Date().getFullYear()} Dejinzerat.cz · <CookieSettingsLink className="hover:text-ink hover:underline" /></span><ThemeToggle /></div></div>
     </footer>
   );
 }

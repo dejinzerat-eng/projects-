@@ -1,31 +1,46 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-
-const KEY = 'dej_cookies_ok';
+import { CONSENT_OPEN_EVENT, type Consent, loadAnalytics, readConsent, revokeAnalytics, saveConsent } from '@/lib/consent';
 
 /**
- * Informační lišta o cookies při první návštěvě. Web používá jen nezbytné cookies a místní úložiště
- * (viz /stranka/cookies), na ty se souhlas podle § 89 odst. 3 zákona č. 127/2005 Sb. nevyžaduje,
- * proto lišta jen informuje a nenabízí odmítnutí. Kdyby web později přidal analytické nebo reklamní
- * cookies, musí se z lišty stát souhlas s volbou „Přijmout / Odmítnout“ ještě před jejich načtením.
+ * Lišta se souhlasem s analytickými cookies (Google Analytics). Ukáže se, dokud návštěvník nezvolí
+ * Přijmout nebo Odmítnout; obě volby jsou stejně výrazné. Volbu lze kdykoli změnit odkazem
+ * „Nastavení cookies“ v patičce. Nezbytné cookies (přihlášení) souhlas nepotřebují.
  */
 export function CookieBar() {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    try { setShow(!localStorage.getItem(KEY)); } catch { /* bez úložiště lištu neukazujeme opakovaně */ }
+    const c = readConsent();
+    if (c === 'granted') loadAnalytics();
+    else if (c === null) setShow(true);
+    const open = () => setShow(true);
+    window.addEventListener(CONSENT_OPEN_EVENT, open);
+    return () => window.removeEventListener(CONSENT_OPEN_EVENT, open);
   }, []);
   if (!show) return null;
-  const close = () => { try { localStorage.setItem(KEY, '1'); } catch { /* */ } setShow(false); };
+  const choose = (v: Consent) => {
+    saveConsent(v);
+    if (v === 'granted') loadAnalytics(); else revokeAnalytics();
+    setShow(false);
+  };
   return (
     <div className="fixed inset-x-0 bottom-20 z-30 flex justify-center px-4 md:bottom-6">
       <section aria-labelledby="cookie-t" className="animate-fade-up card flex w-full max-w-2xl flex-wrap items-center gap-x-4 gap-y-3 p-4 shadow-pop">
         <div className="min-w-0 flex-1 basis-64">
           <h2 id="cookie-t" className="font-bold">Cookies</h2>
-          <p className="mt-0.5 text-sm text-muted">Používáme jen nezbytné cookies, aby fungovalo přihlášení a web. Analytické ani reklamní cookies nepoužíváme. <Link href="/stranka/cookies" className="font-semibold text-brand-ink underline">Zásady používání cookies</Link></p>
+          <p className="mt-0.5 text-sm text-muted">Nezbytné cookies používáme, aby fungovalo přihlášení a web. Se souhlasem použijeme i analytické cookies Google Analytics, které nám ukážou, jak web zlepšit. Reklamní cookies nepoužíváme. <Link href="/stranka/cookies" className="font-semibold text-brand-ink underline">Zásady používání cookies</Link></p>
         </div>
-        <button type="button" onClick={close} className="btn btn-primary btn-sm">Rozumím</button>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => choose('denied')} className="btn btn-outline btn-sm">Odmítnout</button>
+          <button type="button" onClick={() => choose('granted')} className="btn btn-primary btn-sm">Přijmout</button>
+        </div>
       </section>
     </div>
   );
+}
+
+/** Odkaz v patičce, který znovu otevře lištu a dovolí souhlas změnit nebo odvolat. */
+export function CookieSettingsLink({ className }: { className?: string }) {
+  return <button type="button" className={className} onClick={() => window.dispatchEvent(new Event(CONSENT_OPEN_EVENT))}>Nastavení cookies</button>;
 }
