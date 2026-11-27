@@ -3,7 +3,7 @@
  * Volbu ukládáme jen v prohlížeči (localStorage). Dokud návštěvník nesouhlasí, skript Googlu se vůbec nenačte
  * (Consent Mode v základním režimu), jak vyžaduje § 89 odst. 3 zákona č. 127/2005 Sb.
  */
-export const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? 'G-DLDHZQ91V';
+export const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? 'G-DLDHDZQ91V';
 export const CONSENT_KEY = 'dej_consent';
 /** Událost pro znovuotevření lišty (odkaz „Nastavení cookies“ v patičce). */
 export const CONSENT_OPEN_EVENT = 'dej:consent-open';
