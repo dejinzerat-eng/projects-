@@ -5,8 +5,13 @@ import { SITE } from './seo';
 /** Identifikace provozovatele (patička, Kontakt, právní texty). */
 export interface Operator { name: string; ico: string; address: string; registry: string; email: string; phone: string; dsaEmail: string }
 
+/**
+ * Výchozí údaje provozovatele (ověřeno v ARES 27. 11. 2026). Přepíše je vyplněné nastavení v administraci
+ * nebo proměnné OPERATOR_*. Hodnota v hranatých závorkách znamená „nevyplněno“ a na webu se nezobrazí.
+ */
 export const OPERATOR_PLACEHOLDERS: Operator = {
-  name: '[Název provozovatele]', ico: '[IČO]', address: '[Sídlo provozovatele]', registry: '[Zápis v obchodním rejstříku]',
+  name: 'ESTI INTERNATIONAL s.r.o.', ico: '25020137', address: 'Hybernská 1007/20, Nové Město, 110 00 Praha 1',
+  registry: 'obchodním rejstříku vedeném Městským soudem v Praze, oddíl C, vložka 55087',
   email: 'podpora@dejinzerat.cz', phone: '[Telefon]', dsaEmail: '[E-mail kontaktního místa DSA]',
 };
 
@@ -46,8 +51,15 @@ export async function getOperator(): Promise<Operator> {
 
 export const isPlaceholder = (v: string) => v.startsWith('[');
 
-/** Nahradí v textu stránky značky {{provozovatel}}, {{ico}}… údaji provozovatele. */
+const UNSET = '\u0000';
+
+/**
+ * Nahradí v textu stránky značky {{provozovatel}}, {{ico}}… údaji provozovatele.
+ * Řádek se značkou, jejíž hodnota není vyplněná (např. telefon), se vynechá celý.
+ */
 export function fillTokens(text: string, o: Operator) {
   const map: Record<string, string> = { provozovatel: o.name, ico: o.ico, sidlo: o.address, rejstrik: o.registry, email: o.email, telefon: o.phone, dsa_email: o.dsaEmail, web: SITE.replace(/^https?:\/\//, '') };
-  return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k: string) => map[k] ?? m);
+  return text
+    .replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k: string) => (k in map ? (isPlaceholder(map[k]) ? UNSET : map[k]) : m))
+    .split('\n').filter((line) => !line.includes(UNSET)).join('\n');
 }

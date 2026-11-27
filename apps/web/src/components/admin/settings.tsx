@@ -39,7 +39,7 @@ export function SettingsForm({ initial, canReindex }: { initial: Settings; canRe
         </section>
         <section className="card space-y-3 p-5">
           <h2 className="font-bold">Provozovatel</h2>
-          <p className="text-sm text-muted">Zobrazuje se v patičce a v právních textech.</p>
+          <p className="text-sm text-muted">Zobrazuje se na stránce Kontakt a v právních textech. Prázdná pole = výchozí údaje (ESTI INTERNATIONAL s.r.o.).</p>
           <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
             <div><label className="label" htmlFor="s-op">Název / jméno</label><input id="s-op" className="input" {...txt('operatorName')} /></div>
             <div><label className="label" htmlFor="s-ico">IČO</label><input id="s-ico" inputMode="numeric" maxLength={8} className="input" value={v.operatorIco} onChange={(e) => setV({ ...v, operatorIco: e.target.value.replace(/\D/g, '') })} /></div>
