@@ -1,15 +1,15 @@
 /**
  * Identifikace provozovatele pro e-maily a texty. Hodnoty se berou z proměnných prostředí
  * (OPERATOR_NAME, OPERATOR_ICO, OPERATOR_ADDRESS, OPERATOR_REGISTRY, OPERATOR_EMAIL, OPERATOR_PHONE, OPERATOR_DSA_EMAIL);
- * dokud nejsou vyplněné, zobrazí se zřetelné zástupné texty v hranatých závorkách.
+ * jinak platí výchozí údaje provozovatele (ověřeno v ARES 27. 11. 2026); nevyplněný telefon zůstává v hranatých závorkách.
  */
 export interface Operator { name: string; ico: string; address: string; registry: string; email: string; phone: string; dsaEmail: string }
 
 export const OPERATOR_PLACEHOLDERS: Operator = {
-  name: '[Název provozovatele]',
-  ico: '[IČO]',
-  address: '[Sídlo provozovatele]',
-  registry: '[Zápis v obchodním rejstříku]',
+  name: 'ESTI INTERNATIONAL s.r.o.',
+  ico: '25020137',
+  address: 'Hybernská 1007/20, Nové Město, 110 00 Praha 1',
+  registry: 'obchodním rejstříku vedeném Městským soudem v Praze, oddíl C, vložka 55087',
   email: 'podpora@dejinzerat.cz',
   phone: '[Telefon]',
   dsaEmail: '[E-mail kontaktního místa DSA]',

@@ -137,7 +137,7 @@ export const SEED_PAGES: SeedPage[] = [
 
   p('kontakt', 'Kontakt', 'Kontakt na provozovatele portálu Dejinzerat.cz, zákaznickou podporu a kontaktní místo podle DSA.',
     '## Provozovatel',
-    '**{{provozovatel}}**\nIČO: {{ico}}\nSídlo: {{sidlo}}\n{{rejstrik}}',
+    '**{{provozovatel}}**\nIČO: {{ico}}\nSídlo: {{sidlo}}\nZapsaná v {{rejstrik}}',
     '## Zákaznická podpora',
     '- E-mail: {{email}}\n- Telefon: {{telefon}}\n- Odpovídáme v pracovní dny, obvykle do 24 hodin.',
     '## Nahlášení nezákonného obsahu',
@@ -164,7 +164,7 @@ export const SEED_PAGES: SeedPage[] = [
   p('podminky-placenych-sluzeb', 'Podmínky placených služeb', 'Obchodní podmínky placených služeb Dejinzerat.cz: topování, zvýraznění, prémiové inzeráty a firemní balíčky, platby, odstoupení a reklamace.',
     DRAFT_NOTE,
     '## 1. Poskytovatel',
-    'Placené služby poskytuje {{provozovatel}}, IČO {{ico}}, se sídlem {{sidlo}}, {{rejstrik}}, e-mail {{email}}, telefon {{telefon}}.',
+    'Placené služby poskytuje {{provozovatel}}, IČO {{ico}}, se sídlem {{sidlo}}, zapsaná v {{rejstrik}}, e-mail {{email}}.',
     '## 2. Služby a ceny',
     'Nabízíme zejména topování, zvýraznění, posunutí inzerátu, prémiové inzeráty a firemní balíčky. Aktuální popis a ceny včetně DPH jsou v [ceníku](/cenik). Cena platí v okamžiku objednávky.',
     '## 3. Objednávka a platba',
