@@ -48,6 +48,12 @@ export class AdminContentController {
     if (clash) throw new ConflictException(`Adresa „${slugValue}“ už v této úrovni existuje.`);
   }
 
+  /** Název musí být jedinečný mezi sourozenci (hlídá to i unikátní index v databázi). */
+  private async assertNameFree(name: string, parentId: string | null, exceptId?: string) {
+    const clash = await this.prisma.category.findFirst({ where: { name, parentId, ...(exceptId ? { id: { not: exceptId } } : {}) } });
+    if (clash) throw new ConflictException(`Kategorie „${name}“ už v této úrovni existuje.`);
+  }
+
   private async assertParent(parentId: string | null, selfId?: string) {
     if (!parentId) return;
     if (parentId === selfId) throw new BadRequestException('Kategorie nemůže být sama sobě nadřazená.');
@@ -67,6 +73,7 @@ export class AdminContentController {
   async createCategory(@CurrentUser() u: AuthUser, @Body(new ZodPipe(CategoryCreate)) dto: z.infer<typeof CategoryCreate>) {
     await this.assertParent(dto.parentId);
     await this.assertSlugFree(dto.slug, dto.parentId);
+    await this.assertNameFree(dto.name, dto.parentId);
     const last = await this.prisma.category.aggregate({ where: { parentId: dto.parentId }, _max: { position: true } });
     const c = await this.prisma.category.create({ data: { ...dto, position: (last._max.position ?? -1) + 1 } });
     await audit(this.prisma, u, 'category.create', 'category', c.id, dto);
@@ -86,6 +93,7 @@ export class AdminContentController {
       if (parentId && c._count.children) throw new BadRequestException('Kategorii s podkategoriemi nelze vnořit pod jinou (nejvýše 2 úrovně).');
     }
     if (moved || (dto.slug && dto.slug !== c.slug)) await this.assertSlugFree(dto.slug ?? c.slug, parentId, id);
+    if (moved || (dto.name && dto.name !== c.name)) await this.assertNameFree(dto.name ?? c.name, parentId, id);
     // Přesunutá kategorie se zařadí na konec nové úrovně (pokud pořadí výslovně nezměnili)
     const position = moved && dto.position === c.position ? ((await this.prisma.category.aggregate({ where: { parentId }, _max: { position: true } }))._max.position ?? -1) + 1 : dto.position;
     const data = { ...dto, parentId, position, filters: dto.filters as Prisma.InputJsonValue | undefined };

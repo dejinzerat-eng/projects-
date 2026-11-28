@@ -154,6 +154,7 @@ model Category {
   intro          String?
   listings       Listing[]
 
+  /// Navíc částečné unikátní indexy z migrace 20261128160000: název mezi sourozenci a adresa hlavní kategorie
   @@unique([parentId, slug])
   @@index([parentId])
 }
