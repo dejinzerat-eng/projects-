@@ -39,7 +39,7 @@ export function ContactBox({ listingId, loggedIn, hasPhone, sellerName }: { list
       <button className="btn btn-primary w-full" disabled={busy}><Send className="size-4" />{loggedIn ? 'Odeslat zprávu' : 'Přihlásit se a napsat'}</button>
       {hasPhone && (phone ? <a href={`tel:${phone.replace(/\s/g, '')}`} className="btn btn-outline w-full"><Phone className="size-4" />{phone}</a>
         : <button type="button" onClick={reveal} className="btn btn-outline w-full"><Phone className="size-4" />Zobrazit telefon</button>)}
-      <p className="flex items-start gap-2 text-xs leading-relaxed text-muted"><ShieldCheck className="mt-px size-4 shrink-0 text-trust" />Nikdy neplaťte předem neznámým prodejcům a neposílejte údaje z karty. Komunikujte přes zprávy Dejinzerat.cz.</p>
+      <p className="flex items-start gap-2 text-xs leading-relaxed text-muted"><ShieldCheck className="mt-px size-4 shrink-0 text-trust" />Nikdy neplaťte předem neznámým prodejcům a neposílejte údaje z karty. Komunikujte přes zprávy DEJINZERAT.cz.</p>
     </form>
   );
 }

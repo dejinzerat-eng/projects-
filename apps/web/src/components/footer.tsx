@@ -38,7 +38,7 @@ export async function Footer() {
     <footer className="mt-20 border-t border-line bg-surface pb-24 md:pb-0">
       <div className="container-x grid gap-10 py-12 lg:grid-cols-[1fr_2.4fr]">
         <div>
-          <Wordmark className="h-7 w-auto" title="Dejinzerat.cz" />
+          <Wordmark className="h-7 w-auto" title="DEJINZERAT.cz" />
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted">Jednoduchá a bezpečná inzerce pro celou Českou republiku.</p>
           <p className="mt-5 text-sm text-muted">
             <a className="font-medium text-brand-ink hover:underline" href={`mailto:${op.email}`}>{op.email}</a>{!isPlaceholder(op.phone) && <> · <a className="hover:text-ink" href={`tel:${op.phone.replace(/\s/g, '')}`}>{op.phone}</a></>}
@@ -51,7 +51,7 @@ export async function Footer() {
           <Col title="Právní" links={LEGAL as [string, string][]} />
         </div>
       </div>
-      <div className="border-t border-line"><div className="container-x flex items-center justify-between gap-4 py-5 text-xs text-muted"><span>© {new Date().getFullYear()} Dejinzerat.cz · <CookieSettingsLink className="hover:text-ink hover:underline" /></span><ThemeToggle /></div></div>
+      <div className="border-t border-line"><div className="container-x flex items-center justify-between gap-4 py-5 text-xs text-muted"><span>© {new Date().getFullYear()} DEJINZERAT.cz · <CookieSettingsLink className="hover:text-ink hover:underline" /></span><ThemeToggle /></div></div>
     </footer>
   );
 }

@@ -37,13 +37,30 @@ export function pagePlan(existing: { content: string; seededHash: string | null 
   return 'skip';
 }
 
+/** Značka se píše „DEJINZERAT.cz“ (rozhodnutí 2026-11-28). Starší zápis „Dejinzerat.cz“ v textech nahradíme. */
+export const BRAND = 'DEJINZERAT.cz';
+const OLD_BRAND = /Dejinzerat\.cz/g;
+export const rebrand = (s: string) => s.replace(OLD_BRAND, BRAND);
+
+/**
+ * Přepis starého zápisu značky ve stránce z databáze (i upravené správcem – mění se jen samotný název).
+ * Vrací změněná pole, nebo null, když není co měnit. Neupravené znění ze seedu dostane nový otisk,
+ * aby ho seed mohl dál aktualizovat.
+ */
+export function rebrandPage(page: { title: string; content: string; description: string | null; seededHash: string | null }) {
+  const title = rebrand(page.title), content = rebrand(page.content), description = page.description === null ? null : rebrand(page.description);
+  if (title === page.title && content === page.content && description === page.description) return null;
+  const seededHash = page.seededHash && page.seededHash === hashContent(page.content) ? hashContent(content) : page.seededHash;
+  return { title, content, description, seededHash };
+}
+
 const p = (slug: string, title: string, description: string, ...blocks: string[]): SeedPage => ({ slug, title, description, content: blocks.join('\n\n') });
 
 export const SEED_PAGES: SeedPage[] = [
-  p('podminky', 'Podmínky používání', 'Pravidla používání inzertního portálu Dejinzerat.cz: registrace, vkládání inzerátů, odpovědnost, placené služby a řešení sporů.',
+  p('podminky', 'Podmínky používání', 'Pravidla používání inzertního portálu DEJINZERAT.cz: registrace, vkládání inzerátů, odpovědnost, placené služby a řešení sporů.',
     DRAFT_NOTE,
     '## 1. Úvodní ustanovení',
-    'Tyto podmínky upravují používání inzertního portálu Dejinzerat.cz (dále jen „portál“), který provozuje **{{provozovatel}}**, IČO {{ico}}, se sídlem {{sidlo}}, zapsaná v {{rejstrik}} (dále jen „provozovatel“). Kontakt: {{email}}, {{telefon}}.',
+    'Tyto podmínky upravují používání inzertního portálu DEJINZERAT.cz (dále jen „portál“), který provozuje **{{provozovatel}}**, IČO {{ico}}, se sídlem {{sidlo}}, zapsaná v {{rejstrik}} (dále jen „provozovatel“). Kontakt: {{email}}, {{telefon}}.',
     'Portál je on-line platforma, na které uživatelé zveřejňují inzeráty a navzájem se kontaktují. Provozovatel není stranou smluv uzavřených mezi uživateli, neprodává inzerované zboží ani služby a za jejich vlastnosti, cenu ani plnění neodpovídá.',
     'Používáním portálu (prohlížením, registrací nebo vložením inzerátu) potvrzujete, že jste se s podmínkami seznámili a souhlasíte s nimi.',
     '## 2. Uživatelský účet',
@@ -72,7 +89,7 @@ export const SEED_PAGES: SeedPage[] = [
     'Vztahy neupravené těmito podmínkami se řídí právem České republiky, zejména zákonem č. 89/2012 Sb., občanský zákoník. Dozor nad dodržováním povinností podle DSA v ČR vykonává Český telekomunikační úřad (koordinátor digitálních služeb).',
   ),
 
-  p('ochrana-udaju', 'Zásady zpracování osobních údajů', 'Jaké osobní údaje Dejinzerat.cz zpracovává, proč, jak dlouho, komu je předává a jaká máte práva podle GDPR.',
+  p('ochrana-udaju', 'Zásady zpracování osobních údajů', 'Jaké osobní údaje DEJINZERAT.cz zpracovává, proč, jak dlouho, komu je předává a jaká máte práva podle GDPR.',
     DRAFT_NOTE,
     '## 1. Správce osobních údajů',
     'Správcem je **{{provozovatel}}**, IČO {{ico}}, se sídlem {{sidlo}} (dále jen „my“). Ve věcech ochrany osobních údajů nás kontaktujte na {{email}}.',
@@ -95,9 +112,9 @@ export const SEED_PAGES: SeedPage[] = [
     'Používání cookies a podobných technologií popisují [Zásady používání cookies](/stranka/cookies).',
   ),
 
-  p('pravidla-inzerovani', 'Pravidla inzerování', 'Co lze a nelze inzerovat na Dejinzerat.cz: zakázané zboží a služby, pravidla pro texty a fotografie, firemní inzerce.',
+  p('pravidla-inzerovani', 'Pravidla inzerování', 'Co lze a nelze inzerovat na DEJINZERAT.cz: zakázané zboží a služby, pravidla pro texty a fotografie, firemní inzerce.',
     DRAFT_NOTE,
-    'Chceme, aby se na Dejinzerat.cz nakupovalo bezpečně. Inzeráty, které porušují tato pravidla, zamítneme nebo odstraníme a při opakovaném porušování můžeme zablokovat účet.',
+    'Chceme, aby se na DEJINZERAT.cz nakupovalo bezpečně. Inzeráty, které porušují tato pravidla, zamítneme nebo odstraníme a při opakovaném porušování můžeme zablokovat účet.',
     '## Zakázané zboží a služby',
     '- **zbraně a střelivo** – palné zbraně, jejich hlavní části, střelivo, munice, výbušniny a pyrotechnika kategorie F3, F4 a T2; plynové a expanzní zbraně a zbraně kategorie C a D jen v souladu se zákonem o zbraních (v inzerátu uveďte, že kupující musí splňovat zákonné podmínky),\n- **drogy a omamné látky** – včetně konopí s obsahem THC nad zákonný limit, prekurzorů a pomůcek k výrobě drog,\n- **léky na předpis**, doplňky stravy s neschválenými účinky, zdravotnické prostředky bez označení CE,\n- **padělky a napodobeniny** značkového zboží, nelegální kopie softwaru, filmů, her a hudby, prolomené licence a účty,\n- **doklady a osobní údaje** – občanské průkazy, řidičské průkazy, cestovní pasy, registrační značky vozidel, databáze kontaktů, uniklé nebo odcizené přihlašovací údaje,\n- **erotické služby**, eskort, pornografie a jakýkoli obsah se sexuálním zneužíváním dětí,\n- **chráněné druhy** živočichů a rostlin (CITES) bez dokladů, zvířata z množíren, zvířata mladší 8 týdnů a jakékoli týrání zvířat,\n- **tabákové výrobky a alkohol** bez příslušného oprávnění, e-cigarety pro nezletilé,\n- **kradené věci** a věci, k nimž nemáte vlastnické právo,\n- **finanční produkty** – nebankovní půjčky bez licence ČNB, pyramidové hry, „rychlé zbohatnutí“,\n- **nebezpečné výrobky** stažené z trhu a výrobky, které nesplňují bezpečnostní požadavky.',
     'Automatická kontrola na portálu rozpozná nejčastější zakázané výrazy (např. zbraně, náboje, drogy, padělky, doklady, erotické služby). Takový inzerát nejdřív zkontroluje moderátor.',
@@ -109,9 +126,9 @@ export const SEED_PAGES: SeedPage[] = [
     'Porušení řešíme zamítnutím nebo odstraněním inzerátu, omezením funkcí nebo zablokováním účtu. Vždy vám pošleme odůvodnění a můžete podat [námitku](/namitka). Inzerát, který porušuje pravidla, můžete nahlásit tlačítkem „Nahlásit inzerát“, nezákonný obsah také přes [formulář podle DSA](/nahlasit-obsah).',
   ),
 
-  p('nahlasovani-obsahu', 'Nahlašování nezákonného obsahu', 'Jak oznámit nezákonný obsah na Dejinzerat.cz podle nařízení o digitálních službách (DSA), jak oznámení vyřizujeme a kontaktní místo.',
+  p('nahlasovani-obsahu', 'Nahlašování nezákonného obsahu', 'Jak oznámit nezákonný obsah na DEJINZERAT.cz podle nařízení o digitálních službách (DSA), jak oznámení vyřizujeme a kontaktní místo.',
     DRAFT_NOTE,
-    'Dejinzerat.cz je hostingová služba a on-line platforma podle nařízení (EU) 2022/2065 o digitálních službách (DSA). Každý – i bez účtu – nám může oznámit obsah, který považuje za nezákonný.',
+    'DEJINZERAT.cz je hostingová služba a on-line platforma podle nařízení (EU) 2022/2065 o digitálních službách (DSA). Každý – i bez účtu – nám může oznámit obsah, který považuje za nezákonný.',
     '## Jak podat oznámení',
     'Použijte formulář **[Nahlásit nezákonný obsah](/nahlasit-obsah)**. Aby bylo oznámení úplné (čl. 16 DSA), uveďte:',
     '1. dostatečně odůvodněné vysvětlení, proč je obsah podle vás nezákonný,\n2. přesnou adresu (URL) obsahu, například odkaz na inzerát nebo profil,\n3. své jméno a e-mail – neplatí u oznámení týkajících se sexuálního zneužívání dětí, která můžete podat anonymně,\n4. prohlášení, že oznámení podáváte v dobré víře a údaje jsou podle vašeho nejlepšího vědomí přesné a úplné.',
@@ -124,7 +141,7 @@ export const SEED_PAGES: SeedPage[] = [
     'Jednou ročně zveřejníme zprávu o moderování obsahu: počet oznámení podle druhu, přijatá opatření, počet námitek a jejich výsledek a průměrnou dobu vyřízení (čl. 15 a 24 DSA).',
   ),
 
-  p('cookies', 'Zásady používání cookies', 'Jaké cookies a místní úložiště Dejinzerat.cz používá a jak je můžete spravovat.',
+  p('cookies', 'Zásady používání cookies', 'Jaké cookies a místní úložiště DEJINZERAT.cz používá a jak je můžete spravovat.',
     DRAFT_NOTE,
     'Cookies jsou malé soubory, které web ukládá do vašeho prohlížeče. Podobně funguje i místní úložiště prohlížeče (localStorage).',
     '## Co používáme',
@@ -138,7 +155,7 @@ export const SEED_PAGES: SeedPage[] = [
     'Více o zpracování údajů v [Zásadách zpracování osobních údajů](/stranka/ochrana-udaju).',
   ),
 
-  p('kontakt', 'Kontakt', 'Kontakt na provozovatele portálu Dejinzerat.cz, zákaznickou podporu a kontaktní místo podle DSA.',
+  p('kontakt', 'Kontakt', 'Kontakt na provozovatele portálu DEJINZERAT.cz, zákaznickou podporu a kontaktní místo podle DSA.',
     '## Provozovatel',
     '**{{provozovatel}}**\nIČO: {{ico}}\nSídlo: {{sidlo}}\nZapsaná v {{rejstrik}}',
     '## Zákaznická podpora',
@@ -149,9 +166,9 @@ export const SEED_PAGES: SeedPage[] = [
     'Žádosti podle GDPR posílejte na {{email}}. Podrobnosti v [Zásadách zpracování osobních údajů](/stranka/ochrana-udaju).',
   ),
 
-  p('spotrebitele', 'Informace pro spotřebitele', 'Práva spotřebitelů při nákupu přes Dejinzerat.cz: nákup od podnikatele a od soukromé osoby, odstoupení od smlouvy, reklamace a mimosoudní řešení sporů.',
+  p('spotrebitele', 'Informace pro spotřebitele', 'Práva spotřebitelů při nákupu přes DEJINZERAT.cz: nákup od podnikatele a od soukromé osoby, odstoupení od smlouvy, reklamace a mimosoudní řešení sporů.',
     DRAFT_NOTE,
-    'Dejinzerat.cz zprostředkovává kontakt mezi prodávajícími a kupujícími. Kupní smlouvu uzavíráte přímo s prodávajícím – provozovatel portálu není její stranou.',
+    'DEJINZERAT.cz zprostředkovává kontakt mezi prodávajícími a kupujícími. Kupní smlouvu uzavíráte přímo s prodávajícím – provozovatel portálu není její stranou.',
     '## Kupujete od podnikatele',
     'U inzerátu i v profilu uvidíte označení **„Prodávající je podnikatel“** s obchodní firmou a IČO. Při nákupu od podnikatele máte jako spotřebitel zejména tato práva:',
     '- odstoupit od smlouvy uzavřené na dálku do 14 dní od převzetí zboží (§ 1829 občanského zákoníku), s výjimkami podle § 1837,\n- uplatnit práva z vadného plnění (reklamaci) – u nového zboží do 24 měsíců, u použitého lze lhůtu zkrátit na 12 měsíců,\n- dostat před uzavřením smlouvy informace o ceně včetně daní, nákladech na dopravu a totožnosti podnikatele.',
@@ -164,7 +181,7 @@ export const SEED_PAGES: SeedPage[] = [
     'Spor s podnikatelem můžete řešit mimosoudně u České obchodní inspekce (www.coi.cz/informace-o-adr). Spory z placených služeb portálu můžete řešit i s námi na {{email}}. Kontakt na provozovatele najdete na stránce [Kontakt](/stranka/kontakt).',
   ),
 
-  p('podminky-placenych-sluzeb', 'Podmínky placených služeb', 'Obchodní podmínky placených služeb Dejinzerat.cz: topování, zvýraznění, prémiové inzeráty a firemní balíčky, platby, odstoupení a reklamace.',
+  p('podminky-placenych-sluzeb', 'Podmínky placených služeb', 'Obchodní podmínky placených služeb DEJINZERAT.cz: topování, zvýraznění, prémiové inzeráty a firemní balíčky, platby, odstoupení a reklamace.',
     DRAFT_NOTE,
     '## 1. Poskytovatel',
     'Placené služby poskytuje {{provozovatel}}, IČO {{ico}}, se sídlem {{sidlo}}, zapsaná v {{rejstrik}}, e-mail {{email}}.',
@@ -182,7 +199,7 @@ export const SEED_PAGES: SeedPage[] = [
     'Spotřebitel může spor řešit u České obchodní inspekce (www.coi.cz). Ostatní práva a povinnosti upravují [Podmínky používání](/stranka/podminky).',
   ),
 
-  p('napoveda', 'Nápověda', 'Nejčastější otázky k Dejinzerat.cz: vložení inzerátu, úprava a prodloužení, topování, uložená hledání, zprávy a bezpečnost.',
+  p('napoveda', 'Nápověda', 'Nejčastější otázky k DEJINZERAT.cz: vložení inzerátu, úprava a prodloužení, topování, uložená hledání, zprávy a bezpečnost.',
     '## Jak vložím inzerát?',
     'Klikněte na **Přidat inzerát**, napište název, vyberte kategorii (podle názvu ji navrhneme), přidejte fotografie, cenu a lokalitu. Vložení je zdarma a zabere zhruba minutu. Inzerát musí odpovídat [Pravidlům inzerování](/stranka/pravidla-inzerovani).',
     '## Jak inzerát upravím, prodloužím nebo označím jako prodaný?',

@@ -195,7 +195,7 @@ export function cleanDescription(l: Pick<LegacyListing, 'InzeratDescription' | '
   let d = htmlToText(l.InzeratDescription ?? '');
   if (d.replace(/[\s.•-]/g, '').length < 3) d = htmlToText(l.ShortDescription ?? '');
   if (d.replace(/[\s.•-]/g, '').length < 3) d = cleanTitle(l.InzeratName);
-  if (d.length < 10) d = `${d}\n\n(Inzerát převzatý ze starého webu Dejinzerat.cz.)`;
+  if (d.length < 10) d = `${d}\n\n(Inzerát převzatý ze starého webu DEJINZERAT.cz.)`;
   return d.length > 8000 ? `${d.slice(0, 7990).trimEnd()}…` : d;
 }
 

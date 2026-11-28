@@ -15,7 +15,7 @@ export function emailLayout(content: string, origin = config.webOrigin) {
     + `<tr><td style="padding:24px 28px 16px;border-bottom:3px solid #0e9f6e"><a href="${origin}" style="text-decoration:none"><img src="${origin}/email/logo.png" width="200" height="28" alt="DEJINZERAT.CZ" style="display:block;border:0;width:200px;height:auto"></a></td></tr>`
     + `<tr><td style="padding:24px 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1b1f24">${content}</td></tr>`
     + `</table>`
-    + `<p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#667085">Dejinzerat.cz · <a href="${origin}" style="color:#667085">${site}</a></p>`
+    + `<p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#667085">DEJINZERAT.cz · <a href="${origin}" style="color:#667085">${site}</a></p>`
     + `</td></tr></table></body></html>`;
 }
 

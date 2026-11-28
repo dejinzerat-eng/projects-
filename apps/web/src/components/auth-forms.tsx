@@ -257,7 +257,7 @@ export function EmailChangeConfirm({ token }: { token: string }) {
   );
   return (
     <div className="space-y-4">
-      <p className="text-center text-ink-2">Kliknutím potvrdíte, že tuto adresu chcete používat pro svůj účet na Dejinzerat.cz.</p>
+      <p className="text-center text-ink-2">Kliknutím potvrdíte, že tuto adresu chcete používat pro svůj účet na DEJINZERAT.cz.</p>
       <ErrorBox error={error} />
       <button className="btn btn-primary w-full" disabled={busy} onClick={() => run(async () => { await call('/auth/email/confirm', 'POST', { token }); setDone(true); })}>
         {busy ? 'Potvrzuji…' : 'Potvrdit nový e-mail'}
