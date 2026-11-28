@@ -45,8 +45,8 @@ export async function SearchView({ searchParams, category, sub, basePath, headin
   };
 
   return (
-    <div className="container-x py-6 sm:py-8">
-      <nav className="mb-3 flex flex-wrap items-center gap-1.5 text-sm text-muted" aria-label="Drobečková navigace">
+    <div className="container-x py-4 sm:py-5">
+      <nav className="mb-2 flex flex-wrap items-center gap-1.5 text-sm text-muted" aria-label="Drobečková navigace">
         {crumbs ? crumbs.map((c, i) => (
           <Fragment key={c.path}>
             {i > 0 && <span>/</span>}
@@ -60,29 +60,29 @@ export async function SearchView({ searchParams, category, sub, basePath, headin
       </nav>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="h-display text-3xl font-bold sm:text-4xl">{title}</h1>
-          <p className="mt-1 text-muted">{plural(res.total, 'inzerát', 'inzeráty', 'inzerátů')}</p>
+          <h1 className="h-display text-2xl font-bold sm:text-3xl">{title}</h1>
+          <p className="mt-0.5 text-sm text-muted">{plural(res.total, 'inzerát', 'inzeráty', 'inzerátů')}</p>
         </div>
         <SaveSearch key={savedSearchKey(p)} params={p} savedId={saved.get(savedSearchKey(p)) ?? null} label={[p.q, subCat?.name ?? cat?.name, p.city ?? (p.lat != null ? 'v okolí mé polohy' : ''), p.priceMax ? `do ${p.priceMax} Kč` : ''].filter(Boolean).join(', ') || 'Všechny inzeráty'} />
       </div>
       {recognized.length > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-brand-soft bg-brand-soft/50 px-4 py-3 text-sm">
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-brand-soft bg-brand-soft/50 px-4 py-2.5 text-sm">
           <Sparkles className="size-4 text-brand" /><span className="text-ink-2">Rozpoznali jsme:</span>
           {recognized.map((r) => <span key={r} className="rounded-full bg-surface px-2.5 py-0.5 font-semibold">{r}</span>)}
         </div>
       )}
       {cat && !subCat && (
-        <div className="mt-5 flex gap-2 overflow-x-auto scrollbar-none pb-1">
-          {cat.children.map((s) => <Link key={s.slug} href={`/kategorie/${cat.slug}/${s.slug}`} className="chip shrink-0">{s.name}<span className="text-muted">{s.count}</span></Link>)}
+        <div className="mt-3 flex gap-1.5 overflow-x-auto scrollbar-none pb-1">
+          {cat.children.map((s) => <Link key={s.slug} href={`/kategorie/${cat.slug}/${s.slug}`} className="chip h-7 shrink-0 px-2.5 text-[13px]">{s.name}<span className="text-muted">{s.count}</span></Link>)}
         </div>
       )}
-      <div className="mt-6 grid gap-8 lg:grid-cols-[280px_1fr]">
+      <div className="mt-4 grid gap-6 lg:grid-cols-[248px_1fr]">
         <div className="flex items-center justify-between gap-3 lg:block">
           <Filters categories={cats} filters={filters} fixedCategory={basePath !== '/hledat'} />
           <div className="lg:hidden"><SortSelect hasGeo={hasGeo} /></div>
         </div>
         <section aria-label="Výsledky" className="-mt-4 lg:mt-0">
-          <div className="mb-4 hidden items-center justify-end gap-3 lg:flex">
+          <div className="mb-3 hidden items-center justify-end gap-3 lg:flex">
             <SortSelect hasGeo={hasGeo} />
           </div>
           {res.fuzzy && (

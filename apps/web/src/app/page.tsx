@@ -3,7 +3,7 @@ import { Plus, Zap } from 'lucide-react';
 import { HomeSection as Section } from '@/components/home-section';
 import { CategoryTile } from '@/components/icons';
 import { ListingGrid } from '@/components/listing-card';
-import { NearbyListings } from '@/components/nearby-listings';
+import { HomeBanners, type Banner } from '@/components/home-banners';
 import { RecommendedListings } from '@/components/recommended-listings';
 import { SearchBox } from '@/components/search-box';
 import { api, getMe } from '@/lib/api';
@@ -32,7 +32,7 @@ const POPULAR = ['iPhone 15', 'Byt 2+kk Praha', 'Kočárek', 'Horské kolo do 15
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ ikony?: string }> }) {
   const variant = (await searchParams).ikony === 'b' ? 'solid' : 'soft';
-  const [cats, premium, featured, latest, me, favorites, operator] = await Promise.all([
+  const [cats, premium, featured, latest, me, favorites, operator, banners] = await Promise.all([
     api<Category[]>('/categories', { revalidate: 60, auth: false }).catch(() => [] as Category[]),
     api<ListingCard[]>('/search/premium?limit=8', { auth: false }).catch(() => [] as ListingCard[]),
     api<ListingCard[]>('/listings/featured?limit=8', { auth: false }).catch(() => [] as ListingCard[]),
@@ -40,22 +40,23 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ i
     getMe(),
     getFavoriteIds(),
     getOperator(),
+    api<Banner[]>('/banners', { revalidate: 30, auth: false }).catch(() => [] as Banner[]),
   ]);
   const popularCats = [...cats].sort((a, b) => b.count - a.count).slice(0, 6);
 
   return (
     <>
       <JsonLd data={[website(), organization(operator)]} />
-      {/* Kompaktní úvod: na běžném notebooku musí být hned vidět i dlaždice kategorií pod ním. */}
+      {/* Kompaktní úvod: nadpis na jednom řádku, hledání včetně lokality (dříve sekce „Nabídky v okolí“) a tipy. */}
       <section className="border-b border-line bg-surface">
-        <div className="container-x py-5 sm:py-6">
-          <div className="mx-auto max-w-2xl text-center">
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Co hledáte?</h1>
-            <p className="mt-1 text-sm text-muted sm:text-base">Inzeráty z celé České republiky. Vložení zdarma.</p>
+        <div className="container-x py-4 sm:py-5">
+          <div className="mx-auto flex max-w-3xl flex-wrap items-baseline justify-center gap-x-2 text-center">
+            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Co hledáte?</h1>
+            <p className="hidden text-sm text-muted sm:block">Inzeráty z celé České republiky. Vložení zdarma.</p>
           </div>
-          <div className="mx-auto mt-4 max-w-2xl sm:mt-5"><SearchBox size="lg" /></div>
-          <div className="mx-auto mt-3 flex max-w-2xl justify-start gap-2 overflow-x-auto scrollbar-none pb-1 sm:justify-center">
-            {POPULAR.map((p) => <Link key={p} href={`/hledat?q=${encodeURIComponent(p)}&chytre=1`} className="chip shrink-0">{p}</Link>)}
+          <div className="mx-auto mt-3 max-w-3xl"><SearchBox size="lg" withLocation /></div>
+          <div className="mx-auto mt-2.5 flex max-w-3xl justify-start gap-1.5 overflow-x-auto scrollbar-none sm:justify-center">
+            {POPULAR.map((p) => <Link key={p} href={`/hledat?q=${encodeURIComponent(p)}&chytre=1`} className="chip h-7 shrink-0 px-2.5 text-[13px]">{p}</Link>)}
           </div>
         </div>
       </section>
@@ -83,7 +84,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ i
         </Section>
       )}
 
-      <NearbyListings profileCity={me?.city} loggedIn={!!me} />
+      {/* Reklamní bannery (správa: Administrace › Reklamní bannery) – bez aktivních se řada nezobrazí */}
+      <HomeBanners banners={banners} />
 
       <RecommendedListings loggedIn={!!me} />
 

@@ -29,7 +29,7 @@ export function Filters({ categories, filters, fixedCategory }: { categories: Ca
   const activeCount = [...sp.keys()].filter((k) => !['q', 'razeni', 'strana', 'chytre', 'rozpoznano', 'lng'].includes(k) && !(fixedCategory && ['kategorie', 'pod'].includes(k))).length;
 
   const panel = (
-    <div className="space-y-6">
+    <div className="filters-compact space-y-4">
       {!fixedCategory && (
         <Field label="Kategorie">
           <select className="input" value={get('kategorie')} onChange={(e) => set({ kategorie: e.target.value, pod: undefined })}>
@@ -74,12 +74,12 @@ export function Filters({ categories, filters, fixedCategory }: { categories: Ca
           {[['soukromy', 'Soukromí'], ['firma', 'Firmy']].map(([v, l]) => <button key={v} onClick={() => set({ prodejce: get('prodejce') === v ? undefined : v })} className={`chip ${get('prodejce') === v ? 'chip-active' : ''}`} aria-pressed={get('prodejce') === v}>{l}</button>)}
         </div>
       </Field>
-      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface p-3">
+      <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-line bg-surface px-3 py-2.5">
         <input type="checkbox" className="size-5 accent-[var(--trust)]" checked={get('overeny') === '1'} onChange={(e) => set({ overeny: e.target.checked ? '1' : undefined })} />
-        <span className="text-[15px] font-medium">Jen ověření prodejci</span>
+        <span className="text-sm font-medium">Jen ověření prodejci</span>
       </label>
       {filters.length > 0 && (
-        <div className="space-y-6 border-t border-line pt-6">
+        <div className="space-y-4 border-t border-line pt-4">
           {filters.map((f) => <AttrFilter key={f.key} f={f} get={get} list={list} set={set} toggle={toggle} />)}
         </div>
       )}
@@ -129,9 +129,9 @@ function LocationFilter({ get, set }: { get: (k: string) => string; set: (u: Rec
 
   if (city || gps) return (
     <>
-      <div className="flex h-11 items-center gap-2 rounded-xl border border-line bg-surface pl-3.5 pr-1.5">
+      <div className="flex h-10 items-center gap-2 rounded-xl border border-line bg-surface pl-3 pr-1">
         {gps ? <LocateFixed className="size-4 shrink-0 text-brand" /> : <MapPin className="size-4 shrink-0 text-muted" />}
-        <span className="min-w-0 flex-1 truncate text-[15px] font-medium">{gps ? 'Moje poloha' : city}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{gps ? 'Moje poloha' : city}</span>
         <button onClick={() => { setText(''); set({ mesto: undefined, lat: undefined, lng: undefined, okruh: undefined, razeni: get('razeni') === 'distance' ? undefined : get('razeni') || undefined }); }} className="grid size-8 place-items-center rounded-full text-muted hover:bg-surface-2" aria-label="Zrušit lokalitu"><X className="size-4" /></button>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -146,7 +146,7 @@ function LocationFilter({ get, set }: { get: (k: string) => string; set: (u: Rec
       <LocationInput value={text} onChange={setText} ariaLabel="Lokalita" onSelect={(o) => {
         setText('');
         set({ mesto: o.label, okruh: get('okruh') || '20', kraj: undefined, lat: undefined, lng: undefined });
-        saveMyLocation({ name: o.name, lat: o.lat, lng: o.lng, radius: 30, source: 'city' });
+        saveMyLocation({ name: o.name, label: o.label, lat: o.lat, lng: o.lng, radius: Number(get('okruh')) || 20, source: 'city' });
       }} />
       <button onClick={locate} disabled={busy} className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-brand-ink hover:underline disabled:opacity-60">
         {busy ? <Loader2 className="size-4 animate-spin" /> : <LocateFixed className="size-4" />}Použít moji polohu
@@ -160,7 +160,7 @@ function LocationFilter({ get, set }: { get: (k: string) => string; set: (u: Rec
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div><div className="label">{label}</div>{children}</div>;
+  return <div><div className="label mb-1 text-[13px]">{label}</div>{children}</div>;
 }
 
 function NumInput({ value, placeholder, onCommit }: { value: string; placeholder: string; onCommit: (v: string) => void }) {
