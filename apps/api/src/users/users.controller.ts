@@ -19,6 +19,7 @@ import { anonymizeOps, buildExport, userFileUrls } from './gdpr';
 import { aresWebUrl, isValidIco } from './ico';
 import { trustScore } from './trust';
 import { keepsPhoneConsent } from './phone-consent';
+import { applyContactPhone, PHONE_FORMAT_ERROR } from './phone-contact';
 import { phoneRequiresVerification } from './phone-privacy';
 import { unreadCounts } from './unread';
 
@@ -31,7 +32,7 @@ const ProfileDto = z.object({
   companyId: z.string().trim().regex(/^\d{8}$/, 'IČO má 8 číslic.').optional().or(z.literal('')),
   avatarUrl: z.null({ error: 'Profilovou fotku nahrajte v nastavení účtu.' }).optional(), // fotku nahrává POST /auth/avatar, tady jde jen odstranit
 });
-const PhoneDto = z.object({ phone: z.string({ error: 'Zadejte telefonní číslo.' }).trim().max(30).refine((v) => !!normalizePhone(v), 'Zadejte platné české nebo slovenské číslo, např. +420 777 123 456.') });
+const PhoneDto = z.object({ phone: z.string({ error: 'Zadejte telefonní číslo.' }).trim().max(30).refine((v) => !!normalizePhone(v), PHONE_FORMAT_ERROR), showPhone: z.boolean().optional() });
 const PhoneVisibilityDto = z.object({ showPhone: z.boolean({ error: 'Neplatná hodnota.' }) });
 const HistoryQuery = z.object({ page: z.coerce.number({ error: 'Neplatné číslo stránky.' }).int('Neplatné číslo stránky.').min(1, 'Neplatné číslo stránky.').max(500, 'Neplatné číslo stránky.').default(1) });
 
@@ -142,22 +143,19 @@ export class UsersController {
   }
 
   /**
-   * Uložení telefonu bez ověření SMS kódem. Nové číslo je neověřené a souhlas se zobrazením
-   * u inzerátů (showPhone) se pro něj musí dát znovu. Stejné číslo (i v jiném zápisu) nic nemění.
+   * Uložení telefonu bez ověření SMS kódem (Nastavení i průvodce inzerátem). Nové číslo je neověřené;
+   * `showPhone` = zobrazovat u inzerátů. Bez něj se nové číslo uloží skryté a souhlas se dá zaškrtnutím zvlášť.
    */
   @Auth()
   @Throttle({ default: { limit: 10, ttl: 600_000 } })
   @Put('me/phone')
   async savePhone(@CurrentUser() u: AuthUser, @Body(new ZodPipe(PhoneDto)) dto: z.infer<typeof PhoneDto>) {
-    const phone = normalizePhone(dto.phone)!;
-    const cur = await this.prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { phone: true, phoneVerifiedAt: true, showPhone: true } });
-    if (keepsPhoneConsent(cur.phone, phone)) return { ok: true, phone: cur.phone, changed: false };
-    if (await this.prisma.user.findFirst({ where: { phone, phoneVerifiedAt: { not: null }, id: { not: u.id } }, select: { id: true } })) {
-      throw new BadRequestException('Toto číslo už je ověřené u jiného účtu.');
-    }
-    await this.prisma.user.update({ where: { id: u.id }, data: { phone, phoneVerifiedAt: null, showPhone: false } });
-    await this.auth.flushUser(u.id);
-    return { ok: true, phone, changed: true };
+    const cur = await this.prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { phone: true, showPhone: true } });
+    // bez showPhone (Nastavení) zůstává souhlas u stejného čísla, nové číslo začíná skryté
+    const sameNumber = keepsPhoneConsent(cur.phone, normalizePhone(dto.phone)!);
+    const changed = await applyContactPhone(this.prisma, u.id, dto.phone, dto.showPhone ?? (sameNumber && cur.showPhone));
+    if (changed) await this.auth.flushUser(u.id);
+    return { ok: true, changed };
   }
 
   /** Odebrání telefonu z účtu (zmizí i odznak ověřeného telefonu) */

@@ -35,14 +35,17 @@ export function validGuestToken(token: unknown): token is string {
 
 /** Inzerát pro existující účet: do účtu se zapíše až po kliknutí majitele e-mailu, do té doby čeká v tokenu. */
 export const PENDING_TARGET_PREFIX = 'pending:';
-export interface PendingListing { listing: Record<string, unknown>; guestOwner: string | null }
+/** `contact` = telefon zadaný ve formuláři; do účtu se zapíše až po kliknutí majitele (a jen když účet číslo ještě nemá). */
+export interface PendingListing { listing: Record<string, unknown>; guestOwner: string | null; contact?: { phone: string; showPhone: boolean } }
 
 export function pendingTarget(p: PendingListing) { return PENDING_TARGET_PREFIX + JSON.stringify(p); }
 export function pendingFromTarget(target: string | null | undefined): PendingListing | null {
   if (!target?.startsWith(PENDING_TARGET_PREFIX)) return null;
   try {
     const v = JSON.parse(target.slice(PENDING_TARGET_PREFIX.length)) as PendingListing;
-    return v && typeof v.listing === 'object' && v.listing ? { listing: v.listing, guestOwner: typeof v.guestOwner === 'string' ? v.guestOwner : null } : null;
+    if (!v || typeof v.listing !== 'object' || !v.listing) return null;
+    const contact = v.contact && typeof v.contact.phone === 'string' ? { phone: v.contact.phone, showPhone: v.contact.showPhone === true } : undefined;
+    return { listing: v.listing, guestOwner: typeof v.guestOwner === 'string' ? v.guestOwner : null, ...(contact ? { contact } : {}) };
   } catch { return null; }
 }
 

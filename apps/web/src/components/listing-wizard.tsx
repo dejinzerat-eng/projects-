@@ -1,6 +1,6 @@
 'use client';
 import { cleanParams, CONDITIONS, type FilterDef, OFFER_TYPES, parseVideoUrl, VIDEO_URL_ERROR } from '@dej/shared';
-import { ArrowLeft, ArrowRight, Camera, Check, ChevronLeft, ChevronRight, ImagePlus, Lightbulb, Loader2, MailCheck, MapPin, Save, Sparkles, Star, Trash2, Wand2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Camera, Check, ChevronLeft, ChevronRight, ImagePlus, Lightbulb, Loader2, MailCheck, MapPin, MessageSquare, Phone, Save, Sparkles, Star, Trash2, Wand2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { isImageFile, MAX_UPLOAD_BYTES, shrinkImage } from '@/lib/image';
@@ -23,12 +23,24 @@ export interface WizardCategory {
   children: { slug: string; name: string; fields?: FilterDef[] }[];
 }
 const EMPTY: WizardInitial = { title: '', description: '', price: null, priceNegotiable: false, currency: 'CZK', categorySlug: '', subSlug: '', condition: null, offerType: 'SELL', city: '', zip: '', attributes: {}, images: [], videoUrl: '' };
-const STEPS = ['Co nabízíte', 'Fotky', 'Popis a cena', 'Místo', 'Náhled'];
+const STEPS = ['Co nabízíte', 'Fotky', 'Popis a cena', 'Místo a kontakt', 'Náhled'];
 const DRAFT_KEY = 'dej_wizard_draft';
 /** Pole ze serverové chyby → krok průvodce, kde ho uživatel opraví */
-const FIELD_STEP: Record<string, number> = { title: 0, categorySlug: 0, subSlug: 0, offerType: 0, imageIds: 1, videoUrl: 1, description: 2, price: 2, currency: 2, condition: 2, attributes: 2, city: 3, zip: 3, email: 4, name: 4, terms: 4, captcha: 4 };
+const FIELD_STEP: Record<string, number> = { title: 0, categorySlug: 0, subSlug: 0, offerType: 0, imageIds: 1, videoUrl: 1, description: 2, price: 2, currency: 2, condition: 2, attributes: 2, city: 3, zip: 3, phone: 3, hidePhone: 3, email: 4, name: 4, terms: 4, captcha: 4 };
 /** Kontakt při vkládání bez přihlášení (z e-mailu se po potvrzení založí účet). */
 interface GuestContact { email: string; name: string; terms: boolean }
+/** Telefon v průvodci (platí pro celý účet): číslo a volba „neukazovat, jen zprávy“. */
+interface PhoneChoice { value: string; hide: boolean }
+const PHONE_ERROR = 'Zadejte platné české nebo slovenské telefonní číslo, např. 777 123 456.';
+/** Telefon do tvaru +420123456789 (CZ/SK), jinak null – stejná pravidla jako na serveru. */
+function normalizePhone(v: string): string | null {
+  let x = v.replace(/[^\d+]/g, '');
+  if (x.startsWith('00')) x = `+${x.slice(2)}`;
+  const n = x.replace(/\D/g, '');
+  if (/^\d{9}$/.test(n) && !x.startsWith('+')) return `+420${n}`;
+  if (/^(420|421)\d{9}$/.test(n)) return `+${n}`;
+  return null;
+}
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 class SendError extends Error { constructor(message: string, public field?: string, public status?: number, public code?: string) { super(message); } }
@@ -61,7 +73,17 @@ export function ListingWizard({ initial, defaultCity, categories, userId, guest:
   const [captchaReset, setCaptchaReset] = useState(0);
   const [sentTo, setSentTo] = useState<{ email: string; devLink?: string; existingAccount?: boolean } | null>(null);
   const [accountExists, setAccountExists] = useState(false);
+  const [ph, setPh] = useState<PhoneChoice>({ value: '', hide: false });
+  // Telefon uložený v účtu přihlášeného (null = ještě nenačteno / host)
+  const savedPhone = useRef<{ phone: string | null; showPhone: boolean } | null>(null);
   const providers = useProviders();
+  useEffect(() => {
+    if (guestProp) return;
+    call<{ phone: string | null; showPhone: boolean }>('/me/seller-settings').then((s) => {
+      savedPhone.current = { phone: s.phone, showPhone: s.showPhone };
+      setPh({ value: s.phone ?? '', hide: !!s.phone && !s.showPhone });
+    }).catch(() => undefined);
+  }, [guestProp]);
   // Jiný e-mail → nabídka přihlášení k původnímu účtu už neplatí
   useEffect(() => { setAccountExists(false); }, [contact.email]);
   const siteKey = guestProp ? providers?.captchaSiteKey ?? null : null;
@@ -96,7 +118,10 @@ export function ListingWizard({ initial, defaultCity, categories, userId, guest:
       const s = localStorage.getItem(draftKey); const v = s ? JSON.parse(s) : null;
       if (v?.title) {
         const { _startedAt, _contact, ...rest } = v;
-        if (guest && _contact && typeof _contact === 'object') setContact((c) => ({ ...c, email: String(_contact.email ?? ''), name: String(_contact.name ?? '') }));
+        if (guest && _contact && typeof _contact === 'object') {
+          setContact((c) => ({ ...c, email: String(_contact.email ?? ''), name: String(_contact.name ?? '') }));
+          setPh({ value: String(_contact.phone ?? ''), hide: _contact.hidePhone === true });
+        }
         setD((cur) => (cur.title ? cur : { ...EMPTY, ...rest }));
         if (typeof _startedAt === 'number' && Date.now() - _startedAt < 3600e3) startedAt.current = _startedAt;
         setRestored(true);
@@ -112,9 +137,9 @@ export function ListingWizard({ initial, defaultCity, categories, userId, guest:
   }, [fromServer, draftKey]);
   useEffect(() => {
     if (!fromServer && d.title && !sentTo) try {
-      localStorage.setItem(draftKey, JSON.stringify({ ...d, _startedAt: startedAt.current, ...(guest ? { _contact: { email: contact.email, name: contact.name } } : {}) }));
+      localStorage.setItem(draftKey, JSON.stringify({ ...d, _startedAt: startedAt.current, ...(guest ? { _contact: { email: contact.email, name: contact.name, phone: ph.value, hidePhone: ph.hide } } : {}) }));
     } catch { /* */ }
-  }, [d, fromServer, draftKey, guest, contact.email, contact.name, sentTo]);
+  }, [d, fromServer, draftKey, guest, contact.email, contact.name, ph, sentTo]);
   /** Po zveřejnění (i z úpravy konceptu) zapomeneme rozpracovanou kopii v prohlížeči, pokud patří k tomuto inzerátu. */
   function forgetLocal(id: string) {
     try {
@@ -135,7 +160,10 @@ export function ListingWizard({ initial, defaultCity, categories, userId, guest:
       if (d.description.trim().length < 10) return 'Popis musí mít alespoň 10 znaků.';
       const p = cleanParams(fields, d.attributes, true); if (p.error) return p.error;
     }
-    if (s === 3) { if (!d.city.trim()) return 'Zadejte lokalitu.'; if (d.zip && !/^\d{3}\s?\d{2}$/.test(d.zip)) return 'PSČ má 5 číslic.'; }
+    if (s === 3) {
+      if (!d.city.trim()) return 'Zadejte lokalitu.'; if (d.zip && !/^\d{3}\s?\d{2}$/.test(d.zip)) return 'PSČ má 5 číslic.';
+      if (ph.value.trim() && !normalizePhone(ph.value)) return PHONE_ERROR;
+    }
     return null;
   }
   function validateContact(): string | null {
@@ -161,11 +189,27 @@ export function ListingWizard({ initial, defaultCity, categories, userId, guest:
     };
   }
 
+  /**
+   * Telefon přihlášeného uložíme do účtu jen při změně (PUT /me/phone). Prázdné pole číslo nemaže,
+   * jen ho skryje – odebrat ho jde v Nastavení účtu.
+   */
+  async function savePhone() {
+    const v = ph.value.trim(); const show = !!v && !ph.hide; const cur = savedPhone.current;
+    if (v) {
+      if (cur && normalizePhone(v) === (cur.phone && normalizePhone(cur.phone)) && cur.showPhone === show) return;
+      await send('/me/phone', 'PUT', { phone: v, showPhone: show });
+      savedPhone.current = { phone: normalizePhone(v), showPhone: show };
+    } else if (cur?.phone && cur.showPhone) {
+      await send('/me/phone-visibility', 'PATCH', { showPhone: false });
+      savedPhone.current = { ...cur, showPhone: false };
+    }
+  }
+
   /** Odeslání bez přihlášení. `link` = e-mail už má účet a uživatel chce odkaz, který inzerát zveřejní v jeho účtu. */
   async function sendGuest(body: ReturnType<typeof buildBody>, link = false) {
     try {
       const g = await send<{ email: string; devLink?: string; existingAccount?: boolean }>('/listings/guest', 'POST', {
-        ...body, publish: true, email: contact.email.trim(), name: contact.name.trim(), terms: true, ...(captcha ? { captcha } : {}), ...(link ? { existingAccount: 'link' } : {}),
+        ...body, publish: true, email: contact.email.trim(), name: contact.name.trim(), terms: true, phone: ph.value.trim() || undefined, hidePhone: ph.hide, ...(captcha ? { captcha } : {}), ...(link ? { existingAccount: 'link' } : {}),
       });
       try { localStorage.removeItem(draftKey); } catch { /* */ }
       setSentTo(g); setBusy(null); window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -181,6 +225,13 @@ export function ListingWizard({ initial, defaultCity, categories, userId, guest:
   async function loginAndPublish(password: string) {
     await send('/auth/login', 'POST', { email: contact.email.trim(), password });
     setGuest(false); setAccountExists(false);
+    // Přihlášení dalo účtu jeho vlastní číslo: nepřepisujeme ho, jen když ho účet nemá nebo ho uživatel zadal
+    try {
+      const s = await call<{ phone: string | null; showPhone: boolean }>('/me/seller-settings');
+      savedPhone.current = { phone: s.phone, showPhone: s.showPhone };
+      if (!ph.value.trim() && s.phone) setPh({ value: s.phone, hide: !s.showPhone });
+      else await savePhone();
+    } catch { /* telefon jde doplnit v nastavení; inzerát zveřejníme i tak */ }
     const body = buildBody(true);
     type Res = { id: string; slug: string; status: string };
     let r: Res;
@@ -219,6 +270,7 @@ export function ListingWizard({ initial, defaultCity, categories, userId, guest:
     const body = buildBody(publish);
     try {
       if (guest) { await sendGuest(body); return; }
+      await savePhone();
       type Res = { id: string; slug: string; status: string };
       let r: Res;
       if (d.id) {
@@ -284,8 +336,8 @@ export function ListingWizard({ initial, defaultCity, categories, userId, guest:
       {step === 0 && <StepBasics d={d} up={up} categories={categories} />}
       {step === 1 && <StepPhotos d={d} setD={setD} uploading={uploading} setUploading={setUploading} />}
       {step === 2 && <StepDetails d={d} up={up} fields={fields} />}
-      {step === 3 && <StepPrice d={d} up={up} />}
-      {step === 4 && <StepPreview d={d} categories={categories} />}
+      {step === 3 && <StepPlace d={d} up={up} ph={ph} setPh={setPh} />}
+      {step === 4 && <StepPreview d={d} categories={categories} ph={ph} />}
       {step === 4 && guest && <GuestContactForm contact={contact} setContact={setContact} siteKey={siteKey} onCaptcha={setCaptcha} captchaReset={captchaReset} />}
       {step === 4 && !guest && <p className="mt-6 text-sm text-muted">Zveřejněním souhlasíte s <a href="/stranka/pravidla-inzerovani" target="_blank" className="font-medium text-brand-ink underline">Pravidly inzerování</a> a <a href="/stranka/podminky" target="_blank" className="underline">podmínkami používání</a>.</p>}
 
@@ -526,15 +578,38 @@ function PriceFields({ d, up }: StepProps) {
   );
 }
 
-function StepPrice({ d, up }: StepProps) {
+function StepPlace({ d, up, ph, setPh }: StepProps & { ph: PhoneChoice; setPh: React.Dispatch<React.SetStateAction<PhoneChoice>> }) {
+  const bad = !!ph.value.trim() && !normalizePhone(ph.value);
   return (
     <div className="space-y-6">
       <LocationFields city={d.city} zip={d.zip} onChange={up} />
+      <section className="card space-y-4 p-5 sm:p-6" aria-labelledby="w-contact">
+        <div>
+          <h2 id="w-contact" className="text-lg font-bold">Kontakt</h2>
+          <p className="mt-1 text-sm text-muted">Kupující vám mohou vždy napsat přes zprávy na Dejinzerat.cz. Telefon je nepovinný.</p>
+        </div>
+        <div>
+          <label className="label" htmlFor="w-phone">Telefon</label>
+          <input id="w-phone" type="tel" inputMode="tel" autoComplete="tel" className="input sm:max-w-72" maxLength={30} placeholder="777 123 456"
+            value={ph.value} onChange={(e) => setPh((p) => ({ ...p, value: e.target.value }))} aria-invalid={bad || undefined} aria-describedby="w-phone-hint" />
+          <p id="w-phone-hint" className={`mt-1.5 text-xs ${bad ? 'text-danger' : 'text-muted'}`}>
+            {bad ? PHONE_ERROR : 'České nebo slovenské číslo. Platí pro všechny vaše inzeráty, změnit ho jde i v nastavení účtu.'}
+          </p>
+        </div>
+        <label className="flex items-start gap-3">
+          <input type="checkbox" className="mt-0.5 size-5 shrink-0 accent-[var(--brand)]" checked={ph.hide} onChange={(e) => setPh((p) => ({ ...p, hide: e.target.checked }))} />
+          <span>
+            <span className="font-semibold">Neukazovat telefon</span>
+            <span className="mt-0.5 block text-sm text-muted">Komunikovat jen přes osobní zprávy na Dejinzerat.cz.</span>
+          </span>
+        </label>
+      </section>
     </div>
   );
 }
 
-function StepPreview({ d, categories }: { d: WizardInitial; categories: WizardCategory[] }) {
+function StepPreview({ d, categories, ph }: { d: WizardInitial; categories: WizardCategory[]; ph: PhoneChoice }) {
+  const phoneShown = !!ph.value.trim() && !ph.hide;
   const cat = categories.find((c) => c.slug === d.categorySlug);
   const sub = cat?.children.find((s) => s.slug === d.subSlug);
   const video = parseVideoUrl(d.videoUrl);
@@ -547,6 +622,9 @@ function StepPreview({ d, categories }: { d: WizardInitial; categories: WizardCa
         <h2 className="h-display text-2xl font-bold">{d.title}</h2>
         <div className="text-2xl font-bold">{d.offerType === 'GIVE' ? 'Zdarma' : fmtPrice(d.price, d.priceNegotiable, d.currency)}</div>
         <div className="flex flex-wrap gap-2 text-sm"><span className="inline-flex items-center gap-1"><MapPin className="size-4 text-muted" />{d.city}</span>{d.condition && <span className="rounded-md bg-surface-2 px-2">{CONDITION_LABEL[d.condition]}</span>}<span className="text-muted">· {d.images.length} fotek</span></div>
+        <p className="flex items-center gap-1.5 text-sm text-muted">{phoneShown
+          ? <><Phone className="size-4" />Telefon {normalizePhone(ph.value) ?? ph.value} uvidí přihlášení po kliknutí na „Zobrazit telefon“</>
+          : <><MessageSquare className="size-4" />Kupující vás kontaktují jen přes zprávy</>}</p>
         <p className="whitespace-pre-line border-t border-line pt-3 text-ink-2">{d.description}</p>
         {video && <VideoFrame src={video.embed} />}
       </div>
