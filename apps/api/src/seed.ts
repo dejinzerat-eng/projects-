@@ -162,11 +162,12 @@ async function demoImage(icon: string, seed: number, variant: number) {
 async function main() {
   console.log('Kategorie…');
   for (const [i, c] of CATEGORIES.entries()) {
-    const parent = (await prisma.category.findFirst({ where: { slug: c.slug, parentId: null } })) ?? (await prisma.category.create({
+    // Kategorii hledáme podle adresy i názvu: přejmenovaná adresa (v administraci nebo migrací) nesmí vést k založení kopie
+    const parent = (await prisma.category.findFirst({ where: { parentId: null, OR: [{ slug: c.slug }, { name: c.name }] } })) ?? (await prisma.category.create({
       data: { slug: c.slug, name: c.name, icon: c.icon, position: i, filters: c.filters as unknown as Prisma.InputJsonValue, seoTitle: `${c.name} – inzeráty z celé ČR | DEJINZERAT.cz`, seoDescription: `Bazar a inzerce v kategorii ${c.name}. Tisíce nabídek od soukromých prodejců i firem, rychlé hledání a bezpečná komunikace.` },
     }));
     for (const [j, s] of c.children.entries()) {
-      const exists = await prisma.category.findFirst({ where: { slug: s.slug, parentId: parent.id } });
+      const exists = await prisma.category.findFirst({ where: { parentId: parent.id, OR: [{ slug: s.slug }, { name: s.name }] } });
       if (!exists) await prisma.category.create({ data: { slug: s.slug, name: s.name, parentId: parent.id, position: j, filters: (s.filters ?? []) as unknown as Prisma.InputJsonValue, seoTitle: `${s.name} – ${c.name} | DEJINZERAT.cz`, seoDescription: `${s.name}: aktuální inzeráty, nové i použité. Prodávejte a nakupujte bezpečně na DEJINZERAT.cz.` } });
     }
   }
