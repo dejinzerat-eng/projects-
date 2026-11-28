@@ -109,6 +109,10 @@ export class ListingsController {
   phone(@Param('id') id: string, @CurrentUser() u: AuthUser) { return this.listings.revealPhone(id, u); }
 
   @Auth()
+  @Get('listings/:id/email')
+  email(@Param('id') id: string, @CurrentUser() u: AuthUser) { return this.listings.revealEmail(id, u); }
+
+  @Auth()
   @Patch('listings/:id')
   async update(@Param('id') id: string, @CurrentUser() u: AuthUser, @Body(new ListingBodyPipe()) dto: ListingInput, @Req() req: Request) {
     await this.listings.claimGuestImages(guestOwnerOf(req), u.id, dto.imageIds);

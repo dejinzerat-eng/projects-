@@ -14,6 +14,17 @@ export const phoneRequiresVerification = () => process.env.PHONE_REQUIRE_VERIFIE
 export const sellerSharesPhone = (u: PhoneSeller, requireVerified = phoneRequiresVerification()) =>
   !!u.phone && (!requireVerified || !!u.phoneVerifiedAt) && u.showPhone && (u.status ?? 'ACTIVE') === 'ACTIVE';
 
+/**
+ * E-mail prodejce: jen když ho prodejce výslovně povolil (showEmail === true), je ověřený
+ * (vlastník ho potvrdil kliknutím) a nejde o zástupnou adresu (import, smazaný účet).
+ */
+export interface EmailSeller { email: string; emailVerifiedAt: Date | null; showEmail: boolean | null; status?: string }
+export const sellerSharesEmail = (u: EmailSeller) =>
+  u.showEmail === true && !!u.emailVerifiedAt && !u.email.endsWith('.invalid') && (u.status ?? 'ACTIVE') === 'ACTIVE';
+export function canRevealEmail(listingStatus: string, seller: EmailSeller, blockedEitherWay: boolean) {
+  return ['ACTIVE', 'RESERVED'].includes(listingStatus) && sellerSharesEmail(seller) && !blockedEitherWay;
+}
+
 export function canRevealPhone(listingStatus: string, seller: PhoneSeller, blockedEitherWay: boolean) {
   return ['ACTIVE', 'RESERVED'].includes(listingStatus) && sellerSharesPhone(seller) && !blockedEitherWay;
 }

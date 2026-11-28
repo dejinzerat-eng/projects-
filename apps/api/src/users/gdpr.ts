@@ -5,7 +5,7 @@ type Db = Pick<PrismaClient, 'user' | 'listing' | 'listingImage' | 'favorite' | 
 
 /** Pole uživatele v exportu. Hesla, tokeny ani kódy se nikdy neexportují (jen informace, že existují). */
 export const EXPORT_USER_SELECT = {
-  id: true, email: true, name: true, role: true, status: true, phone: true, phoneVerifiedAt: true, emailVerifiedAt: true, showPhone: true,
+  id: true, email: true, name: true, role: true, status: true, phone: true, phoneVerifiedAt: true, emailVerifiedAt: true, showPhone: true, showEmail: true,
   avatarUrl: true, bio: true, city: true, region: true, createdAt: true, updatedAt: true, lastSeenAt: true, lastActiveAt: true,
   isBusiness: true, companyName: true, companyId: true, companyAddress: true, vatId: true, companyVerifiedAt: true,
   passwordHash: true, googleId: true, appleId: true, termsAcceptedAt: true, termsVersion: true,
@@ -73,7 +73,7 @@ export async function buildExport(db: Db, userId: string, now = new Date()) {
     where: { OR: [{ targetType: 'user', targetId: userId }, { targetType: 'listing', targetId: { in: listings.map((l) => l.id) } }] },
     select: { action: true, targetType: true, targetId: true, meta: true, createdAt: true }, orderBy: { createdAt: 'asc' },
   });
-  const { passwordHash, googleId, appleId, isBusiness, companyName, companyId, companyAddress, vatId, companyVerifiedAt, showPhone, ...account } = u;
+  const { passwordHash, googleId, appleId, isBusiness, companyName, companyId, companyAddress, vatId, companyVerifiedAt, showPhone, showEmail, ...account } = u;
   const signup = passwordHash ? 'registrace e-mailem a heslem' : googleId ? 'přihlášení přes Google' : appleId ? 'přihlášení přes Apple' : 'neznámý';
 
   return stripSecrets({
@@ -84,6 +84,7 @@ export async function buildExport(db: Db, userId: string, now = new Date()) {
     consents: {
       termsAndPrivacy: { acceptedAt: u.termsAcceptedAt ?? u.createdAt, version: u.termsVersion, method: signup, note: 'Souhlas s podmínkami a zásadami ochrany osobních údajů je podmínkou registrace.' },
       showPhoneOnListings: showPhone,
+      showEmailOnListings: showEmail === true,
       emailOnNewMessage: messagePrefs?.emailOnMessage ?? true,
       savedSearchAlerts: savedSearches.map((s) => ({ name: s.name, emailNotifications: s.notify })),
     },
@@ -157,7 +158,7 @@ export function anonymizeOps(db: Db, user: AnonymizeTarget) {
     db.user.update({
       where: { id: userId },
       data: {
-        email: `deleted-${userId}@dejinzerat.invalid`, name: 'Smazaný uživatel', phone: null, phoneVerifiedAt: null, emailVerifiedAt: null, showPhone: false,
+        email: `deleted-${userId}@dejinzerat.invalid`, name: 'Smazaný uživatel', phone: null, phoneVerifiedAt: null, emailVerifiedAt: null, showPhone: false, showEmail: null,
         bio: null, avatarUrl: null, passwordHash: null, googleId: null, appleId: null, city: null, region: null, lastSeenAt: null, lastActiveAt: null,
         isBusiness: false, companyName: null, companyId: null, companyAddress: null, vatId: null, companyVerifiedAt: null, failedLogins: 0, lastFailedLoginAt: null, lockedUntil: null, status: 'BLOCKED',
       },

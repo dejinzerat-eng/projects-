@@ -11,7 +11,16 @@ export const ContactPhoneFields = {
   phone: z.string().trim().max(30).optional().refine((v) => !v || !!normalizePhone(v), { message: PHONE_FORMAT_ERROR }),
   /** „Neukazovat telefon – komunikovat jen přes zprávy“ */
   hidePhone: z.boolean().optional(),
+  /** „Neukazovat e-mail – komunikovat jen přes zprávy“ */
+  hideEmail: z.boolean().optional(),
 };
+
+/** Volba zobrazení e-mailu u inzerátů. `onlyIfUnset` = nepřepisovat, když se prodejce už rozhodl (odkaz pro existující účet). */
+export async function applyEmailVisibility(prisma: PrismaService, userId: string, showEmail: boolean, onlyIfUnset = false) {
+  // (NOT s NULL v SQL nefunguje, proto výslovně „nerozhodnuto nebo opačná volba“)
+  const r = await prisma.user.updateMany({ where: { id: userId, OR: onlyIfUnset ? [{ showEmail: null }] : [{ showEmail: null }, { showEmail: !showEmail }] }, data: { showEmail } });
+  return r.count > 0;
+}
 
 interface CurrentPhone { phone: string | null; phoneVerifiedAt: Date | null; showPhone: boolean }
 type PhoneUpdate = { phone?: string; phoneVerifiedAt?: null; showPhone?: boolean };

@@ -7,6 +7,7 @@ import { useToast } from './toast';
 
 interface SellerSettingsData {
   phone: string | null; phoneVerified: boolean; showPhone: boolean; phoneRequiresVerification?: boolean;
+  email?: string; emailVerified?: boolean; showEmail?: boolean | null;
   company: { ico: string | null; name: string | null; address: string | null; vatId: string | null; verifiedAt: string | null; status: 'verified' | 'unverified' | 'invalid' | 'none' } | null;
 }
 
@@ -38,7 +39,7 @@ export function SellerSettings({ refreshKey }: { refreshKey?: unknown }) {
   return (
     <section className="card p-5 sm:p-6">
       <h2 className="text-lg font-bold">Kontakt u inzerátů</h2>
-      <p className="mt-1 text-sm text-muted">E-mail nikdy nezveřejňujeme. Kupující vám mohou vždy napsat přes zprávy.</p>
+      <p className="mt-1 text-sm text-muted">Kupující vám mohou vždy napsat přes zprávy. Telefon a e-mail uvidí jen přihlášení uživatelé po kliknutí na tlačítko u inzerátu.</p>
       <div className="mt-5 space-y-4">
         <div>
           <label className="label" htmlFor="seller-phone">Telefon</label>
@@ -60,7 +61,7 @@ export function SellerSettings({ refreshKey }: { refreshKey?: unknown }) {
               <button type="button" disabled={busy} onClick={() => { if (confirm('Odebrat telefon z účtu? U inzerátů se přestane zobrazovat.')) void act(() => call('/me/phone', 'DELETE'), 'Telefon odebrán'); }} className="btn btn-ghost btn-sm">Odebrat</button>
             </div>
           )}
-          <p className="mt-1.5 text-xs text-muted">České nebo slovenské číslo. Bez vašeho souhlasu níže ho nikomu neukážeme.</p>
+          <p className="mt-1.5 text-xs text-muted">České nebo slovenské číslo. Jestli se u inzerátů ukáže, nastavíte níže.</p>
         </div>
 
         <label className={`flex items-start gap-3 ${canShow ? '' : 'opacity-60'}`}>
@@ -72,6 +73,18 @@ export function SellerSettings({ refreshKey }: { refreshKey?: unknown }) {
               {canShow ? 'Číslo uvidí jen přihlášení uživatelé po kliknutí na „Zobrazit telefon“.'
                 : d.phone ? 'Nejdřív si v části E-mail a telefon potvrďte číslo SMS kódem. Neověřené číslo nikomu neukážeme.'
                 : 'Nejdřív výše uložte telefonní číslo.'}
+            </span>
+          </span>
+        </label>
+
+        <label className="flex items-start gap-3">
+          <input type="checkbox" className="mt-0.5 size-5 shrink-0 accent-[var(--brand)]" checked={d.showEmail === true} disabled={busy}
+            onChange={(e) => { const v = e.target.checked; setD({ ...d, showEmail: v }); void act(() => call('/me/email-visibility', 'PATCH', { showEmail: v }), v ? 'E-mail se u inzerátů zobrazí' : 'E-mail je skrytý'); }} />
+          <span>
+            <span className="font-semibold">Zobrazovat e-mail u mých inzerátů</span>
+            <span className="mt-0.5 block text-sm text-muted">
+              {d.email && <>{d.email}. </>}
+              {d.emailVerified === false ? 'Ukáže se, až e-mail potvrdíte odkazem, který jsme vám poslali.' : 'Uvidí ho jen přihlášení po kliknutí na „Zobrazit e-mail“.'}
             </span>
           </span>
         </label>

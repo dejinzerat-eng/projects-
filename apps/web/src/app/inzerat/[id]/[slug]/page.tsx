@@ -25,7 +25,7 @@ interface Detail {
   condition: string | null; offerType: string; status: string; city: string; region: string; zip: string | null; attributes: Record<string, unknown>;
   videoUrl: string | null; views: number; publishedAt: string | null; createdAt: string; expiresAt: string;
   images: { url: string; thumbUrl: string }[]; category: { slug: string; name: string; parent: { slug: string; name: string } | null };
-  seller: { id: string; name: string; avatarUrl: string | null; city: string | null; createdAt: string; phoneVerified: boolean; emailVerified: boolean; isBusiness: boolean; companyName: string | null; companyVerified?: boolean; companyId?: string | null; lastSeenAt: string | null; rating: number | null; reviewCount: number; activeListings: number; hasPhone: boolean };
+  seller: { id: string; name: string; avatarUrl: string | null; city: string | null; createdAt: string; phoneVerified: boolean; emailVerified: boolean; isBusiness: boolean; companyName: string | null; companyVerified?: boolean; companyId?: string | null; lastSeenAt: string | null; rating: number | null; reviewCount: number; activeListings: number; hasPhone: boolean; hasEmail?: boolean };
   favorites: number; isFavorite: boolean; isOwner: boolean; filters: FilterDef[];
 }
 type Props = { params: Promise<{ id: string; slug: string }> };
@@ -132,7 +132,7 @@ export default async function Page({ params }: Props) {
           {!l.isOwner && ['ACTIVE', 'RESERVED'].includes(l.status) && (
             <div className="card p-5" id="kontakt">
               <h2 className="mb-3 font-bold">Napsat prodejci</h2>
-              <ContactBox listingId={l.id} loggedIn={!!me} hasPhone={l.seller.hasPhone} sellerName={l.seller.name} />
+              <ContactBox listingId={l.id} loggedIn={!!me} hasPhone={l.seller.hasPhone} hasEmail={!!l.seller.hasEmail} sellerName={l.seller.name} />
             </div>
           )}
           <Link href={`/uzivatel/${l.seller.id}`} className="card flex items-center gap-4 p-5 transition hover:shadow-pop">

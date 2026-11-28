@@ -19,7 +19,7 @@ import { anonymizeOps, buildExport, userFileUrls } from './gdpr';
 import { aresWebUrl, isValidIco } from './ico';
 import { trustScore } from './trust';
 import { keepsPhoneConsent } from './phone-consent';
-import { applyContactPhone, PHONE_FORMAT_ERROR } from './phone-contact';
+import { applyContactPhone, applyEmailVisibility, PHONE_FORMAT_ERROR } from './phone-contact';
 import { phoneRequiresVerification } from './phone-privacy';
 import { unreadCounts } from './unread';
 
@@ -34,6 +34,7 @@ const ProfileDto = z.object({
 });
 const PhoneDto = z.object({ phone: z.string({ error: 'Zadejte telefonní číslo.' }).trim().max(30).refine((v) => !!normalizePhone(v), PHONE_FORMAT_ERROR), showPhone: z.boolean().optional() });
 const PhoneVisibilityDto = z.object({ showPhone: z.boolean({ error: 'Neplatná hodnota.' }) });
+const EmailVisibilityDto = z.object({ showEmail: z.boolean({ error: 'Neplatná hodnota.' }) });
 const HistoryQuery = z.object({ page: z.coerce.number({ error: 'Neplatné číslo stránky.' }).int('Neplatné číslo stránky.').min(1, 'Neplatné číslo stránky.').max(500, 'Neplatné číslo stránky.').default(1) });
 
 const SavedSearchDto = z.object({ name: z.string().trim().min(1).max(120), query: z.record(z.string(), z.unknown()), notify: z.boolean().default(true) });
@@ -122,10 +123,11 @@ export class UsersController {
   @Auth()
   @Get('me/seller-settings')
   async sellerSettings(@CurrentUser() u: AuthUser) {
-    const x = await this.prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { phone: true, phoneVerifiedAt: true, showPhone: true, isBusiness: true, companyId: true, companyName: true, companyAddress: true, vatId: true, companyVerifiedAt: true } });
+    const x = await this.prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { phone: true, phoneVerifiedAt: true, showPhone: true, email: true, emailVerifiedAt: true, showEmail: true, isBusiness: true, companyId: true, companyName: true, companyAddress: true, vatId: true, companyVerifiedAt: true } });
     return {
       phone: x.phone, phoneVerified: !!x.phoneVerifiedAt && !!x.phone, showPhone: x.showPhone && !!x.phone,
       phoneRequiresVerification: phoneRequiresVerification(),
+      email: x.email, emailVerified: !!x.emailVerifiedAt, showEmail: x.showEmail,
       company: x.isBusiness ? { ico: x.companyId, name: x.companyName, address: x.companyAddress, vatId: x.vatId, verifiedAt: x.companyVerifiedAt, status: x.companyVerifiedAt ? 'verified' : !x.companyId ? 'none' : isValidIco(x.companyId) ? 'unverified' : 'invalid' } : null,
     };
   }
@@ -144,18 +146,26 @@ export class UsersController {
 
   /**
    * Uložení telefonu bez ověření SMS kódem (Nastavení i průvodce inzerátem). Nové číslo je neověřené;
-   * `showPhone` = zobrazovat u inzerátů. Bez něj se nové číslo uloží skryté a souhlas se dá zaškrtnutím zvlášť.
+   * `showPhone` = zobrazovat u inzerátů. Bez něj se nové číslo ukazuje (výchozí volba, skrýt jde zaškrtnutím).
    */
   @Auth()
   @Throttle({ default: { limit: 10, ttl: 600_000 } })
   @Put('me/phone')
   async savePhone(@CurrentUser() u: AuthUser, @Body(new ZodPipe(PhoneDto)) dto: z.infer<typeof PhoneDto>) {
     const cur = await this.prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { phone: true, showPhone: true } });
-    // bez showPhone (Nastavení) zůstává souhlas u stejného čísla, nové číslo začíná skryté
+    // bez showPhone (Nastavení) zůstává volba u stejného čísla, nové číslo se ve výchozím stavu ukazuje
     const sameNumber = keepsPhoneConsent(cur.phone, normalizePhone(dto.phone)!);
-    const changed = await applyContactPhone(this.prisma, u.id, dto.phone, dto.showPhone ?? (sameNumber && cur.showPhone));
+    const changed = await applyContactPhone(this.prisma, u.id, dto.phone, dto.showPhone ?? (sameNumber ? cur.showPhone : true));
     if (changed) await this.auth.flushUser(u.id);
     return { ok: true, changed };
+  }
+
+  /** Zobrazení e-mailu u inzerátů (ukáže se jen ověřený e-mail) */
+  @Auth()
+  @Patch('me/email-visibility')
+  async emailVisibility(@CurrentUser() u: AuthUser, @Body(new ZodPipe(EmailVisibilityDto)) dto: z.infer<typeof EmailVisibilityDto>) {
+    await applyEmailVisibility(this.prisma, u.id, dto.showEmail);
+    return { ok: true, showEmail: dto.showEmail };
   }
 
   /** Odebrání telefonu z účtu (zmizí i odznak ověřeného telefonu) */

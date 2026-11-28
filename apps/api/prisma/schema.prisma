@@ -101,8 +101,10 @@ model User {
   failedLogins      Int       @default(0)
   lastFailedLoginAt DateTime?
   lockedUntil       DateTime?
-  /// Telefon se u inzerátů ukáže jen s výslovným souhlasem (a jen ověřený)
+  /// Telefon se u inzerátů ukáže, jen když to prodejce povolil (v průvodci je to výchozí volba)
   showPhone         Boolean   @default(false)
+  /// E-mail u inzerátů: null = nerozhodnuto (neukazuje se), true/false = volba prodejce
+  showEmail         Boolean?
   /// Firma ověřená v registru ARES (obchodní jméno a sídlo z ARES)
   companyVerifiedAt DateTime?
   companyAddress    String?

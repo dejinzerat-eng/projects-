@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { User } from '@prisma/client';
 import { ClientInfo, clientInfo } from '../auth/audit';
 import { termsOutdated } from '../users/terms';
-import { applyContactPhone, ContactPhoneFields } from '../users/phone-contact';
+import { applyContactPhone, applyEmailVisibility, ContactPhoneFields } from '../users/phone-contact';
 import { AuthService } from '../auth/auth.service';
 import { AuthUser, SESSION_COOKIE } from '../common/auth.guard';
 import { verifyCaptcha } from '../common/captcha';
@@ -64,13 +64,14 @@ export class GuestListingController {
       throw new HttpException('Z tohoto připojení bylo bez přihlášení vloženo už hodně inzerátů. Zkuste to za hodinu, nebo se zaregistrujte.', HttpStatus.TOO_MANY_REQUESTS);
     }
 
-    const { email: _e, name: _n, terms: _t, captcha: _c, existingAccount: _x, phone, hidePhone, ...listing } = dto;
+    const { email: _e, name: _n, terms: _t, captcha: _c, existingAccount: _x, phone, hidePhone, hideEmail, ...listing } = dto;
     const showPhone = !!phone && !hidePhone;
+    const showEmail = !hideEmail;
     await this.listings.precheck({ ...listing, publish: true });
 
     // Existující účet: do účtu nic nezapíšeme, dokud majitel e-mailu neklikne na odkaz
     if (decision === 'login' && existing) {
-      const dev = await this.auth.sendExistingAccountListingLink(existing, { listing: { ...listing, publish: true }, guestOwner: guestOwnerOf(req), ...(phone ? { contact: { phone, showPhone } } : {}) }, listing.title);
+      const dev = await this.auth.sendExistingAccountListingLink(existing, { listing: { ...listing, publish: true }, guestOwner: guestOwnerOf(req), contact: { ...(phone ? { phone, showPhone } : {}), showEmail } }, listing.title);
       return { ok: true, email, existingAccount: true, ...dev };
     }
 
@@ -85,6 +86,8 @@ export class GuestListingController {
     try {
       // Telefon u nového účtu: zobrazí se, až bude inzerát po potvrzení e-mailu aktivní
       if (phone) await applyContactPhone(this.prisma, user.id, phone, showPhone);
+      // E-mail se ukáže až po jeho potvrzení (zveřejnění inzerátu), a jen když ho prodejce neskryl
+      await applyEmailVisibility(this.prisma, user.id, showEmail);
       await this.listings.claimGuestImages(owner, user.id, listing.imageIds);
       created = await this.listings.create(authUser, { ...listing, publish: false }, { strict: true });
     } catch (e) {
@@ -140,7 +143,8 @@ export class GuestListingController {
     }
     await this.listings.claimGuestImages(pending.guestOwner, user.id, dto.imageIds);
     // Číslo, které už účet má, odkaz nepřepíše (o změně čísla rozhoduje majitel v nastavení)
-    if (pending.contact) await applyContactPhone(this.prisma, user.id, pending.contact.phone, pending.contact.showPhone, true).catch(() => false);
+    if (pending.contact?.phone) await applyContactPhone(this.prisma, user.id, pending.contact.phone, !!pending.contact.showPhone, true).catch(() => false);
+    if (typeof pending.contact?.showEmail === 'boolean') await applyEmailVisibility(this.prisma, user.id, pending.contact.showEmail, true);
     try {
       const r = await this.listings.create(authUser, dto);
       return { ok: true, listing: { id: r.id, slug: r.slug, status: r.status }, hasPassword: !!user.passwordHash };

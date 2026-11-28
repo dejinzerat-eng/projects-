@@ -14,7 +14,7 @@ import { nextExpiry, nextStatus, REVIEW_SCORE } from './lifecycle';
 import { assessListing } from './moderation';
 import { priceInCzk } from './price';
 import { isPriceAnomaly, LOW_PRICE_REASON, pickPriceStats, PRICE_ANOMALY_MIN_SAMPLE, PRICE_ANOMALY_SCORE, PRICED_OFFER_TYPES, type PriceStats } from './price-anomaly';
-import { canRevealPhone } from '../users/phone-privacy';
+import { canRevealEmail, canRevealPhone } from '../users/phone-privacy';
 
 const VideoUrl = z.string().trim().max(500)
   .refine((u) => !u || !!parseVideoUrl(u), { message: VIDEO_URL_ERROR })
@@ -328,7 +328,7 @@ export class ListingsService {
       where: { id },
       include: {
         images: { orderBy: { position: 'asc' } }, category: { include: { parent: true } },
-        user: { select: { id: true, name: true, avatarUrl: true, city: true, createdAt: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, companyId: true, companyVerifiedAt: true, lastSeenAt: true, phone: true, showPhone: true } },
+        user: { select: { id: true, name: true, avatarUrl: true, city: true, createdAt: true, phoneVerifiedAt: true, emailVerifiedAt: true, isBusiness: true, companyName: true, companyId: true, companyVerifiedAt: true, lastSeenAt: true, phone: true, showPhone: true, email: true, showEmail: true, status: true } },
       },
     });
     const isOwner = !!viewer && viewer.id === l?.userId;
@@ -343,14 +343,14 @@ export class ListingsService {
       this.prisma.favorite.count({ where: { listingId: id } }),
       viewer ? this.prisma.favorite.findUnique({ where: { userId_listingId: { userId: viewer.id, listingId: id } } }).then(Boolean) : false,
     ]);
-    const { phone, showPhone, companyVerifiedAt, ...seller } = l.user;
+    const { phone, showPhone, companyVerifiedAt, email, showEmail, status: sellerStatus, ...seller } = l.user;
     // Obchodní jméno a odznak jen u firmy s IČO ověřeným v ARES (stejně jako na profilu); jinak jméno osoby
     const companyVerified = seller.isBusiness && !!companyVerifiedAt && !!seller.companyId;
     // Interní údaje automatické kontroly vidí jen tým (jinak by šlo kontrolu obcházet)
     const { spamScore, riskReasons, contentHash: _hash, composeSeconds, ...pub } = l;
     return {
       ...pub, ...(staff ? { spamScore, riskReasons, composeSeconds } : {}), user: undefined, rejectReason: staff || viewer?.id === l.userId ? l.rejectReason : undefined,
-      seller: { ...seller, companyName: companyVerified ? seller.companyName : null, companyVerified, phoneVerified: !!l.user.phoneVerifiedAt, emailVerified: !!l.user.emailVerifiedAt, phoneVerifiedAt: undefined, emailVerifiedAt: undefined, rating: rating._avg.rating, reviewCount: rating._count, activeListings: activeCount, hasPhone: canRevealPhone(l.status, { phone, phoneVerifiedAt: l.user.phoneVerifiedAt, showPhone }, false) },
+      seller: { ...seller, companyName: companyVerified ? seller.companyName : null, companyVerified, phoneVerified: !!l.user.phoneVerifiedAt, emailVerified: !!l.user.emailVerifiedAt, phoneVerifiedAt: undefined, emailVerifiedAt: undefined, rating: rating._avg.rating, reviewCount: rating._count, activeListings: activeCount, hasPhone: canRevealPhone(l.status, { phone, phoneVerifiedAt: l.user.phoneVerifiedAt, showPhone }, false), hasEmail: canRevealEmail(l.status, { email, emailVerifiedAt: l.user.emailVerifiedAt, showEmail, status: sellerStatus }, false) },
       favorites: favCount, isFavorite, isOwner: !!isOwner, filters: l.category.parent ? effectiveFilters(l.category.parent.slug, l.category.parent.filters, l.category.slug, l.category.filters) : [],
     };
   }
@@ -361,6 +361,14 @@ export class ListingsService {
     if (!l?.user.phone || !canRevealPhone(l.status, l.user, blocked)) throw new NotFoundException('Prodejce telefon nezveřejnil.');
     if ((await this.redis.incr(`phone:${viewer.id}`, 86400)) > 50) throw new BadRequestException('Denní limit zobrazení telefonu vyčerpán.');
     return { phone: l.user.phone };
+  }
+
+  async revealEmail(id: string, viewer: AuthUser) {
+    const l = await this.prisma.listing.findUnique({ where: { id }, include: { user: { select: { email: true, emailVerifiedAt: true, showEmail: true, status: true } } } });
+    const blocked = !!l && l.userId !== viewer.id && (await this.prisma.block.count({ where: { OR: [{ blockerId: l.userId, blockedId: viewer.id }, { blockerId: viewer.id, blockedId: l.userId }] } })) > 0;
+    if (!l || !canRevealEmail(l.status, l.user, blocked)) throw new NotFoundException('Prodejce e-mail nezveřejnil.');
+    if ((await this.redis.incr(`email:${viewer.id}`, 86400)) > 50) throw new BadRequestException('Denní limit zobrazení e-mailu vyčerpán.');
+    return { email: l.user.email };
   }
 
   async similar(id: string) {
