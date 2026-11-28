@@ -330,6 +330,23 @@ export class AuthService {
       `<p>Když odkaz vyprší, použijte na ${escapeHtml(site)} „Zapomenuté heslo“.</p>`);
   }
 
+  /**
+   * Pozvánka partnerovi s XML importem: jeho nabídky se na webu zobrazují pod firemním účtem, heslo si nastaví přes odkaz
+   * (platí 14 dní, jen jednou). Po přihlášení vidí statistiky a zprávy od zájemců.
+   */
+  async sendPartnerInvite(user: { id: string; email: string; name: string }, listingCount: number) {
+    const token = await this.issueToken(user.id, 'PASSWORD_RESET', 60 * 24 * 14);
+    const link = `${config.webOrigin}/obnova-hesla?token=${token}`;
+    const site = config.webOrigin.replace(/^https?:\/\//, '');
+    await this.send(user.email, 'Přístup k vašemu firemnímu účtu na DEJINZERAT.cz',
+      `<p>Dobrý den,</p>` +
+      `<p>vaše nabídky${listingCount ? ` (${listingCount})` : ''} se na ${escapeHtml(site)} zobrazují automaticky z vašeho XML feedu pod firemním účtem <b>${escapeHtml(user.name)}</b> (${escapeHtml(user.email)}).</p>` +
+      `<p>Heslo k účtu si nastavíte zde (odkaz platí 14 dní a lze ho použít jen jednou):</p>` +
+      `<p><a href="${link}">${link}</a></p>` +
+      `<p>Po přihlášení uvidíte zprávy od zájemců a statistiky nabídek. Nabídky upravujte ve svém systému – změny se k nám přenesou při další synchronizaci.</p>` +
+      `<p>Když odkaz vyprší, použijte na ${escapeHtml(site)} „Zapomenuté heslo“.</p>`);
+  }
+
   async forgotPassword(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (!user || user.status === 'BLOCKED') return; // neprozrazujeme existenci účtu

@@ -73,6 +73,9 @@ jobs:
       - name: Inzerát bez registrace (celý průběh s e-mailem)
         run: pnpm --filter @dej/api guest:e2e
 
+      - name: Import nabídek partnerů z XML feedu (falešný web partnera, celý průběh)
+        run: pnpm --filter @dej/api feeds:e2e
+
       - name: Zabalení API pro Vercel
         working-directory: apps/api
         run: node scripts/bundle.mjs

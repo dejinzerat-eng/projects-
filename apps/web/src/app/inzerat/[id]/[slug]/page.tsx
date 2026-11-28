@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, permanentRedirect, redirect } from 'next/navigation';
-import { BadgeCheck, Building2, CalendarDays, Eye, Heart, MapPin, Pencil, Star } from 'lucide-react';
+import { BadgeCheck, Building2, CalendarDays, ExternalLink, Eye, Heart, MapPin, Pencil, Star } from 'lucide-react';
 import { Avatar } from '@/components/avatar';
 import { CompareBar, CompareToggle } from '@/components/compare';
 import { ContactBox } from '@/components/contact-box';
@@ -27,6 +27,8 @@ interface Detail {
   images: { url: string; thumbUrl: string }[]; category: { slug: string; name: string; parent: { slug: string; name: string } | null };
   seller: { id: string; name: string; avatarUrl: string | null; city: string | null; createdAt: string; phoneVerified: boolean; emailVerified: boolean; isBusiness: boolean; companyName: string | null; companyVerified?: boolean; companyId?: string | null; lastSeenAt: string | null; rating: number | null; reviewCount: number; activeListings: number; hasPhone: boolean };
   favorites: number; isFavorite: boolean; isOwner: boolean; filters: FilterDef[];
+  /** Nabídka partnera z XML feedu: odkaz na jeho web */
+  sourceUrl?: string | null;
 }
 type Props = { params: Promise<{ id: string; slug: string }> };
 
@@ -151,6 +153,12 @@ export default async function Page({ params }: Props) {
             </div>
           </Link>
           <SellerStatus isBusiness={l.seller.isBusiness} companyName={l.seller.companyName} companyId={l.seller.companyId} />
+          {l.sourceUrl && /^https?:\/\//.test(l.sourceUrl) && (
+            <a href={l.sourceUrl} target="_blank" rel="nofollow noopener noreferrer" className="card flex items-center gap-3 p-4 text-sm font-medium transition hover:shadow-pop">
+              <ExternalLink className="size-[18px] shrink-0 text-muted" />
+              <span className="min-w-0 flex-1">Nabídka na webu prodejce<span className="block truncate text-xs font-normal text-muted">{new URL(l.sourceUrl).hostname.replace(/^www\./, '')}</span></span>
+            </a>
+          )}
         </aside>
       </div>
 

@@ -347,7 +347,7 @@ export class ListingsService {
     // Obchodní jméno a odznak jen u firmy s IČO ověřeným v ARES (stejně jako na profilu); jinak jméno osoby
     const companyVerified = seller.isBusiness && !!companyVerifiedAt && !!seller.companyId;
     // Interní údaje automatické kontroly vidí jen tým (jinak by šlo kontrolu obcházet)
-    const { spamScore, riskReasons, contentHash: _hash, composeSeconds, ...pub } = l;
+    const { spamScore, riskReasons, contentHash: _hash, composeSeconds, feedHash: _feedHash, legacyHash: _legacyHash, ...pub } = l;
     return {
       ...pub, ...(staff ? { spamScore, riskReasons, composeSeconds } : {}), user: undefined, rejectReason: staff || viewer?.id === l.userId ? l.rejectReason : undefined,
       seller: { ...seller, companyName: companyVerified ? seller.companyName : null, companyVerified, phoneVerified: !!l.user.phoneVerifiedAt, emailVerified: !!l.user.emailVerifiedAt, phoneVerifiedAt: undefined, emailVerifiedAt: undefined, rating: rating._avg.rating, reviewCount: rating._count, activeListings: activeCount, hasPhone: canRevealPhone(l.status, { phone, phoneVerifiedAt: l.user.phoneVerifiedAt, showPhone }, false) },
