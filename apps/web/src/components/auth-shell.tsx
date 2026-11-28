@@ -3,7 +3,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
   return (
     <div className="container-x flex justify-center py-10 sm:py-16">
       <div className="w-full max-w-[420px]">
-        <Wordmark className="mx-auto h-8 w-auto" title="Dejinzerat.cz" />
+        <Wordmark className="mx-auto h-8 w-auto" title="DEJINZERAT.cz" />
         <h1 className="h-display mt-5 text-center text-3xl font-bold">{title}</h1>
         {subtitle && <p className="mt-2 text-center text-muted">{subtitle}</p>}
         <div className="card mt-8 p-6 sm:p-8">{children}</div>

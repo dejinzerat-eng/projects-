@@ -26,7 +26,7 @@ type Props = { params: Promise<{ id: string }> };
 const load = (id: string) => api<Profile>(`/users/${id}`).catch(() => notFound());
 
 const MONTHS_GEN = ['ledna', 'února', 'března', 'dubna', 'května', 'června', 'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
-/** „listopadu 2026“ – měsíc ve 2. pádě pro větu „Na Dejinzeratu od …“ */
+/** „listopadu 2026“ – měsíc ve 2. pádě pro větu „Na DEJINZERAT.cz od …“ */
 const since = (iso: string) => {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Prague', month: 'numeric', year: 'numeric' }).formatToParts(new Date(iso));
   const get = (t: string) => Number(parts.find((x) => x.type === t)?.value);
@@ -65,7 +65,7 @@ export default async function Page({ params }: Props) {
                   {p.isBusiness && <span className="inline-flex items-center gap-1"><Building2 className="size-4" />Firma</span>}
                   {p.city && <span className="inline-flex items-center gap-1"><MapPin className="size-4" />{p.city}</span>}
                 </div>
-                <p className="mt-1 inline-flex items-center gap-1 text-sm text-muted"><CalendarDays className="size-4" />Na Dejinzeratu od {since(p.createdAt)}</p>
+                <p className="mt-1 inline-flex items-center gap-1 text-sm text-muted"><CalendarDays className="size-4" />Na DEJINZERAT.cz od {since(p.createdAt)}</p>
               </div>
             </div>
             <h2 className="sr-only">Stav ověření</h2>

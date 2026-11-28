@@ -14,7 +14,7 @@ const body = Onest({ subsets: ['latin', 'latin-ext'], variable: '--font-body', d
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
-  title: { default: HOME_TITLE, template: '%s | Dejinzerat.cz' },
+  title: { default: HOME_TITLE, template: '%s | DEJINZERAT.cz' },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
   ...social({ title: HOME_TITLE, description: SITE_DESCRIPTION }),

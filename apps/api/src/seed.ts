@@ -6,7 +6,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import sharp from 'sharp';
 import { StorageService } from './media/storage.service';
-import { hashContent, pagePlan, SEED_PAGES } from './seed-pages';
+import { hashContent, pagePlan, rebrandPage, SEED_PAGES } from './seed-pages';
 
 const prisma = new PrismaClient();
 const storage = new StorageService();
@@ -163,11 +163,11 @@ async function main() {
   console.log('Kategorie…');
   for (const [i, c] of CATEGORIES.entries()) {
     const parent = (await prisma.category.findFirst({ where: { slug: c.slug, parentId: null } })) ?? (await prisma.category.create({
-      data: { slug: c.slug, name: c.name, icon: c.icon, position: i, filters: c.filters as unknown as Prisma.InputJsonValue, seoTitle: `${c.name} – inzeráty z celé ČR | Dejinzerat.cz`, seoDescription: `Bazar a inzerce v kategorii ${c.name}. Tisíce nabídek od soukromých prodejců i firem, rychlé hledání a bezpečná komunikace.` },
+      data: { slug: c.slug, name: c.name, icon: c.icon, position: i, filters: c.filters as unknown as Prisma.InputJsonValue, seoTitle: `${c.name} – inzeráty z celé ČR | DEJINZERAT.cz`, seoDescription: `Bazar a inzerce v kategorii ${c.name}. Tisíce nabídek od soukromých prodejců i firem, rychlé hledání a bezpečná komunikace.` },
     }));
     for (const [j, s] of c.children.entries()) {
       const exists = await prisma.category.findFirst({ where: { slug: s.slug, parentId: parent.id } });
-      if (!exists) await prisma.category.create({ data: { slug: s.slug, name: s.name, parentId: parent.id, position: j, filters: (s.filters ?? []) as unknown as Prisma.InputJsonValue, seoTitle: `${s.name} – ${c.name} | Dejinzerat.cz`, seoDescription: `${s.name}: aktuální inzeráty, nové i použité. Prodávejte a nakupujte bezpečně na Dejinzerat.cz.` } });
+      if (!exists) await prisma.category.create({ data: { slug: s.slug, name: s.name, parentId: parent.id, position: j, filters: (s.filters ?? []) as unknown as Prisma.InputJsonValue, seoTitle: `${s.name} – ${c.name} | DEJINZERAT.cz`, seoDescription: `${s.name}: aktuální inzeráty, nové i použité. Prodávejte a nakupujte bezpečně na DEJINZERAT.cz.` } });
     }
   }
 
@@ -194,6 +194,13 @@ async function main() {
     else if (plan === 'update') await prisma.page.update({ where: { slug: def.slug }, data });
     else if (existing && !existing.description) await prisma.page.update({ where: { slug: def.slug }, data: { description: def.description, updatedAt: existing.updatedAt } });
     if (plan !== 'skip') console.log(`  stránka ${def.slug}: ${plan === 'create' ? 'vytvořena' : 'aktualizována'}`);
+  }
+
+  // Starý zápis značky „Dejinzerat.cz“ → „DEJINZERAT.cz“ i ve stránkách upravených v administraci
+  const anyBrand = { contains: 'dejinzerat.cz', mode: 'insensitive' as const };
+  for (const page of await prisma.page.findMany({ where: { OR: [{ title: anyBrand }, { content: anyBrand }, { description: anyBrand }] } })) {
+    const data = rebrandPage(page);
+    if (data) { await prisma.page.update({ where: { slug: page.slug }, data: { ...data, updatedAt: page.updatedAt } }); console.log(`  stránka ${page.slug}: název značky přepsán na DEJINZERAT.cz`); }
   }
 
   // Seedovaný admin je hlavní administrátor (i v existující databázi), dokud žádný hlavní administrátor není.

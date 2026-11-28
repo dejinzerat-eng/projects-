@@ -55,18 +55,18 @@ export async function landingMetadata(l: Landing, sp: SP): Promise<Metadata> {
   const count = res?.total ?? sub?.count ?? cat?.count ?? 0;
   let title: string, description: string;
   if (city && name) {
-    title = `${name} ${city.name} – inzeráty a bazar | Dejinzerat.cz`;
-    description = `${name} v lokalitě ${city.name}: ${plural(count, 'aktuální nabídka', 'aktuální nabídky', 'aktuálních nabídek')} od soukromých inzerentů i firem. Inzerujte zdarma na Dejinzerat.cz.`;
+    title = `${name} ${city.name} – inzeráty a bazar | DEJINZERAT.cz`;
+    description = `${name} v lokalitě ${city.name}: ${plural(count, 'aktuální nabídka', 'aktuální nabídky', 'aktuálních nabídek')} od soukromých inzerentů i firem. Inzerujte zdarma na DEJINZERAT.cz.`;
   } else if (city) {
-    title = `Inzeráty ${city.name} – bazar a inzerce zdarma | Dejinzerat.cz`;
+    title = `Inzeráty ${city.name} – bazar a inzerce zdarma | DEJINZERAT.cz`;
     description = `Aktuální inzeráty z lokality ${city.name}: ${plural(count, 'nabídka', 'nabídky', 'nabídek')} – auta, reality, elektronika, nábytek, práce a služby. Inzerce zdarma.`;
   } else {
     const s = sub ?? cat!;
-    title = s.seoTitle ?? (sub ? `${sub.name} – ${cat!.name} | Dejinzerat.cz` : `${cat!.name} – inzeráty z celé ČR | Dejinzerat.cz`);
+    title = s.seoTitle ?? (sub ? `${sub.name} – ${cat!.name} | DEJINZERAT.cz` : `${cat!.name} – inzeráty z celé ČR | DEJINZERAT.cz`);
     description = s.seoDescription ?? `Inzeráty v kategorii ${name} z celé ČR – ${plural(count, 'nabídka', 'nabídky', 'nabídek')} od soukromých inzerentů i firem. Rychlé hledání, bezpečná komunikace a inzerce zdarma.`;
   }
   // Vlastní SEO titulek z administrace nemusí končit značkou – číslo strany doplníme vždy (jinak duplicitní titulky)
-  if (n > 1) title = / \| Dejinzerat\.cz$/.test(title) ? title.replace(/ \| Dejinzerat\.cz$/, ` – strana ${n} | Dejinzerat.cz`) : `${title} – strana ${n}`;
+  if (n > 1) title = / \| DEJINZERAT\.cz$/i.test(title) ? title.replace(/ \| DEJINZERAT\.cz$/i, ` – strana ${n} | DEJINZERAT.cz`) : `${title} – strana ${n}`;
   if (n > 1) description = `Strana ${n}. ${description}`;
   const canonical = listCanonical(l.path, sp.strana);
   // Kombinace filtrů a prázdné lokality neindexujeme (odkazy ale sledujeme)

@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import { CITIES, slugify, type City } from '@dej/shared';
 
 export const SITE = (process.env.NEXT_PUBLIC_SITE_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:3000')).replace(/\/$/, '');
-export const SITE_NAME = 'Dejinzerat.cz';
+export const SITE_NAME = 'DEJINZERAT.cz';
 /** Výchozí SEO úvodní stránky – v administraci (Správa SEO) je lze přepsat. */
-export const HOME_TITLE = 'Dejinzerat.cz – moderní inzerce a bazar zdarma';
+export const HOME_TITLE = 'DEJINZERAT.cz – moderní inzerce a bazar zdarma';
 /** Výchozí meta description webu (a tedy i úvodní stránky). */
 export const SITE_DESCRIPTION = 'Prodávejte a nakupujte rychle a bezpečně. Inzeráty zdarma z celé České republiky: auta, reality, elektronika, mobily, nábytek, oblečení a další.';
 /** Výchozí popis úvodní stránky pro sdílení (Open Graph). */

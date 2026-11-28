@@ -23,7 +23,7 @@ export function LogoMark({ className = 'size-8' }: { className?: string }) {
 
 export function Logo() {
   return (
-    <Link href="/" className="flex shrink-0 items-center" aria-label="Dejinzerat.cz – úvodní stránka">
+    <Link href="/" className="flex shrink-0 items-center" aria-label="DEJINZERAT.cz – úvodní stránka">
       <Wordmark className="h-[22px] w-auto sm:h-7" />
     </Link>
   );

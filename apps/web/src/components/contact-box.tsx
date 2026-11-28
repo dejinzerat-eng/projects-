@@ -46,7 +46,7 @@ export function ContactBox({ listingId, loggedIn, hasPhone, hasEmail = false, se
         : <button type="button" onClick={reveal} className="btn btn-outline w-full"><Phone className="size-4" />Zobrazit telefon</button>)}
       {hasEmail && (email ? <a href={`mailto:${email}`} className="btn btn-outline w-full min-w-0"><Mail className="size-4 shrink-0" /><span className="truncate">{email}</span></a>
         : <button type="button" onClick={revealEmail} className="btn btn-outline w-full"><Mail className="size-4" />Zobrazit e-mail</button>)}
-      <p className="flex items-start gap-2 text-xs leading-relaxed text-muted"><ShieldCheck className="mt-px size-4 shrink-0 text-trust" />Nikdy neplaťte předem neznámým prodejcům a neposílejte údaje z karty. Komunikujte přes zprávy Dejinzerat.cz.</p>
+      <p className="flex items-start gap-2 text-xs leading-relaxed text-muted"><ShieldCheck className="mt-px size-4 shrink-0 text-trust" />Nikdy neplaťte předem neznámým prodejcům a neposílejte údaje z karty. Komunikujte přes zprávy DEJINZERAT.cz.</p>
     </form>
   );
 }

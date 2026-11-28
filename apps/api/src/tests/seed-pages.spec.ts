@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { DRAFT_NOTE, hashContent, OLD_PLACEHOLDERS, pagePlan, SEED_PAGES } from '../seed-pages';
+import { DRAFT_NOTE, hashContent, OLD_PLACEHOLDERS, pagePlan, rebrandPage, SEED_PAGES } from '../seed-pages';
 
 const def = (slug: string) => SEED_PAGES.find((p) => p.slug === slug)!;
 
@@ -44,5 +44,33 @@ describe('SEED_PAGES', () => {
   it('DSA stránka popisuje náležitosti oznámení a kontaktní místo', () => {
     const c = def('nahlasovani-obsahu').content;
     for (const s of ['dobré víře', 'URL', 'Jednotné kontaktní místo', '{{dsa_email}}', '/nahlasit-obsah']) assert.ok(c.includes(s), s);
+  });
+});
+
+describe('rebrandPage', () => {
+  it('přepíše Dejinzerat.cz na DEJINZERAT.cz, adresy a e-maily nechá', () => {
+    const content = 'Portál Dejinzerat.cz – podpora: podpora@dejinzerat.cz, web https://www.dejinzerat.cz';
+    const r = rebrandPage({ title: 'O Dejinzerat.cz', content, description: null, seededHash: null })!;
+    assert.equal(r.title, 'O DEJINZERAT.cz');
+    assert.equal(r.content, 'Portál DEJINZERAT.cz – podpora: podpora@dejinzerat.cz, web https://www.dejinzerat.cz');
+    assert.equal(r.description, null);
+    assert.equal(r.seededHash, null);
+  });
+  it('neupravenému znění ze seedu dá nový otisk, upravenému ponechá', () => {
+    const content = 'Text Dejinzerat.cz';
+    assert.equal(rebrandPage({ title: 'T', content, description: 'x', seededHash: hashContent(content) })!.seededHash, hashContent('Text DEJINZERAT.cz'));
+    assert.equal(rebrandPage({ title: 'T', content, description: 'x', seededHash: 'jiny' })!.seededHash, 'jiny');
+  });
+  it('sjednotí i jiné zápisy, adresy a e-maily nechá', () => {
+    const r = rebrandPage({ title: 'DEJinzerat.cz - moderní inzerce', content: 'DEJINZERAT.CZ, DejInzerat.cz, www.Dejinzerat.cz, info@Dejinzerat.cz, https://Dejinzerat.cz/x, dejinzerat.cz', description: '(Dejinzerat.cz)', seededHash: null })!;
+    assert.equal(r.title, 'DEJINZERAT.cz - moderní inzerce');
+    assert.equal(r.content, 'DEJINZERAT.cz, DEJINZERAT.cz, www.Dejinzerat.cz, info@Dejinzerat.cz, https://Dejinzerat.cz/x, dejinzerat.cz');
+    assert.equal(r.description, '(DEJINZERAT.cz)');
+  });
+  it('je opakovatelné – podruhé už nic nemění', () => {
+    assert.equal(rebrandPage({ title: 'DEJINZERAT.cz', content: 'DEJINZERAT.cz', description: 'DEJINZERAT.cz', seededHash: null }), null);
+  });
+  it('v nových textech seedu starý zápis není', () => {
+    for (const p of SEED_PAGES) assert.ok(!/Dejinzerat\.cz/.test(p.title + p.description + p.content), p.slug);
   });
 });

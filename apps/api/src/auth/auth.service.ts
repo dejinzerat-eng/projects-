@@ -38,7 +38,7 @@ export class AuthService {
 
   /** E-mail s jednoduchým rámcem; text v `body` musí být už escapovaný. */
   private send(to: string, subject: string, body: string) {
-    return this.mail.send(to, `${subject} – Dejinzerat.cz`, `${body}<p style="color:#667085;font-size:13px">Tým Dejinzerat.cz</p>`);
+    return this.mail.send(to, `${subject} – DEJINZERAT.cz`, `${body}<p style="color:#667085;font-size:13px">Tým DEJINZERAT.cz</p>`);
   }
 
   /** `company` = firemní údaje z resolveCompany (firma s IČO), u soukromé osoby se nevyplňuje. */
@@ -211,7 +211,7 @@ export class AuthService {
     const link = `${config.webOrigin}/potvrzeni-inzeratu?token=${token}`;
     await this.send(user.email, 'Zveřejnit inzerát ve vašem účtu?',
       `<p>Dobrý den, ${escapeHtml(user.name)},</p>` +
-      `<p>na Dejinzerat.cz byl s vaším e-mailem vyplněn inzerát <b>„${escapeHtml(title)}“</b>. Protože u nás už máte účet, zveřejníme ho ve vašem účtu, jakmile to potvrdíte:</p>` +
+      `<p>na DEJINZERAT.cz byl s vaším e-mailem vyplněn inzerát <b>„${escapeHtml(title)}“</b>. Protože u nás už máte účet, zveřejníme ho ve vašem účtu, jakmile to potvrdíte:</p>` +
       `<p><a href="${link}" style="display:inline-block;background:#059669;color:#fff;padding:10px 18px;border-radius:10px;text-decoration:none;font-weight:600">Zveřejnit inzerát v mém účtu</a></p>` +
       `<p style="color:#667085;font-size:13px">Pokud tlačítko nefunguje, otevřete odkaz: <a href="${link}">${link}</a><br>Odkaz platí ${GUEST_LINK_HOURS / 24} dny, lze ho použít jen jednou a zároveň vás přihlásí. Potvrzením souhlasíte s aktuálními podmínkami používání a pravidly inzerování.</p>` +
       `<p>Pokud jste inzerát nevkládali vy, e-mail ignorujte – do vašeho účtu se nic neuloží.</p>`);
@@ -254,7 +254,7 @@ export class AuthService {
     const token = await this.issueToken(userId, 'EMAIL_CHANGE', 60 * 24, { target: email });
     const link = `${config.webOrigin}/overeni-emailu?token=${token}&zmena=1`;
     await this.send(email, 'Potvrďte nový e-mail',
-      `<p>Dobrý den, ${escapeHtml(user.name)},</p><p>pro dokončení změny e-mailu u účtu na Dejinzerat.cz otevřete tento odkaz (platí 24 hodin):</p><p><a href="${link}">${link}</a></p>`);
+      `<p>Dobrý den, ${escapeHtml(user.name)},</p><p>pro dokončení změny e-mailu u účtu na DEJINZERAT.cz otevřete tento odkaz (platí 24 hodin):</p><p><a href="${link}">${link}</a></p>`);
     await this.send(user.email, 'Žádost o změnu e-mailu',
       `<p>Dobrý den, ${escapeHtml(user.name)},</p><p>u vašeho účtu někdo požádal o změnu e-mailu na <b>${escapeHtml(email)}</b>. Změna proběhne až po potvrzení z nové adresy.</p>` +
       `<p>Pokud jste to nebyli vy, změňte si prosím heslo a v nastavení účtu odhlaste ostatní zařízení.</p>`);
@@ -284,7 +284,7 @@ export class AuthService {
     }
     // číslo se k účtu uloží až po ověření kódu
     const code = await this.issueToken(userId, 'PHONE_VERIFY', 10, { numeric: true, target: phone });
-    await this.sms.send(phone, `Dejinzerat.cz: váš ověřovací kód je ${code}`);
+    await this.sms.send(phone, `DEJINZERAT.cz: váš ověřovací kód je ${code}`);
     return process.env.NODE_ENV !== 'production' && !this.sms.enabled ? { devCode: code } : {};
   }
 
@@ -321,9 +321,9 @@ export class AuthService {
     const token = await this.issueToken(user.id, 'PASSWORD_RESET', 60 * 24 * 14);
     const link = `${config.webOrigin}/obnova-hesla?token=${token}`;
     const site = config.webOrigin.replace(/^https?:\/\//, '');
-    await this.send(user.email, 'Váš účet na novém Dejinzerat.cz',
+    await this.send(user.email, 'Váš účet na novém DEJINZERAT.cz',
       `<p>Dobrý den, ${escapeHtml(user.name)},</p>` +
-      `<p>web Dejinzerat.cz běží v nové verzi. Vaše inzeráty ze starého webu${listingCount ? ` (${listingCount})` : ''} jsme přenesli a založili jsme vám účet pro e-mail <b>${escapeHtml(user.email)}</b>.</p>` +
+      `<p>web DEJINZERAT.cz běží v nové verzi. Vaše inzeráty ze starého webu${listingCount ? ` (${listingCount})` : ''} jsme přenesli a založili jsme vám účet pro e-mail <b>${escapeHtml(user.email)}</b>.</p>` +
       `<p>Heslo ze starého webu z bezpečnostních důvodů nepřenášíme. Nové heslo si nastavíte zde (odkaz platí 14 dní a lze ho použít jen jednou):</p>` +
       `<p><a href="${link}">${link}</a></p>` +
       `<p>Po přihlášení můžete inzeráty upravit, prodloužit nebo smazat. Pokud účet nechcete, můžete ho v Nastavení účtu smazat i se všemi údaji, nebo nám napište a smažeme ho za vás.</p>` +
