@@ -59,7 +59,7 @@ export function Settings({ me, blocked, sessions, smsEnabled, welcome }: { me: A
   return (
     <div className="space-y-5">
       <h1 className="h-display text-3xl font-bold">Nastavení účtu</h1>
-      {welcome && <div className="rounded-2xl bg-trust-soft p-4 text-trust">Vítejte na Dejinzerat.cz! Poslali jsme vám e-mail k ověření adresy. Ověřte si také telefon – získáte odznak <b>Ověřený prodejce</b>.</div>}
+      {welcome && <div className="rounded-2xl bg-trust-soft p-4 text-trust">Vítejte na Dejinzerat.cz! Poslali jsme vám e-mail k ověření adresy. Telefon pro kupující si můžete doplnit v části <b>Kontakt u inzerátů</b>.</div>}
 
       <Section id="profil" title="Profil" desc="Jméno, fotka a lokalita se zobrazují u vašich inzerátů.">
         <div className="mb-5 flex items-center gap-4">
@@ -87,7 +87,7 @@ export function Settings({ me, blocked, sessions, smsEnabled, welcome }: { me: A
       </Section>
       <SellerSettings refreshKey={me} />
 
-      <Section id="overeni" title="E-mail a telefon" desc="Ověření prodejci mají u inzerátů zelený odznak a kupující jim víc důvěřují.">
+      <Section id="overeni" title={smsEnabled ? 'E-mail a telefon' : 'E-mail'} desc={smsEnabled ? 'Ověření prodejci mají u inzerátů zelený odznak a kupující jim víc důvěřují.' : 'Na e-mail vám posíláme upozornění na zprávy a odkaz pro obnovu hesla.'}>
         <div className="divide-y divide-line">
           <div className="pb-4">
             <div className="flex items-center gap-3">
@@ -112,22 +112,23 @@ export function Settings({ me, blocked, sessions, smsEnabled, welcome }: { me: A
             )}
           </div>
 
-          <div className="pt-4">
+          {/* Ověření telefonu SMS kódem – ukáže se jen se zapnutou SMS bránou (GoSMS). Číslo samotné se ukládá v části Kontakt u inzerátů. */}
+          {smsEnabled && <div className="pt-4">
             <div className="flex items-center gap-3">
               <Phone className="size-5 shrink-0 text-muted" />
               {me.phoneVerifiedAt && !phoneEdit ? <>
                 <span className="min-w-0 flex-1">{me.phone}</span><Verified />
-              </> : <span className="min-w-0 flex-1 text-sm text-muted">{smsEnabled ? 'Telefon ověříte kódem z SMS.' : 'Ověření telefonu brzy spustíme.'}</span>}
+              </> : <span className="min-w-0 flex-1 text-sm text-muted">Telefon ověříte kódem z SMS.</span>}
             </div>
-            {me.phoneVerifiedAt && !phoneEdit && smsEnabled && <div className="mt-2 pl-8"><button onClick={() => { setPhoneEdit(true); setPhone(''); }} className="btn btn-ghost btn-sm -ml-3">Změnit číslo</button></div>}
-            {phoneEdit && smsEnabled && (
+            {me.phoneVerifiedAt && !phoneEdit && <div className="mt-2 pl-8"><button onClick={() => { setPhoneEdit(true); setPhone(''); }} className="btn btn-ghost btn-sm -ml-3">Změnit číslo</button></div>}
+            {phoneEdit && (
               <form className="mt-3 flex flex-wrap gap-2 pl-8" onSubmit={(e) => { e.preventDefault(); void sendCode(); }}>
                 <input className="input min-w-0 flex-1 sm:max-w-56" type="tel" inputMode="tel" autoComplete="tel" placeholder="+420 777 123 456" value={phone} onChange={(e) => setPhone(e.target.value)} aria-label="Telefon" required />
                 <button className="btn btn-outline h-11">Poslat kód</button>
                 {me.phoneVerifiedAt && <button type="button" onClick={() => { setPhoneEdit(false); setCodeSent(null); }} className="btn btn-ghost h-11">Zrušit</button>}
               </form>
             )}
-            {codeSent !== null && phoneEdit && smsEnabled && (
+            {codeSent !== null && phoneEdit && (
               <form className="mt-3 ml-8 flex flex-wrap items-center gap-2 rounded-xl bg-surface-2 p-3" onSubmit={async (e) => {
                 e.preventDefault();
                 if (await run(() => call('/auth/phone/verify', 'POST', { code }), 'Telefon ověřen')) { setCodeSent(null); setPhoneEdit(false); }
@@ -137,7 +138,7 @@ export function Settings({ me, blocked, sessions, smsEnabled, welcome }: { me: A
                 {codeSent && <span className="text-xs text-muted">Testovací režim: kód {codeSent}</span>}
               </form>
             )}
-          </div>
+          </div>}
         </div>
       </Section>
 

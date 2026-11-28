@@ -20,4 +20,9 @@ describe('trustScore', () => {
     const r = trustScore({ ...base, emailVerified: true, phoneVerified: true, isBusiness: true, companyId: '1', companyVerified: true, createdAt: new Date(now - 5 * 365 * 864e5), ratingCount: 50, ratingAvg: 5, sold: 50 }, now);
     assert.equal(r.score, 100);
   });
+  it('bez SMS ověření řádek o telefonu chybí, ověřený telefon zůstane', () => {
+    assert.equal(trustScore(base, now, { phoneVerifiable: false }).breakdown.some((b) => b.label === 'Ověřený telefon'), false);
+    assert.equal(trustScore({ ...base, phoneVerified: true }, now, { phoneVerifiable: false }).breakdown.some((b) => b.label === 'Ověřený telefon' && b.ok), true);
+    assert.equal(trustScore(base, now).breakdown.some((b) => b.label === 'Ověřený telefon'), true);
+  });
 });

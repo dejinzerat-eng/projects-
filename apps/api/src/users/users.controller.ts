@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Header, Logger, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, Logger, NotFoundException, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { Prisma } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { Auth, AuthUser, CurrentUser } from '../common/auth.guard';
 import { config } from '../common/config';
 import { PrismaService } from '../common/prisma.service';
+import { SmsService } from '../common/mailer.service';
+import { normalizePhone } from '../legacy/legacy-map';
 import { ZodPipe } from '../common/zod';
 import { clientInfo } from '../auth/audit';
 import { AuthService } from '../auth/auth.service';
@@ -16,6 +18,8 @@ import { StorageService } from '../media/storage.service';
 import { anonymizeOps, buildExport, userFileUrls } from './gdpr';
 import { aresWebUrl, isValidIco } from './ico';
 import { trustScore } from './trust';
+import { keepsPhoneConsent } from './phone-consent';
+import { phoneRequiresVerification } from './phone-privacy';
 import { unreadCounts } from './unread';
 
 const ProfileDto = z.object({
@@ -27,6 +31,7 @@ const ProfileDto = z.object({
   companyId: z.string().trim().regex(/^\d{8}$/, 'IČO má 8 číslic.').optional().or(z.literal('')),
   avatarUrl: z.null({ error: 'Profilovou fotku nahrajte v nastavení účtu.' }).optional(), // fotku nahrává POST /auth/avatar, tady jde jen odstranit
 });
+const PhoneDto = z.object({ phone: z.string({ error: 'Zadejte telefonní číslo.' }).trim().max(30).refine((v) => !!normalizePhone(v), 'Zadejte platné české nebo slovenské číslo, např. +420 777 123 456.') });
 const PhoneVisibilityDto = z.object({ showPhone: z.boolean({ error: 'Neplatná hodnota.' }) });
 const HistoryQuery = z.object({ page: z.coerce.number({ error: 'Neplatné číslo stránky.' }).int('Neplatné číslo stránky.').min(1, 'Neplatné číslo stránky.').max(500, 'Neplatné číslo stránky.').default(1) });
 
@@ -39,7 +44,7 @@ const HISTORY_PAGE = 12;
 @Controller()
 export class UsersController {
   private log = new Logger('Users');
-  constructor(private prisma: PrismaService, private search: SearchService, private auth: AuthService, private storage: StorageService) {}
+  constructor(private prisma: PrismaService, private search: SearchService, private auth: AuthService, private storage: StorageService, private sms: SmsService) {}
 
   @Get('cities')
   cities() { return CITIES.map((c) => ({ name: c.name, region: c.region, zip: c.zip })); }
@@ -63,7 +68,7 @@ export class UsersController {
     const trust = trustScore({
       emailVerified: !!u.emailVerifiedAt, phoneVerified: !!u.phoneVerifiedAt, isBusiness: u.isBusiness, companyVerified, companyId: u.companyId,
       createdAt: u.createdAt, ratingCount: rating._count, ratingAvg: rating._avg.rating, sold,
-    });
+    }, Date.now(), { phoneVerifiable: this.sms.enabled });
     return {
       id: u.id, name: u.name, avatarUrl: u.avatarUrl, bio: u.bio, city: u.city, createdAt: u.createdAt, lastSeenAt: u.lastSeenAt, isBusiness: u.isBusiness,
       // Neověřený název firmy nezveřejňujeme (ochrana před vydáváním se za cizí firmu)
@@ -117,9 +122,9 @@ export class UsersController {
   @Get('me/seller-settings')
   async sellerSettings(@CurrentUser() u: AuthUser) {
     const x = await this.prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { phone: true, phoneVerifiedAt: true, showPhone: true, isBusiness: true, companyId: true, companyName: true, companyAddress: true, vatId: true, companyVerifiedAt: true } });
-    const verified = !!x.phoneVerifiedAt && !!x.phone;
     return {
-      phone: verified ? x.phone : null, phoneVerified: verified, showPhone: x.showPhone,
+      phone: x.phone, phoneVerified: !!x.phoneVerifiedAt && !!x.phone, showPhone: x.showPhone && !!x.phone,
+      phoneRequiresVerification: phoneRequiresVerification(),
       company: x.isBusiness ? { ico: x.companyId, name: x.companyName, address: x.companyAddress, vatId: x.vatId, verifiedAt: x.companyVerifiedAt, status: x.companyVerifiedAt ? 'verified' : !x.companyId ? 'none' : isValidIco(x.companyId) ? 'unverified' : 'invalid' } : null,
     };
   }
@@ -129,10 +134,30 @@ export class UsersController {
   async phoneVisibility(@CurrentUser() u: AuthUser, @Body(new ZodPipe(PhoneVisibilityDto)) dto: z.infer<typeof PhoneVisibilityDto>) {
     if (dto.showPhone) {
       const x = await this.prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { phone: true, phoneVerifiedAt: true } });
-      if (!x.phone || !x.phoneVerifiedAt) throw new BadRequestException('Nejdřív si ověřte telefonní číslo.');
+      if (!x.phone) throw new BadRequestException('Nejdřív si v nastavení uložte telefonní číslo.');
+      if (phoneRequiresVerification() && !x.phoneVerifiedAt) throw new BadRequestException('Nejdřív si ověřte telefonní číslo.');
     }
     await this.prisma.user.update({ where: { id: u.id }, data: { showPhone: dto.showPhone } });
     return { ok: true, showPhone: dto.showPhone };
+  }
+
+  /**
+   * Uložení telefonu bez ověření SMS kódem. Nové číslo je neověřené a souhlas se zobrazením
+   * u inzerátů (showPhone) se pro něj musí dát znovu. Stejné číslo (i v jiném zápisu) nic nemění.
+   */
+  @Auth()
+  @Throttle({ default: { limit: 10, ttl: 600_000 } })
+  @Put('me/phone')
+  async savePhone(@CurrentUser() u: AuthUser, @Body(new ZodPipe(PhoneDto)) dto: z.infer<typeof PhoneDto>) {
+    const phone = normalizePhone(dto.phone)!;
+    const cur = await this.prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { phone: true, phoneVerifiedAt: true, showPhone: true } });
+    if (keepsPhoneConsent(cur.phone, phone)) return { ok: true, phone: cur.phone, changed: false };
+    if (await this.prisma.user.findFirst({ where: { phone, phoneVerifiedAt: { not: null }, id: { not: u.id } }, select: { id: true } })) {
+      throw new BadRequestException('Toto číslo už je ověřené u jiného účtu.');
+    }
+    await this.prisma.user.update({ where: { id: u.id }, data: { phone, phoneVerifiedAt: null, showPhone: false } });
+    await this.auth.flushUser(u.id);
+    return { ok: true, phone, changed: true };
   }
 
   /** Odebrání telefonu z účtu (zmizí i odznak ověřeného telefonu) */
