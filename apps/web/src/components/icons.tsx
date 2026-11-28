@@ -9,11 +9,11 @@ export function CategoryIcon({ name, className, strokeWidth = 1.75 }: { name: st
 
 /** Barva každé kategorie (odstín pro dlaždici ikony). */
 const HUES: Record<string, [string, string]> = {
-  'auto-moto': ['#2563eb', '#60a5fa'], reality: ['#0e9f6e', '#34d399'], elektronika: ['#7c3aed', '#a78bfa'], mobily: ['#0891b2', '#22d3ee'],
-  pocitace: ['#4f46e5', '#818cf8'], nabytek: ['#b45309', '#f59e0b'], 'dum-zahrada': ['#15803d', '#4ade80'], obleceni: ['#db2777', '#f472b6'],
-  deti: ['#ea580c', '#fb923c'], sport: ['#dc2626', '#f87171'], zvirata: ['#a16207', '#facc15'], prace: ['#334155', '#64748b'],
-  sluzby: ['#0f766e', '#2dd4bf'], 'stroje-naradi': ['#c2410c', '#fb923c'], hudba: ['#9333ea', '#c084fc'], sberatelstvi: ['#a16207', '#fbbf24'],
-  knihy: ['#1d4ed8', '#93c5fd'], hobby: ['#be185d', '#f9a8d4'], potraviny: ['#65a30d', '#a3e635'], ostatni: ['#475569', '#94a3b8'],
+  'auto-moto': ['#2563eb', '#60a5fa'], reality: ['#0e9f6e', '#34d399'], elektronika: ['#7c3aed', '#a78bfa'], 'mobily-a-prislusenstvi': ['#0891b2', '#22d3ee'],
+  'pocitace-a-it': ['#4f46e5', '#818cf8'], 'nabytek-a-bydleni': ['#b45309', '#f59e0b'], 'dum-a-zahrada': ['#15803d', '#4ade80'], 'obleceni-a-obuv': ['#db2777', '#f472b6'],
+  'deti-a-kojenecke-potreby': ['#ea580c', '#fb923c'], 'sport-a-volny-cas': ['#dc2626', '#f87171'], 'zvirata-a-chovatelske-potreby': ['#a16207', '#facc15'], 'prace-a-brigady': ['#334155', '#64748b'],
+  'sluzby-a-remesla': ['#0f766e', '#2dd4bf'], 'stroje-a-naradi': ['#c2410c', '#fb923c'], 'hudba-a-hudebni-nastroje': ['#9333ea', '#c084fc'], 'sberatelstvi-a-starozitnosti': ['#a16207', '#fbbf24'],
+  'knihy-a-ucebnice': ['#1d4ed8', '#93c5fd'], 'hobby-a-volny-cas': ['#be185d', '#f9a8d4'], 'potraviny-a-zemedelstvi': ['#65a30d', '#a3e635'], ostatni: ['#475569', '#94a3b8'],
 };
 
 /** Barevná dlaždice kategorie. Varianta „soft“: pastelové pozadí a barevná ikona; „solid“: barevný přechod a bílá ikona. */

@@ -18,6 +18,10 @@ describe('kategorie', () => {
     }
   });
 
+  it('adresa každé kategorie a podkategorie odpovídá jejímu názvu', () => {
+    for (const c of CATEGORIES) for (const s of [c, ...c.children]) assert.equal(s.slug, slugify(s.name), `${s.name}: adresa ${s.slug}`);
+  });
+
   it('filtersFor vrací filtry kategorie', () => {
     for (const c of CATEGORIES) assert.ok(Array.isArray(filtersFor(c.slug, c.children[0].slug)));
   });
