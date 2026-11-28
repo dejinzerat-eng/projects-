@@ -338,7 +338,7 @@ export class AuthService {
     const token = await this.issueToken(user.id, 'PASSWORD_RESET', 60 * 24 * 14);
     const link = `${config.webOrigin}/obnova-hesla?token=${token}`;
     const site = config.webOrigin.replace(/^https?:\/\//, '');
-    await this.send(user.email, 'Přístup k vašemu firemnímu účtu na Dejinzerat.cz',
+    await this.send(user.email, 'Přístup k vašemu firemnímu účtu na DEJINZERAT.cz',
       `<p>Dobrý den,</p>` +
       `<p>vaše nabídky${listingCount ? ` (${listingCount})` : ''} se na ${escapeHtml(site)} zobrazují automaticky z vašeho XML feedu pod firemním účtem <b>${escapeHtml(user.name)}</b> (${escapeHtml(user.email)}).</p>` +
       `<p>Heslo k účtu si nastavíte zde (odkaz platí 14 dní a lze ho použít jen jednou):</p>` +

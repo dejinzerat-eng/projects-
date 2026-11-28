@@ -4,7 +4,7 @@
  * Podporované formáty:
  * - Heureka / Zboží.cz (SHOP › SHOPITEM, PARAM › PARAM_NAME + VAL) – běžný export e-shopů (Shoptet, Upgates…),
  * - Google Merchant (RSS item / Atom entry s poli g:id, g:price…),
- * - libovolné jiné XML (autobazary, realitní software, vlastní export „Dejinzerat XML“): opakující se položka
+ * - libovolné jiné XML (autobazary, realitní software, vlastní export „DEJINZERAT XML“): opakující se položka
  *   se najde sama a pole se přiřadí podle názvů (feed-map.ts), v administraci je lze přiřadit ručně.
  *
  * Každá položka se převede na plochý seznam polí „cesta → hodnoty“ (např. `IMGURL`, `foto/@url`, `param:Rok výroby`).

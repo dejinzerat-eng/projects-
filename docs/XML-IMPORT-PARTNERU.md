@@ -59,7 +59,7 @@ Feed může být v UTF-8 i windows-1250 / ISO-8859-2, může být komprimovaný 
 Sauto.cz a Sreality.cz používají pro import jiné rozhraní (XML-RPC), takže partner, který tam inzeruje, potřebuje
 z autobazarového/realitního softwaru **XML export** – většina programů ho umí, případně stačí formát níže.
 
-### Doporučený formát pro partnery bez feedu („Dejinzerat XML“)
+### Doporučený formát pro partnery bez feedu („DEJINZERAT XML“)
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -103,11 +103,11 @@ nebo koních), reality (dispozice, užitná plocha, vlastnictví, energetická t
 
 ## Šablona e-mailu pro oslovení partnerů
 
-> **Předmět:** Bezplatné zveřejnění vašich nabídek na Dejinzerat.cz
+> **Předmět:** Bezplatné zveřejnění vašich nabídek na DEJINZERAT.cz
 >
 > Dobrý den,
 >
-> provozujeme inzertní portál Dejinzerat.cz a rádi bychom na něm zdarma zveřejňovali i vaše nabídky.
+> provozujeme inzertní portál DEJINZERAT.cz a rádi bychom na něm zdarma zveřejňovali i vaše nabídky.
 > Nemusíte nic přepisovat ani vkládat ručně – stačí nám poslat odkaz na XML feed, který už nejspíš máte
 > (např. pro Heureku, Zboží.cz, Google Nákupy nebo export z autobazarového či realitního programu).
 >
@@ -120,5 +120,5 @@ nebo koních), reality (dispozice, užitná plocha, vlastnictví, energetická t
 > Rádi pomůžeme i s nastavením, pokud feed zatím nemáte.
 >
 > Děkujeme a přejeme hezký den
-> [Jméno], Dejinzerat.cz
+> [Jméno], DEJINZERAT.cz
 > [telefon] · [e-mail]
