@@ -59,7 +59,7 @@ export function Settings({ me, blocked, sessions, smsEnabled, welcome }: { me: A
   return (
     <div className="space-y-5">
       <h1 className="h-display text-3xl font-bold">Nastavení účtu</h1>
-      {welcome && <div className="rounded-2xl bg-trust-soft p-4 text-trust">Vítejte na Dejinzerat.cz! Poslali jsme vám e-mail k ověření adresy. Telefon pro kupující si můžete doplnit v části <b>Kontakt u inzerátů</b>.</div>}
+      {welcome && <div className="rounded-2xl bg-trust-soft p-4 text-trust">Vítejte na DEJINZERAT.cz! Poslali jsme vám e-mail k ověření adresy. Telefon pro kupující si můžete doplnit v části <b>Kontakt u inzerátů</b>.</div>}
 
       <Section id="profil" title="Profil" desc="Jméno, fotka a lokalita se zobrazují u vašich inzerátů.">
         <div className="mb-5 flex items-center gap-4">

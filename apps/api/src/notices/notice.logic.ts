@@ -102,7 +102,7 @@ export function mailTarget(url: string, webOrigin: string) {
     const u = new URL(url), own = new URL(webOrigin);
     if (u.hostname.replace(/^www\./, '') === own.hostname.replace(/^www\./, '')) return `${own.origin}${u.pathname}`;
   } catch { /* neplatná adresa */ }
-  return 'adresa mimo Dejinzerat.cz (uvedená ve formuláři)';
+  return 'adresa mimo DEJINZERAT.cz (uvedená ve formuláři)';
 }
 
 /** Escapování textu do HTML e-mailu. */

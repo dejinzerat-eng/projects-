@@ -27,7 +27,7 @@ export const config = {
   resendKey: process.env.RESEND_API_KEY,
   /** Adresa API Resend (v testech falešný server). */
   resendUrl: (process.env.RESEND_API_URL ?? 'https://api.resend.com').replace(/\/$/, ''),
-  mailFrom: process.env.MAIL_FROM ?? 'Dejinzerat.cz <noreply@dejinzerat.cz>',
+  mailFrom: process.env.MAIL_FROM ?? 'DEJINZERAT.cz <noreply@dejinzerat.cz>',
   s3: {
     endpoint: process.env.S3_ENDPOINT || undefined,
     region: process.env.S3_REGION || 'auto',

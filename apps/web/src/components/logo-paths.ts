@@ -1,5 +1,5 @@
 /**
- * Logo Dejinzerat.cz – převzato 1:1 z původního webu www.dejinzerat.cz (SVG, cca 15 let známý tvar).
+ * Logo DEJINZERAT.cz – převzato 1:1 z původního webu www.dejinzerat.cz (SVG, cca 15 let známý tvar).
  * Tvary písmen se nemění, mění se jen barvy (viz LOGO_COLORS a tokeny --logo-a / --logo-b v globals.css).
  */
 

@@ -2,7 +2,7 @@ import { Zap } from 'lucide-react';
 import { api } from '@/lib/api';
 import { price } from '@/lib/format';
 import { social } from '@/lib/seo';
-const description = 'Základní inzerát je na Dejinzerat.cz vždy zdarma. Přehled cen topování a zvýhodnění inzerátů.';
+const description = 'Základní inzerát je na DEJINZERAT.cz vždy zdarma. Přehled cen topování a zvýhodnění inzerátů.';
 export const metadata = { title: 'Ceník a zvýhodnění inzerátů', description, alternates: { canonical: '/cenik' }, ...social({ title: 'Ceník a zvýhodnění inzerátů', description, path: '/cenik' }) };
 type Item = { code: string; name: string; description: string | null; priceCzk: number; durationDays: number | null };
 export default async function Page() {

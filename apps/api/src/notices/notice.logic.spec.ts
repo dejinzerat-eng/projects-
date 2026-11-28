@@ -78,7 +78,7 @@ describe('ostatní', () => {
 describe('mailTarget', () => {
   it('v e-mailu ukáže jen adresu našeho webu, cizí odkaz ne', () => {
     assert.equal(mailTarget('https://www.dejinzerat.cz/inzerat/abc/x?utm=1', 'https://dejinzerat.cz'), 'https://dejinzerat.cz/inzerat/abc/x');
-    assert.equal(mailTarget('https://podvod.example/login', 'https://dejinzerat.cz'), 'adresa mimo Dejinzerat.cz (uvedená ve formuláři)');
-    assert.equal(mailTarget('https://dejinzerat.cz.podvod.example/', 'https://dejinzerat.cz'), 'adresa mimo Dejinzerat.cz (uvedená ve formuláři)');
+    assert.equal(mailTarget('https://podvod.example/login', 'https://dejinzerat.cz'), 'adresa mimo DEJINZERAT.cz (uvedená ve formuláři)');
+    assert.equal(mailTarget('https://dejinzerat.cz.podvod.example/', 'https://dejinzerat.cz'), 'adresa mimo DEJINZERAT.cz (uvedená ve formuláři)');
   });
 });

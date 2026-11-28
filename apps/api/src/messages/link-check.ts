@@ -113,8 +113,8 @@ export function assessLink(link: ParsedLink, ownHosts: string[] = []): { level: 
   if (BRAND_STEMS.some((b) => joined.includes(b)) || tokens.some((t) => BRAND_TOKENS.has(t)) || /ceska-?posta|cesk[ae]-?sporitelna|komercni-?banka/.test(flat)) {
     return { level: 'danger', reason: `Stránka ${uhost} se tváří jako dopravce, banka nebo bazar, ale není jejich oficiální adresou.` };
   }
-  if (PAY_WORDS.test(strip(link.path)) || PAY_WORDS.test(joined)) return { level: 'danger', reason: `Odkaz ${uhost} vede na platbu nebo „ověření“ mimo Dejinzerat.cz.` };
-  return { level: 'warn', reason: `Zpráva obsahuje odkaz na stránku mimo Dejinzerat.cz (${uhost}).` };
+  if (PAY_WORDS.test(strip(link.path)) || PAY_WORDS.test(joined)) return { level: 'danger', reason: `Odkaz ${uhost} vede na platbu nebo „ověření“ mimo DEJINZERAT.cz.` };
+  return { level: 'warn', reason: `Zpráva obsahuje odkaz na stránku mimo DEJINZERAT.cz (${uhost}).` };
 }
 
 export function foreignPhones(text: string): string[] {
@@ -130,7 +130,7 @@ export function foreignPhones(text: string): string[] {
   return out;
 }
 
-const ADVICE = 'Neklikejte na odkazy, nezadávejte údaje z platební karty ani přihlášení do banky a neplaťte předem. Dejinzerat.cz nikdy nechce platbu přes odkaz ve zprávě.';
+const ADVICE = 'Neklikejte na odkazy, nezadávejte údaje z platební karty ani přihlášení do banky a neplaťte předem. DEJINZERAT.cz nikdy nechce platbu přes odkaz ve zprávě.';
 
 /** Vyhodnotí zprávu. `ownHosts` = naše domény (web a úložiště fotek), které nevarují. */
 export function assessMessageSafety(body: string, ownHosts: string[] = []): MessageWarning | null {
@@ -152,7 +152,7 @@ export function assessMessageSafety(body: string, ownHosts: string[] = []): Mess
   if (!level) return null;
   return {
     level, reasons: reasons.slice(0, 4), advice: ADVICE,
-    title: level === 'danger' ? 'Pozor, tato zpráva může být podvod' : 'Opatrně s odkazy a přesunem mimo Dejinzerat.cz',
+    title: level === 'danger' ? 'Pozor, tato zpráva může být podvod' : 'Opatrně s odkazy a přesunem mimo DEJINZERAT.cz',
   };
 }
 

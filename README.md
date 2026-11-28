@@ -1,4 +1,4 @@
-# Dejinzerat.cz
+# DEJINZERAT.cz
 
 Moderní inzertní portál pro ČR a SR. Monorepo:
 
