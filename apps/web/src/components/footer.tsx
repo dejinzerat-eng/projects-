@@ -4,6 +4,7 @@ import { api } from '@/lib/api';
 import { getOperator, isPlaceholder } from '@/lib/operator';
 import { citySlug } from '@/lib/seo';
 import type { Category } from '@/lib/types';
+import { CookieSettingsLink } from './cookie-bar';
 import { Wordmark } from './logo';
 import { ThemeToggle } from './theme-toggle';
 
@@ -39,14 +40,9 @@ export async function Footer() {
         <div>
           <Wordmark className="h-7 w-auto" title="Dejinzerat.cz" />
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted">Jednoduchá a bezpečná inzerce pro celou Českou republiku.</p>
-          <address className="mt-5 space-y-1 text-sm not-italic text-muted">
-            <div className="font-semibold text-ink-2">Provozovatel</div>
-            <div>{op.name}</div>
-            <div>IČO {op.ico}</div>
-            <div>{op.address}</div>
-            {!isPlaceholder(op.registry) && <div>{op.registry}</div>}
-            <div className="pt-1"><a className="font-medium text-brand-ink hover:underline" href={`mailto:${op.email}`}>{op.email}</a>{!isPlaceholder(op.phone) && <> · <a className="hover:text-ink" href={`tel:${op.phone.replace(/\s/g, '')}`}>{op.phone}</a></>}</div>
-          </address>
+          <p className="mt-5 text-sm text-muted">
+            <a className="font-medium text-brand-ink hover:underline" href={`mailto:${op.email}`}>{op.email}</a>{!isPlaceholder(op.phone) && <> · <a className="hover:text-ink" href={`tel:${op.phone.replace(/\s/g, '')}`}>{op.phone}</a></>}
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-8 text-sm sm:grid-cols-4">
           <Col title="Kategorie" links={cats.slice(0, 8).map((c) => [`/kategorie/${c.slug}`, c.name])} />
@@ -55,7 +51,7 @@ export async function Footer() {
           <Col title="Právní" links={LEGAL as [string, string][]} />
         </div>
       </div>
-      <div className="border-t border-line"><div className="container-x flex items-center justify-between gap-4 py-5 text-xs text-muted"><span>© {new Date().getFullYear()} Dejinzerat.cz · {op.name}</span><ThemeToggle /></div></div>
+      <div className="border-t border-line"><div className="container-x flex items-center justify-between gap-4 py-5 text-xs text-muted"><span>© {new Date().getFullYear()} Dejinzerat.cz · <CookieSettingsLink className="hover:text-ink hover:underline" /></span><ThemeToggle /></div></div>
     </footer>
   );
 }

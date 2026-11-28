@@ -56,6 +56,8 @@ const REALITY = `<inzeraty>
 </inzeraty>`;
 
 const cats: CatRef[] = CATEGORIES.flatMap((p) => p.children.map((c) => ({ id: `${p.slug}/${c.slug}`, slug: c.slug, name: c.name, parentSlug: p.slug, parentName: p.name })));
+/** Kategorie podle zobrazených názvů (adresy kategorií se mohou změnit, názvy ne). */
+const named = (c: CatRef | null) => (c ? `${c.parentName} › ${c.name}` : null);
 const filtersOf = (id: string) => { const [p, c] = id.split('/'); const parent = CATEGORIES.find((x) => x.slug === p)!; return effectiveFilters(p, parent.filters, c, parent.children.find((x) => x.slug === c)!.filters ?? []); };
 
 describe('čtení XML feedu', () => {
@@ -129,7 +131,7 @@ describe('přiřazení polí a převod položky', () => {
     assert.equal(item.price, 289000);
     assert.equal(item.city, 'Brno');
     const cat = suggestCategory(item.category, cats, { attrs: item.attrs })!;
-    assert.equal(cat.id, 'auto-moto/osobni-auta');
+    assert.equal(named(cat), 'Auto-moto › Osobní automobily');
     assert.deepEqual(normalizeAttrs(item, filtersOf(cat.id)), { brand: 'Škoda', year: 2018, mileage: 125000, fuel: 'Nafta', gearbox: 'Automatická', body: 'Kombi', power: 110 });
     const vw = mapItem(f.items[1], map).item!;
     assert.equal(normalizeAttrs(vw, filtersOf(cat.id)).brand, 'Volkswagen');
@@ -143,7 +145,7 @@ describe('přiřazení polí a převod položky', () => {
     assert.equal(item.offer, 'RENT');
     assert.equal(item.zip, '15000');
     const cat = suggestCategory(item.category, cats, { offer: item.offer, attrs: item.attrs })!;
-    assert.equal(cat.id, 'reality/byty-pronajem');
+    assert.equal(named(cat), 'Reality › Byty k pronájmu');
     assert.deepEqual(normalizeAttrs(item, filtersOf(cat.id)), { offerType: 'Pronájem', layout: '2+kk', area: 54, ownership: 'Osobní', energy: 'C' });
   });
   it('ruční přiřazení má přednost, prázdné = nepoužít', () => {
@@ -169,7 +171,7 @@ describe('přiřazení polí a převod položky', () => {
     assert.equal(item!.price, 7500);
     assert.equal(item!.currency, 'CZK');
     assert.equal(item!.condition, 'USED');
-    assert.equal(suggestCategory(item!.category, cats)!.id, 'deti/kocarky');
+    assert.equal(named(suggestCategory(item!.category, cats)), 'Děti a kojenecké potřeby › Kočárky');
   });
 });
 
@@ -201,11 +203,11 @@ describe('hodnoty', () => {
     assert.equal(fieldKey('fotky/foto/@url'), 'url');
   });
   it('kategorie e-shopu podle názvu podkategorie', () => {
-    assert.equal(suggestCategory('Elektronika | Mobilní telefony', cats)!.id, 'mobily/mobilni-telefony');
-    assert.equal(suggestCategory('Elektronika > Chytré hodinky', cats)!.id, 'mobily/chytre-hodinky');
-    assert.equal(suggestCategory('Motocykly', cats)!.id, 'auto-moto/motorky');
-    assert.equal(suggestCategory('Prodej rodinného domu', cats)!.id, 'reality/domy');
-    assert.equal(suggestCategory('Garáže', cats)!.id, 'reality/garaze');
+    assert.equal(named(suggestCategory('Elektronika | Mobilní telefony', cats)), 'Mobily a příslušenství › Mobilní telefony');
+    assert.equal(named(suggestCategory('Elektronika > Chytré hodinky', cats)), 'Mobily a příslušenství › Chytré hodinky');
+    assert.equal(named(suggestCategory('Motocykly', cats)), 'Auto-moto › Motocykly a skútry');
+    assert.equal(named(suggestCategory('Prodej rodinného domu', cats)), 'Reality › Domy');
+    assert.equal(named(suggestCategory('Garáže', cats)), 'Reality › Garáže');
     assert.equal(suggestCategory('', cats), null);
   });
 });

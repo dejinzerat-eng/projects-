@@ -15,6 +15,7 @@ import { RedisService } from './common/redis.service';
 import { HealthController } from './health.controller';
 import { JobsController } from './jobs/jobs.controller';
 import { JobsService } from './jobs/jobs.service';
+import { GuestListingController } from './listings/guest-listing.controller';
 import { ListingsController } from './listings/listings.controller';
 import { ListingsService } from './listings/listings.service';
 import { MediaController } from './media/media.controller';
@@ -28,7 +29,7 @@ import { UsersController } from './users/users.controller';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }])],
-  controllers: [HealthController, AuthController, DiscoveryController, ListingsController, MessagesController, UsersController, MediaController, JobsController, NoticesController, NoticesAdminController, SeoController, SeoAdminController, LegacyAdminController, LegacyPublicController, FeedsAdminController, ...ADMIN_CONTROLLERS],
+  controllers: [HealthController, AuthController, DiscoveryController, GuestListingController, ListingsController, MessagesController, UsersController, MediaController, JobsController, NoticesController, NoticesAdminController, SeoController, SeoAdminController, LegacyAdminController, LegacyPublicController, FeedsAdminController, ...ADMIN_CONTROLLERS],
   providers: [
     PrismaService, RedisService, MailerService, SmsService, StorageService, SearchService, AuthService, ListingsService, JobsService, LegacyImportService, FeedImportService, ...ADMIN_PROVIDERS,
     { provide: APP_GUARD, useClass: ThrottlerGuard },

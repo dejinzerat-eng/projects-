@@ -278,26 +278,27 @@ export function normalizeAttrs(item: Pick<FeedItem, 'attrs' | 'offer'>, defs: Fi
 
 export interface CatRef { id: string; slug: string; name: string; parentSlug: string; parentName: string }
 
-/** Klíčová slova běžných kategorií feedů (autobazary, reality, e-shopy) → naše podkategorie. */
+/** Klíčová slova běžných kategorií feedů (autobazary, reality, e-shopy) → naše podkategorie
+ *  (adresa hlavní kategorie / zobrazený název podkategorie – název se nemění, i když se změní adresa). */
 const CATEGORY_RULES: [RegExp, string][] = [
-  [/\b(motocykl|motork|skutr|moped|ctyrkolk)/, 'auto-moto/motorky'],
-  [/\b(uzitkov|dodavk|nakladn|truck|tahac|autobus)/, 'auto-moto/uzitkova-vozidla'],
-  [/\b(karavan|obytn|privez|privesy)/, 'auto-moto/karavany'],
-  [/\b(pneu|pneumatik|disky|alu kola|kola a disky)/, 'auto-moto/pneu-kola'],
-  [/\b(nahradni dil|autodil|dily)/, 'auto-moto/nahradni-dily'],
-  [/\b(osobni|automobil|ojete vozy|ojeta auta|vozy|auta|car|cars|vehicle)/, 'auto-moto/osobni-auta'],
-  [/\b(garaz|parkovaci stani)/, 'reality/garaze'],
-  [/\b(chata|chaty|chalup|rekreacni)/, 'reality/chaty-chalupy'],
-  [/\b(pozem|parcel|zahrad[ay] k|louk|les\b|orna puda)/, 'reality/pozemky'],
-  [/\b(komercni|kancelar|sklad|obchodni prostor|nebytov|restaurac|hotel|vyrobni)/, 'reality/komercni'],
-  [/\b(rodinn|domy\b|dum\b|domu\b|domek|vila|vily|radov)/, 'reality/domy'],
-  [/\b(byt|byty|apartman|garsonier)/, 'reality/byty'],
+  [/\b(motocykl|motork|skutr|moped|ctyrkolk)/, 'auto-moto/Motocykly a skútry'],
+  [/\b(uzitkov|dodavk|nakladn|truck|tahac|autobus)/, 'auto-moto/Užitkové vozy'],
+  [/\b(karavan|obytn|privez|privesy)/, 'auto-moto/Karavany a přívěsy'],
+  [/\b(pneu|pneumatik|disky|alu kola|kola a disky)/, 'auto-moto/Pneumatiky a kola'],
+  [/\b(nahradni dil|autodil|dily)/, 'auto-moto/Náhradní díly'],
+  [/\b(osobni|automobil|ojete vozy|ojeta auta|vozy|auta|car|cars|vehicle)/, 'auto-moto/Osobní automobily'],
+  [/\b(garaz|parkovaci stani)/, 'reality/Garáže'],
+  [/\b(chata|chaty|chalup|rekreacni)/, 'reality/Chaty a chalupy'],
+  [/\b(pozem|parcel|zahrad[ay] k|louk|les\b|orna puda)/, 'reality/Pozemky'],
+  [/\b(komercni|kancelar|sklad|obchodni prostor|nebytov|restaurac|hotel|vyrobni)/, 'reality/Komerční prostory'],
+  [/\b(rodinn|domy\b|dum\b|domu\b|domek|vila|vily|radov)/, 'reality/Domy'],
+  [/\b(byt|byty|apartman|garsonier)/, 'reality/Byty na prodej'],
 ];
 
 /** Odhad naší podkategorie podle textu kategorie feedu (a parametrů). null = nevíme, použije se výchozí kategorie feedu. */
 export function suggestCategory(text: string, cats: CatRef[], hints: { offer?: 'SELL' | 'RENT'; attrs?: FeedItem['attrs'] } = {}): CatRef | null {
-  const bySlug = (s: string) => cats.find((c) => `${c.parentSlug}/${c.slug}` === s) ?? null;
-  const rent = (c: CatRef | null) => (c && c.parentSlug === 'reality' && c.slug === 'byty' && hints.offer === 'RENT' ? bySlug('reality/byty-pronajem') ?? c : c);
+  const byName = (s: string) => cats.find((c) => `${c.parentSlug}/${c.name}` === s) ?? null;
+  const rent = (c: CatRef | null) => (c && c.parentSlug === 'reality' && c.name === 'Byty na prodej' && hints.offer === 'RENT' ? byName('reality/Byty k pronájmu') ?? c : c);
   const segments = text.split(/\s*(?:\||>|›|»|\/|;|\\)\s*/).map(nk).filter(Boolean);
   // 1) přesná shoda názvu podkategorie (od nejkonkrétnější části)
   for (const seg of [...segments].reverse()) {
@@ -306,7 +307,7 @@ export function suggestCategory(text: string, cats: CatRef[], hints: { offer?: '
   }
   // 2) klíčová slova (autobazary, reality)
   const full = ` ${segments.join(' ')} `;
-  for (const [re, slug] of CATEGORY_RULES) if (re.test(full)) return rent(bySlug(slug));
+  for (const [re, target] of CATEGORY_RULES) if (re.test(full)) return rent(byName(target));
   // 3) shoda slov (kmen 5 znaků) s názvem podkategorie, nejkonkrétnější část má přednost
   const stems = (s: string) => s.split(' ').filter((w) => w.length >= 4).map((w) => w.slice(0, 5));
   for (const seg of [...segments].reverse()) {
@@ -322,7 +323,7 @@ export function suggestCategory(text: string, cats: CatRef[], hints: { offer?: '
   }
   // 4) podle parametrů: auto / nemovitost
   const a = hints.attrs ?? {};
-  if (a.brand && (a.mileage || a.fuel || a.gearbox)) return bySlug('auto-moto/osobni-auta');
-  if (a.layout || (a.area && a.ownership)) return rent(bySlug('reality/byty'));
+  if (a.brand && (a.mileage || a.fuel || a.gearbox)) return byName('auto-moto/Osobní automobily');
+  if (a.layout || (a.area && a.ownership)) return rent(byName('reality/Byty na prodej'));
   return null;
 }

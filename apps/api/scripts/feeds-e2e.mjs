@@ -191,7 +191,7 @@ try {
     assert.equal(o.price, 289000);
     assert.equal(o.city, 'Brno');
     assert.equal(o.description, 'Servisní knížka, nehavarováno.');
-    assert.equal(`${o.category.parent.slug}/${o.category.slug}`, 'auto-moto/osobni-auta');
+    assert.equal(`${o.category.parent.name} › ${o.category.name}`, 'Auto-moto › Osobní automobily');
     assert.deepEqual(o.attributes, { brand: 'Škoda', year: 2018, mileage: 125000, fuel: 'Nafta' });
     assert.equal(o.images.length, 2);
     assert.ok(o.images[0].url.includes(`feeds/${feedId}/`));

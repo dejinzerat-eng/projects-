@@ -12,6 +12,7 @@
     "vercel-build": "prisma generate && tsc -p tsconfig.json && prisma migrate deploy && node dist/seed.js && node scripts/bundle.mjs",
     "smoke": "node --env-file-if-exists=.env scripts/smoke.mjs",
     "legacy:e2e": "node --env-file-if-exists=.env scripts/legacy-e2e.mjs",
+    "guest:e2e": "node --env-file-if-exists=.env scripts/guest-e2e.mjs",
     "feeds:e2e": "node --env-file-if-exists=.env scripts/feeds-e2e.mjs"
   },
   "dependencies": {

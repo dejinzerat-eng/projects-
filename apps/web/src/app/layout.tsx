@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Onest } from 'next/font/google';
+import { CookieBar } from '@/components/cookie-bar';
 import { Footer } from '@/components/footer';
 import { Header } from '@/components/header';
 import { MobileNav } from '@/components/mobile-nav';
@@ -34,6 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {me?.termsOutdated && <TermsBanner />}
           <main id="obsah">{children}</main>
           <Footer />
+          <CookieBar />
           <MobileNav unread={me ? { messages: me.unreadMessages, notifications: me.unreadNotifications } : undefined} loggedIn={!!me} />
         </ToastProvider>
       </body>
