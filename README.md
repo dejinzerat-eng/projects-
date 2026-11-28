@@ -1,4 +1,4 @@
-# Dejinzerat.cz
+# DEJINZERAT.cz
 
 Moderní inzertní portál pro ČR a SR. Monorepo:
 
@@ -72,7 +72,8 @@ Web (`apps/web/.env.local`): `API_INTERNAL_URL`, `NEXT_PUBLIC_SITE_URL`, `NOINDE
 - Stránkování výpisů (`?strana=N`) má vlastní kanonickou adresu; kombinace filtrů, prázdné lokality a soukromé části (účet, zprávy, administrace, přidání inzerátu, přihlášení, hledání) mají `noindex`.
 - Strukturovaná data podle typu obsahu (`apps/web/src/lib/jsonld.ts`): Product, Car/Vehicle/Motorcycle (auto-moto), RealEstateListing (reality), JobPosting (práce), Service (služby), BreadcrumbList, ItemList (výpisy), WebSite + SearchAction a Organization (úvod), Person/Organization s hodnocením (profil).
 - Sitemapa: index `/sitemap.xml` → `/sitemap/static.xml` (úvod, kategorie z databáze, lokality, informační stránky), `/sitemap/inzeraty-N.xml` (všechny aktivní inzeráty po 10 000) a `/sitemap/profily-N.xml`. Data dává API `GET /seo/sitemap*`.
-- Lokální vstupní stránky: `/lokalita/praha`, `/kategorie/elektronika/mesto/brno`, `/kategorie/reality/byty/mesto/ostrava`.
+- Adresa kategorie je její název bez diakritiky, malými písmeny a s pomlčkami (např. „Osobní automobily“ → `/kategorie/auto-moto/osobni-automobily`); hlídá to test v `apps/api/src/tests/catalog.spec.ts`. Když se adresa později změní v administraci (Kategorie), stará adresa se automaticky trvale přesměruje.
+- Lokální vstupní stránky: `/lokalita/praha`, `/kategorie/elektronika/mesto/brno`, `/kategorie/reality/byty-na-prodej/mesto/ostrava`.
 - Smazané, zamítnuté a dávno neaktivní inzeráty se trvale (308) přesměrují do své kategorie (`?odstraneno=1` zobrazí vysvětlení). Neznámé adresy kategorií a stránek se dohledají v tabulce přesměrování (Administrace → SEO).
 
 ## Právní texty a DSA

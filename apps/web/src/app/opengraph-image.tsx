@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og';
 import { LOGO_COLORS, LOGO_PATH_A, LOGO_PATH_B, LOGO_RATIO, LOGO_VIEWBOX } from '@/components/logo-paths';
 
 /** Výchozí obrázek pro sdílení (Open Graph / Twitter), 1200 × 630. */
-export const alt = 'Dejinzerat.cz – moderní inzerce a bazar zdarma';
+export const alt = 'DEJINZERAT.cz – moderní inzerce a bazar zdarma';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 

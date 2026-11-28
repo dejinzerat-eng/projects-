@@ -18,7 +18,7 @@ import {
 import { operatorFromEnv } from './operator';
 
 const STATUS_TEXT = { RECEIVED: 'Přijato, čeká na posouzení', ACTION_TAKEN: 'Vyřízeno – obsah byl omezen', NO_ACTION: 'Vyřízeno – bez zásahu' } as const;
-const mail = (title: string, body: string) => `<div style="font-family:system-ui,sans-serif;max-width:560px;color:#1b1f24"><h2 style="font-size:20px">${title}</h2>${body}<p style="color:#69717a;font-size:13px;margin-top:24px">${esc(operatorFromEnv().name)} · Dejinzerat.cz · <a href="${config.webOrigin}/stranka/nahlasovani-obsahu">Jak vyřizujeme oznámení</a></p></div>`;
+const mail = (title: string, body: string) => `<div style="font-family:system-ui,sans-serif;max-width:560px;color:#1b1f24"><h2 style="font-size:20px">${title}</h2>${body}<p style="color:#69717a;font-size:13px;margin-top:24px">${esc(operatorFromEnv().name)} · DEJINZERAT.cz · <a href="${config.webOrigin}/stranka/nahlasovani-obsahu">Jak vyřizujeme oznámení</a></p></div>`;
 
 /** E-mail nesmí shodit už uložené oznámení nebo rozhodnutí (výpadek Resend apod.) – chybu jen zalogujeme. */
 const log = new Logger('Notices');

@@ -78,7 +78,7 @@ export async function buildExport(db: Db, userId: string, now = new Date()) {
 
   return stripSecrets({
     exportedAt: now.toISOString(),
-    about: 'Export všech osobních údajů, které o vás Dejinzerat.cz uchovává (čl. 15 a 20 GDPR). Hesla, přihlašovací tokeny a ověřovací kódy neexportujeme – uchováváme je jen v nevratně zašifrované podobě.',
+    about: 'Export všech osobních údajů, které o vás DEJINZERAT.cz uchovává (čl. 15 a 20 GDPR). Hesla, přihlašovací tokeny a ověřovací kódy neexportujeme – uchováváme je jen v nevratně zašifrované podobě.',
     account: { ...account, hasPassword: !!passwordHash, linkedAccounts: { google: !!googleId, apple: !!appleId } },
     company: { isBusiness, companyName, companyId, companyAddress, vatId, companyVerifiedAt },
     consents: {

@@ -13,7 +13,11 @@ export interface TrustInput {
   sold: number;
 }
 
-export function trustScore(t: TrustInput, now = Date.now()) {
+/**
+ * `phoneVerifiable` = jde telefon na webu ověřit (SMS brána zapnutá). Když ne, řádek „Ověřený telefon“
+ * v přehledu neukazujeme – jinak by u všech svítil křížek, který nejde nijak splnit.
+ */
+export function trustScore(t: TrustInput, now = Date.now(), { phoneVerifiable = true }: { phoneVerifiable?: boolean } = {}) {
   const ageDays = Math.max(0, (now - t.createdAt.getTime()) / 864e5);
   const score = Math.round(
     (t.emailVerified ? 15 : 0) + (t.phoneVerified ? 25 : 0) + Math.min(20, ageDays / 18) +
@@ -21,7 +25,7 @@ export function trustScore(t: TrustInput, now = Date.now()) {
   const age = ageDays < 30 ? 'méně než měsíc' : ageDays < 365 ? `${Math.floor(ageDays / 30)} měs.` : `${Math.floor(ageDays / 365)} r.`;
   const breakdown = [
     { label: 'Ověřený e-mail', ok: t.emailVerified },
-    { label: 'Ověřený telefon', ok: t.phoneVerified },
+    ...(t.phoneVerified || phoneVerifiable ? [{ label: 'Ověřený telefon', ok: t.phoneVerified }] : []),
     { label: `Na portálu ${age}`, ok: ageDays > 90 },
     { label: `${t.ratingCount} hodnocení po skutečné komunikaci`, ok: t.ratingCount > 0 },
     { label: `${t.sold} prodaných inzerátů`, ok: t.sold > 0 },

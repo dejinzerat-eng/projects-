@@ -38,16 +38,16 @@ export type OfferTypeValue = 'SELL' | 'BUY' | 'EXCHANGE' | 'GIVE' | 'RENT';
 
 /** Staré kategorie (id → adresa na starém webu a cíl v nové struktuře, když chybí podkategorie). */
 export const LEGACY_CATEGORIES: Record<number, { slug: string; name: string; fallback: [string, string] }> = {
-  1: { slug: 'auto-moto-lode', name: 'Auto, Moto, Lodě', fallback: ['auto-moto', 'osobni-auta'] },
-  2: { slug: 'prace-a-podnikani', name: 'Práce a podnikání', fallback: ['prace', 'nabidka-prace'] },
+  1: { slug: 'auto-moto-lode', name: 'Auto, Moto, Lodě', fallback: ['auto-moto', 'osobni-automobily'] },
+  2: { slug: 'prace-a-podnikani', name: 'Práce a podnikání', fallback: ['prace-a-brigady', 'nabidka-prace'] },
   3: { slug: 'nemovitosti', name: 'Nemovitosti', fallback: ['reality', 'domy'] },
-  4: { slug: 'elektro-a-pocitace', name: 'Elektro a počítače', fallback: ['pocitace', 'komponenty'] },
-  5: { slug: 'domacnost', name: 'Domácnost', fallback: ['nabytek', 'dekorace'] },
-  6: { slug: 'obleceni-a-obuv', name: 'Oblečení a obuv', fallback: ['obleceni', 'damske'] },
-  7: { slug: 'zvirata', name: 'Zvířata', fallback: ['zvirata', 'psi'] },
-  8: { slug: 'stavba-zahrada-stroje', name: 'Stavba, zahrada, stroje', fallback: ['dum-zahrada', 'stavebniny'] },
+  4: { slug: 'elektro-a-pocitace', name: 'Elektro a počítače', fallback: ['pocitace-a-it', 'komponenty'] },
+  5: { slug: 'domacnost', name: 'Domácnost', fallback: ['nabytek-a-bydleni', 'dekorace-a-doplnky'] },
+  6: { slug: 'obleceni-a-obuv', name: 'Oblečení a obuv', fallback: ['obleceni-a-obuv', 'damske-obleceni'] },
+  7: { slug: 'zvirata', name: 'Zvířata', fallback: ['zvirata-a-chovatelske-potreby', 'psi'] },
+  8: { slug: 'stavba-zahrada-stroje', name: 'Stavba, zahrada, stroje', fallback: ['dum-a-zahrada', 'stavebniny'] },
   9: { slug: 'zdravi-a-krasa', name: 'Zdraví a krása', fallback: ['ostatni', 'ruzne'] },
-  10: { slug: 'pro-deti', name: 'Pro děti', fallback: ['deti', 'hracky'] },
+  10: { slug: 'pro-deti', name: 'Pro děti', fallback: ['deti-a-kojenecke-potreby', 'hracky'] },
   11: { slug: 'hobby-a-zaliby', name: 'Hobby a záliby', fallback: ['ostatni', 'ruzne'] },
   12: { slug: 'volny-cas-a-zabava', name: 'Volný čas a zábava', fallback: ['ostatni', 'ruzne'] },
 };
@@ -55,82 +55,82 @@ export const LEGACY_CATEGORIES: Record<number, { slug: string; name: string; fal
 /** Staré podkategorie → [hlavní, podkategorie] v novém systému. */
 export const LEGACY_SUBCATEGORIES: Record<number, [string, string]> = {
   // Auto, Moto, Lodě
-  113: ['auto-moto', 'osobni-auta'], 114: ['auto-moto', 'uzitkova-vozidla'], 115: ['auto-moto', 'uzitkova-vozidla'],
-  116: ['auto-moto', 'motorky'], 117: ['auto-moto', 'nahradni-dily'], 118: ['auto-moto', 'nahradni-dily'],
-  119: ['auto-moto', 'auto-prislusenstvi'], 120: ['auto-moto', 'auto-prislusenstvi'],
+  113: ['auto-moto', 'osobni-automobily'], 114: ['auto-moto', 'uzitkove-vozy'], 115: ['auto-moto', 'uzitkove-vozy'],
+  116: ['auto-moto', 'motocykly-a-skutry'], 117: ['auto-moto', 'nahradni-dily'], 118: ['auto-moto', 'nahradni-dily'],
+  119: ['auto-moto', 'prislusenstvi'], 120: ['auto-moto', 'prislusenstvi'],
   // Práce a podnikání
-  4: ['prace', 'nabidka-prace'], 5: ['prace', 'hledam-praci'], 6: ['prace', 'brigady'],
+  4: ['prace-a-brigady', 'nabidka-prace'], 5: ['prace-a-brigady', 'hledam-praci'], 6: ['prace-a-brigady', 'brigady'],
   // Nemovitosti (pronájem, komerční prostory, garáže upřesní refine)
-  1: ['reality', 'byty'], 2: ['reality', 'domy'], 3: ['reality', 'pozemky'],
+  1: ['reality', 'byty-na-prodej'], 2: ['reality', 'domy'], 3: ['reality', 'pozemky'],
   // Elektro a počítače
-  7: ['elektronika', 'audio'], 8: ['mobily', 'mobilni-telefony'], 9: ['mobily', 'tablety'], 10: ['pocitace', 'stolni-pc'],
-  11: ['pocitace', 'notebooky'], 12: ['elektronika', 'herni-konzole'], 13: ['elektronika', 'herni-konzole'],
-  14: ['pocitace', 'site-servery'], 15: ['pocitace', 'periferie'], 16: ['pocitace', 'periferie'], 17: ['pocitace', 'periferie'],
+  7: ['elektronika', 'audio-technika'], 8: ['mobily-a-prislusenstvi', 'mobilni-telefony'], 9: ['mobily-a-prislusenstvi', 'tablety'], 10: ['pocitace-a-it', 'stolni-pocitace'],
+  11: ['pocitace-a-it', 'notebooky'], 12: ['elektronika', 'herni-konzole'], 13: ['elektronika', 'herni-konzole'],
+  14: ['pocitace-a-it', 'site-a-servery'], 15: ['pocitace-a-it', 'periferie-a-prislusenstvi'], 16: ['pocitace-a-it', 'periferie-a-prislusenstvi'], 17: ['pocitace-a-it', 'periferie-a-prislusenstvi'],
   // Domácnost
   18: ['elektronika', 'domaci-spotrebice'], 19: ['elektronika', 'domaci-spotrebice'], 20: ['elektronika', 'domaci-spotrebice'],
-  21: ['nabytek', 'kuchyne'], 22: ['nabytek', 'obyvaci-pokoj'], 23: ['nabytek', 'koupelna'], 24: ['nabytek', 'obyvaci-pokoj'], 25: ['nabytek', 'dekorace'],
+  21: ['nabytek-a-bydleni', 'kuchyne-a-jidelna'], 22: ['nabytek-a-bydleni', 'obyvaci-pokoj'], 23: ['nabytek-a-bydleni', 'koupelna'], 24: ['nabytek-a-bydleni', 'obyvaci-pokoj'], 25: ['nabytek-a-bydleni', 'dekorace-a-doplnky'],
   // Volný čas a zábava
-  26: ['hudba', 'desky'], 27: ['hudba', 'desky'], 28: ['hudba', 'studio'], 29: ['hudba', 'studio'], 30: ['knihy', 'beletrie'],
-  31: ['ostatni', 'vstupenky'], 32: ['ostatni', 'vstupenky'],
+  26: ['hudba-a-hudebni-nastroje', 'desky-cd-a-noty'], 27: ['hudba-a-hudebni-nastroje', 'desky-cd-a-noty'], 28: ['hudba-a-hudebni-nastroje', 'studio-a-ozvuceni'], 29: ['hudba-a-hudebni-nastroje', 'studio-a-ozvuceni'], 30: ['knihy-a-ucebnice', 'beletrie'],
+  31: ['ostatni', 'vstupenky-a-poukazy'], 32: ['ostatni', 'vstupenky-a-poukazy'],
   // Hobby a záliby
-  33: ['sberatelstvi', 'mince'], 34: ['hobby', 'modelarstvi'], 35: ['potraviny', 'farmarske'], 36: ['sberatelstvi', 'starozitnosti'],
-  37: ['sberatelstvi', 'starozitnosti'], 38: ['sberatelstvi', 'starozitnosti'], 39: ['obleceni', 'doplnky'], 40: ['sberatelstvi', 'umeni'],
-  41: ['ostatni', 'ruzne'], 42: ['sberatelstvi', 'znamky'], 43: ['ostatni', 'ruzne'],
+  33: ['sberatelstvi-a-starozitnosti', 'mince-a-bankovky'], 34: ['hobby-a-volny-cas', 'modelarstvi'], 35: ['potraviny-a-zemedelstvi', 'farmarske-potraviny'], 36: ['sberatelstvi-a-starozitnosti', 'starozitnosti'],
+  37: ['sberatelstvi-a-starozitnosti', 'starozitnosti'], 38: ['sberatelstvi-a-starozitnosti', 'starozitnosti'], 39: ['obleceni-a-obuv', 'doplnky-a-sperky'], 40: ['sberatelstvi-a-starozitnosti', 'obrazy-a-umeni'],
+  41: ['ostatni', 'ruzne'], 42: ['sberatelstvi-a-starozitnosti', 'znamky'], 43: ['ostatni', 'ruzne'],
   // Pro děti
-  44: ['deti', 'autosedacky'], 45: ['deti', 'detske-obleceni'], 46: ['deti', 'detske-obleceni'], 47: ['deti', 'detsky-nabytek'],
-  48: ['deti', 'detsky-nabytek'], 49: ['deti', 'hracky'], 50: ['sport', 'cyklistika'], 51: ['deti', 'kocarky'], 52: ['deti', 'kocarky'],
-  53: ['deti', 'detsky-nabytek'], 54: ['deti', 'detsky-nabytek'], 55: ['deti', 'hracky'], 56: ['deti', 'detsky-nabytek'],
-  57: ['deti', 'hracky'], 58: ['knihy', 'ucebnice'],
+  44: ['deti-a-kojenecke-potreby', 'autosedacky'], 45: ['deti-a-kojenecke-potreby', 'detske-obleceni'], 46: ['deti-a-kojenecke-potreby', 'detske-obleceni'], 47: ['deti-a-kojenecke-potreby', 'detsky-nabytek'],
+  48: ['deti-a-kojenecke-potreby', 'detsky-nabytek'], 49: ['deti-a-kojenecke-potreby', 'hracky'], 50: ['sport-a-volny-cas', 'cyklistika'], 51: ['deti-a-kojenecke-potreby', 'kocarky'], 52: ['deti-a-kojenecke-potreby', 'kocarky'],
+  53: ['deti-a-kojenecke-potreby', 'detsky-nabytek'], 54: ['deti-a-kojenecke-potreby', 'detsky-nabytek'], 55: ['deti-a-kojenecke-potreby', 'hracky'], 56: ['deti-a-kojenecke-potreby', 'detsky-nabytek'],
+  57: ['deti-a-kojenecke-potreby', 'hracky'], 58: ['knihy-a-ucebnice', 'ucebnice-a-skripta'],
   // Zdraví a krása (zboží nemá v nové struktuře vlastní kategorii, služby ano)
-  59: ['ostatni', 'ruzne'], 60: ['ostatni', 'ruzne'], 61: ['ostatni', 'ruzne'], 62: ['sluzby', 'krasa'], 63: ['sluzby', 'krasa'],
-  64: ['sluzby', 'krasa'], 65: ['ostatni', 'ruzne'],
+  59: ['ostatni', 'ruzne'], 60: ['ostatni', 'ruzne'], 61: ['ostatni', 'ruzne'], 62: ['sluzby-a-remesla', 'krasa-a-zdravi'], 63: ['sluzby-a-remesla', 'krasa-a-zdravi'],
+  64: ['sluzby-a-remesla', 'krasa-a-zdravi'], 65: ['ostatni', 'ruzne'],
   // Stavba, zahrada, stroje
-  66: ['dum-zahrada', 'bazeny'], 67: ['dum-zahrada', 'bazeny'], 68: ['stroje-naradi', 'dilna'], 69: ['stroje-naradi', 'dilna'],
-  70: ['dum-zahrada', 'rostliny'], 71: ['stroje-naradi', 'elektricke-naradi'], 72: ['dum-zahrada', 'vytapeni'],
-  73: ['dum-zahrada', 'zahradni-technika'], 74: ['potraviny', 'zemedelska-technika'], 75: ['stroje-naradi', 'dilna'],
+  66: ['dum-a-zahrada', 'bazeny-a-virivky'], 67: ['dum-a-zahrada', 'bazeny-a-virivky'], 68: ['stroje-a-naradi', 'dilenske-vybaveni'], 69: ['stroje-a-naradi', 'dilenske-vybaveni'],
+  70: ['dum-a-zahrada', 'rostliny-a-semena'], 71: ['stroje-a-naradi', 'elektricke-naradi'], 72: ['dum-a-zahrada', 'vytapeni-a-klimatizace'],
+  73: ['dum-a-zahrada', 'zahradni-technika'], 74: ['potraviny-a-zemedelstvi', 'zemedelska-technika'], 75: ['stroje-a-naradi', 'dilenske-vybaveni'],
   // Zvířata
-  76: ['zvirata', 'psi'], 77: ['zvirata', 'kocky'], 78: ['zvirata', 'akvaristika'], 79: ['zvirata', 'ptaci'],
-  80: ['potraviny', 'hospodarska-zvirata'], 81: ['zvirata', 'chovatelske-potreby'], 82: ['potraviny', 'hospodarska-zvirata'],
-  83: ['zvirata', 'psi'], 84: ['zvirata', 'psi'], 85: ['zvirata', 'hlodavci'], 86: ['zvirata', 'akvaristika'], 87: ['zvirata', 'chovatelske-potreby'],
+  76: ['zvirata-a-chovatelske-potreby', 'psi'], 77: ['zvirata-a-chovatelske-potreby', 'kocky'], 78: ['zvirata-a-chovatelske-potreby', 'akvaristika-a-teraristika'], 79: ['zvirata-a-chovatelske-potreby', 'ptaci'],
+  80: ['potraviny-a-zemedelstvi', 'hospodarska-zvirata'], 81: ['zvirata-a-chovatelske-potreby', 'chovatelske-potreby'], 82: ['potraviny-a-zemedelstvi', 'hospodarska-zvirata'],
+  83: ['zvirata-a-chovatelske-potreby', 'psi'], 84: ['zvirata-a-chovatelske-potreby', 'psi'], 85: ['zvirata-a-chovatelske-potreby', 'hlodavci'], 86: ['zvirata-a-chovatelske-potreby', 'akvaristika-a-teraristika'], 87: ['zvirata-a-chovatelske-potreby', 'chovatelske-potreby'],
   // Oblečení a obuv (bez rozlišení dámské/pánské – upřesní refine)
-  88: ['obleceni', 'obuv'], 89: ['obleceni', 'damske'], 90: ['obleceni', 'panske'], 91: ['obleceni', 'doplnky'], 92: ['obleceni', 'doplnky'],
-  93: ['obleceni', 'damske'], 94: ['obleceni', 'doplnky'], 95: ['obleceni', 'kabelky'], 96: ['obleceni', 'kabelky'], 97: ['obleceni', 'damske'],
-  98: ['obleceni', 'damske'], 99: ['obleceni', 'damske'], 100: ['obleceni', 'damske'], 101: ['obleceni', 'panske'], 102: ['obleceni', 'damske'],
-  103: ['obleceni', 'damske'], 104: ['obleceni', 'damske'], 105: ['obleceni', 'damske'], 106: ['obleceni', 'damske'], 107: ['obleceni', 'damske'],
-  108: ['obleceni', 'damske'], 109: ['obleceni', 'doplnky'], 110: ['obleceni', 'damske'], 111: ['obleceni', 'damske'], 112: ['obleceni', 'damske'],
+  88: ['obleceni-a-obuv', 'obuv'], 89: ['obleceni-a-obuv', 'damske-obleceni'], 90: ['obleceni-a-obuv', 'panske-obleceni'], 91: ['obleceni-a-obuv', 'doplnky-a-sperky'], 92: ['obleceni-a-obuv', 'doplnky-a-sperky'],
+  93: ['obleceni-a-obuv', 'damske-obleceni'], 94: ['obleceni-a-obuv', 'doplnky-a-sperky'], 95: ['obleceni-a-obuv', 'kabelky-a-tasky'], 96: ['obleceni-a-obuv', 'kabelky-a-tasky'], 97: ['obleceni-a-obuv', 'damske-obleceni'],
+  98: ['obleceni-a-obuv', 'damske-obleceni'], 99: ['obleceni-a-obuv', 'damske-obleceni'], 100: ['obleceni-a-obuv', 'damske-obleceni'], 101: ['obleceni-a-obuv', 'panske-obleceni'], 102: ['obleceni-a-obuv', 'damske-obleceni'],
+  103: ['obleceni-a-obuv', 'damske-obleceni'], 104: ['obleceni-a-obuv', 'damske-obleceni'], 105: ['obleceni-a-obuv', 'damske-obleceni'], 106: ['obleceni-a-obuv', 'damske-obleceni'], 107: ['obleceni-a-obuv', 'damske-obleceni'],
+  108: ['obleceni-a-obuv', 'damske-obleceni'], 109: ['obleceni-a-obuv', 'doplnky-a-sperky'], 110: ['obleceni-a-obuv', 'damske-obleceni'], 111: ['obleceni-a-obuv', 'damske-obleceni'], 112: ['obleceni-a-obuv', 'damske-obleceni'],
 };
 
 /** Upřesnění podle textu: [platí pro staré kategorie (prázdné = všechny), vzor v názvu/začátku popisu, cíl]. */
 const REFINE: { cats?: number[]; subs?: number[]; re: RegExp; to: [string, string] }[] = [
   // služby vložené mezi zboží nebo práci
-  { cats: [2, 5, 8, 11], re: /(tvorb\p{L}*\s+(\p{L}+\s+){0,3}(web|e-?shop)|webov\p{L}*\s+str[aá]nk|\bseo\b|marketing|reklam)/iu, to: ['sluzby', 'it-sluzby'] },
-  { cats: [2, 5, 8, 11], re: /(zatepl|sanac|hydroizolac|rekonstrukc|stavebn\p{L}*\s+pr[aá]c|hodinov\p{L}*\s+man[žz]el|anhydrit|n[aá]t[ěe]r\p{L}*\s+st[řr]ech|[čc]i[šs]t[ěe]n\p{L}*\s+(a\s+\p{L}+\s+)?st[řr]ech|v[ýy]m[ěe]n\p{L}*\s+oken|vlhkost\p{L}*\s+ve\s+zdivu|3d\s+tisk|tiskovin|orienta[čc]n\p{L}*\s+syst|firemn\p{L}*\s+n[aá]pis)/iu, to: ['sluzby', 'remesla'] },
-  { cats: [11, 12, 2], re: /(ubytov|penzion|azyl)/iu, to: ['hobby', 'vstupenky-zazitky'] },
+  { cats: [2, 5, 8, 11], re: /(tvorb\p{L}*\s+(\p{L}+\s+){0,3}(web|e-?shop)|webov\p{L}*\s+str[aá]nk|\bseo\b|marketing|reklam)/iu, to: ['sluzby-a-remesla', 'it-a-web'] },
+  { cats: [2, 5, 8, 11], re: /(zatepl|sanac|hydroizolac|rekonstrukc|stavebn\p{L}*\s+pr[aá]c|hodinov\p{L}*\s+man[žz]el|anhydrit|n[aá]t[ěe]r\p{L}*\s+st[řr]ech|[čc]i[šs]t[ěe]n\p{L}*\s+(a\s+\p{L}+\s+)?st[řr]ech|v[ýy]m[ěe]n\p{L}*\s+oken|vlhkost\p{L}*\s+ve\s+zdivu|3d\s+tisk|tiskovin|orienta[čc]n\p{L}*\s+syst|firemn\p{L}*\s+n[aá]pis)/iu, to: ['sluzby-a-remesla', 'remesla-a-opravy'] },
+  { cats: [11, 12, 2], re: /(ubytov|penzion|azyl)/iu, to: ['hobby-a-volny-cas', 'zazitky-a-cestovani'] },
   // reality
   { cats: [3], re: /gar[aá][žz]/iu, to: ['reality', 'garaze'] },
-  { cats: [3], re: /(sklad|v[ýy]robn|kancel[aá][řr]|komer[čc]n|\bhal[ay]?\b)/iu, to: ['reality', 'komercni'] },
-  { cats: [3], re: /(chat[ay]\b|chalup)/iu, to: ['reality', 'chaty-chalupy'] },
-  { cats: [3], subs: [1], re: /(pron[aá]j|podn[aá]j)/iu, to: ['reality', 'byty-pronajem'] },
+  { cats: [3], re: /(sklad|v[ýy]robn|kancel[aá][řr]|komer[čc]n|\bhal[ay]?\b)/iu, to: ['reality', 'komercni-prostory'] },
+  { cats: [3], re: /(chat[ay]\b|chalup)/iu, to: ['reality', 'chaty-a-chalupy'] },
+  { cats: [3], subs: [1], re: /(pron[aá]j|podn[aá]j)/iu, to: ['reality', 'byty-k-pronajmu'] },
   // zvířata
-  { cats: [7], re: /(ko[čc]k|kot[ěe]|ko[ťt]at|kocour|sphynx|britsk\p{L}*\s+kr[aá]tkosrst)/iu, to: ['zvirata', 'kocky'] },
-  { cats: [7], re: /(papou[šs]|\bpt[aá][kc]|andulk|korel)/iu, to: ['zvirata', 'ptaci'] },
-  { cats: [7], subs: [85, 83, 84], re: /(\bps[ií]k|\bpes\b|[šs]t[ěe]n|fenk)/iu, to: ['zvirata', 'psi'] },
+  { cats: [7], re: /(ko[čc]k|kot[ěe]|ko[ťt]at|kocour|sphynx|britsk\p{L}*\s+kr[aá]tkosrst)/iu, to: ['zvirata-a-chovatelske-potreby', 'kocky'] },
+  { cats: [7], re: /(papou[šs]|\bpt[aá][kc]|andulk|korel)/iu, to: ['zvirata-a-chovatelske-potreby', 'ptaci'] },
+  { cats: [7], subs: [85, 83, 84], re: /(\bps[ií]k|\bpes\b|[šs]t[ěe]n|fenk)/iu, to: ['zvirata-a-chovatelske-potreby', 'psi'] },
   // auto
   { cats: [1], subs: [113], re: /(n[aá]hradn\p{L}*\s+d[ií]l|servo[čc]erpadl|h[řr]ebenov)/iu, to: ['auto-moto', 'nahradni-dily'] },
   // domácnost
   { cats: [5], re: /(kart[aá][čc]ek|vysava[čc]|[čc]isti[čc]k\p{L}*\s+vzduchu|lednic|pra[čc]k|my[čc]k|mikrovln|k[aá]vovar|spot[řr]ebi[čc])/iu, to: ['elektronika', 'domaci-spotrebice'] },
   // stavba, zahrada, stroje
-  { cats: [8], re: /(plastov\p{L}*\s+okn|\bokn[oa]\b|st[řr]e[šs]n\p{L}*\s+okn|posuvn\p{L}*\s+dve[řr]|dve[řr]e|hs\s+port[aá]l|stavebnin)/iu, to: ['dum-zahrada', 'stavebniny'] },
-  { cats: [8], re: /(dumper|bagr|rypadl|m[ií]cha[čc]k|le[šs]en[ií]|vibra[čc]n)/iu, to: ['stroje-naradi', 'stavebni-stroje'] },
-  { cats: [8], subs: [73], re: /(alt[aá]n|pergol|domek|zahradn\p{L}*\s+n[aá]bytek)/iu, to: ['dum-zahrada', 'zahradni-nabytek'] },
-  { cats: [8], subs: [73], re: /(d[řr]evin|rostlin|semen|sazenic|statice|limonk|stromk|ke[řr]e)/iu, to: ['dum-zahrada', 'rostliny'] },
+  { cats: [8], re: /(plastov\p{L}*\s+okn|\bokn[oa]\b|st[řr]e[šs]n\p{L}*\s+okn|posuvn\p{L}*\s+dve[řr]|dve[řr]e|hs\s+port[aá]l|stavebnin)/iu, to: ['dum-a-zahrada', 'stavebniny'] },
+  { cats: [8], re: /(dumper|bagr|rypadl|m[ií]cha[čc]k|le[šs]en[ií]|vibra[čc]n)/iu, to: ['stroje-a-naradi', 'stavebni-stroje'] },
+  { cats: [8], subs: [73], re: /(alt[aá]n|pergol|domek|zahradn\p{L}*\s+n[aá]bytek)/iu, to: ['dum-a-zahrada', 'zahradni-nabytek'] },
+  { cats: [8], subs: [73], re: /(d[řr]evin|rostlin|semen|sazenic|statice|limonk|stromk|ke[řr]e)/iu, to: ['dum-a-zahrada', 'rostliny-a-semena'] },
   // hudební nástroje
-  { subs: [28], re: /kytar|baskytar|ukulele/iu, to: ['hudba', 'kytary'] },
-  { subs: [28], re: /kl[aá]ves|piano|klav[ií]r|pian/iu, to: ['hudba', 'klavesy'] },
-  { subs: [28], re: /\bbic[ií]|bubn|[čc]inel/iu, to: ['hudba', 'bici'] },
-  { subs: [28], re: /saxofon|trubk|fl[ée]tn|klarinet|trombon|dechov/iu, to: ['hudba', 'dechove'] },
+  { subs: [28], re: /kytar|baskytar|ukulele/iu, to: ['hudba-a-hudebni-nastroje', 'kytary-a-baskytary'] },
+  { subs: [28], re: /kl[aá]ves|piano|klav[ií]r|pian/iu, to: ['hudba-a-hudebni-nastroje', 'klavesy-a-piana'] },
+  { subs: [28], re: /\bbic[ií]|bubn|[čc]inel/iu, to: ['hudba-a-hudebni-nastroje', 'bici-nastroje'] },
+  { subs: [28], re: /saxofon|trubk|fl[ée]tn|klarinet|trombon|dechov/iu, to: ['hudba-a-hudebni-nastroje', 'dechove-nastroje'] },
   // oblečení: pánské
-  { cats: [6], subs: [89, 93, 97, 98, 99, 100, 103, 105, 108, 111, 112], re: /(p[aá]nsk|mu[žz]sk)/iu, to: ['obleceni', 'panske'] },
+  { cats: [6], subs: [89, 93, 97, 98, 99, 100, 103, 105, 108, 111, 112], re: /(p[aá]nsk|mu[žz]sk)/iu, to: ['obleceni-a-obuv', 'panske-obleceni'] },
 ];
 
 /** Cílová kategorie [hlavní, podkategorie]. */
@@ -195,7 +195,7 @@ export function cleanDescription(l: Pick<LegacyListing, 'InzeratDescription' | '
   let d = htmlToText(l.InzeratDescription ?? '');
   if (d.replace(/[\s.•-]/g, '').length < 3) d = htmlToText(l.ShortDescription ?? '');
   if (d.replace(/[\s.•-]/g, '').length < 3) d = cleanTitle(l.InzeratName);
-  if (d.length < 10) d = `${d}\n\n(Inzerát převzatý ze starého webu Dejinzerat.cz.)`;
+  if (d.length < 10) d = `${d}\n\n(Inzerát převzatý ze starého webu DEJINZERAT.cz.)`;
   return d.length > 8000 ? `${d.slice(0, 7990).trimEnd()}…` : d;
 }
 

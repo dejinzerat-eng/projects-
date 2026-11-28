@@ -53,9 +53,9 @@ export const salaryUnit = (v: number) => (v < 1000 ? 'HOUR' : 'MONTH');
 
 /** Typ strukturovaných dat podle hlavní kategorie inzerátu. */
 export function listingKind(parentSlug: string, subSlug: string): 'job' | 'realestate' | 'vehicle' | 'service' | 'product' {
-  if (parentSlug === 'prace' || parentSlug.startsWith('prace-')) return subSlug === 'hledam-praci' ? 'service' : 'job';
+  if (parentSlug === 'prace-a-brigady') return subSlug === 'hledam-praci' ? 'service' : 'job';
   if (parentSlug === 'reality') return 'realestate';
-  if (parentSlug === 'sluzby' || parentSlug.startsWith('sluzby-')) return 'service';
+  if (parentSlug === 'sluzby-a-remesla') return 'service';
   if (parentSlug === 'auto-moto' && !/(dil|pneu|kola|prislus)/.test(subSlug)) return 'vehicle';
   return 'product';
 }
@@ -101,7 +101,7 @@ export function listingJsonLd(l: ListingLd): Json[] {
   } else if (kind === 'vehicle') {
     const km = num(a.mileage), year = num(a.year), power = num(a.power);
     main = {
-      '@type': l.category.slug === 'osobni-auta' ? 'Car' : l.category.slug === 'motorky' ? 'Motorcycle' : 'Vehicle', name: l.title, description, url, image: images, category: `${parent.name} > ${l.category.name}`,
+      '@type': l.category.slug === 'osobni-automobily' ? 'Car' : l.category.slug === 'motocykly-a-skutry' ? 'Motorcycle' : 'Vehicle', name: l.title, description, url, image: images, category: `${parent.name} > ${l.category.name}`,
       ...(str(a.brand) ? { brand: { '@type': 'Brand', name: str(a.brand) } } : {}), ...(str(a.model) ? { model: str(a.model) } : {}),
       ...(km != null ? { mileageFromOdometer: { '@type': 'QuantitativeValue', value: km, unitCode: 'KMT' } } : {}),
       ...(year ? { vehicleModelDate: String(year), productionDate: String(year) } : {}),

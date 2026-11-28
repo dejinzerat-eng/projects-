@@ -55,7 +55,7 @@ async function upload(cookie = '') {
   return { status: r.status, body: await r.json().catch(() => null), headers: r.headers };
 }
 const listing = (extra = {}) => ({
-  title: `Reproduktory Bose ${RUN}`, description: 'Prodám reproduktory, plně funkční, jen osobní předání.', price: 2500, categorySlug: 'elektronika', subSlug: 'audio',
+  title: `Reproduktory Bose ${RUN}`, description: 'Prodám reproduktory, plně funkční, jen osobní předání.', price: 2500, categorySlug: 'elektronika', subSlug: 'audio-technika',
   city: 'Brno', offerType: 'SELL', condition: 'USED', ...extra,
 });
 const tokenFrom = (m) => /potvrzeni-inzeratu\?token=([A-Za-z0-9_-]+)/.exec(m.html)?.[1];

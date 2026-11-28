@@ -169,8 +169,9 @@ export class SearchService implements OnModuleInit {
   private async searchMeili(p: SearchParams, page: number, limit: number, publishedAfter?: Date): Promise<SearchResponse> {
     const f: string[] = [];
     const esc = (s: string) => JSON.stringify(s);
+    // Názvy podkategorií se mohou opakovat pod různými hlavními kategoriemi (např. „příslušenství“) – filtrujeme i podle hlavní
+    if (p.category) f.push(`parentCategorySlug = ${esc(p.category)}`);
     if (p.sub) f.push(`categorySlug = ${esc(p.sub)}`);
-    else if (p.category) f.push(`parentCategorySlug = ${esc(p.category)}`);
     if (p.priceMin != null) f.push(`priceCzk >= ${Number(p.priceMin)}`);
     if (p.priceMax != null) f.push(`priceCzk <= ${Number(p.priceMax)}`);
     const geo = this.geoOf(p);

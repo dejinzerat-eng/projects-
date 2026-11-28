@@ -6,17 +6,19 @@ import { call } from '@/lib/client';
 import { useToast } from './toast';
 
 interface SellerSettingsData {
-  phone: string | null; phoneVerified: boolean; showPhone: boolean;
+  phone: string | null; phoneVerified: boolean; showPhone: boolean; phoneRequiresVerification?: boolean;
   company: { ico: string | null; name: string | null; address: string | null; vatId: string | null; verifiedAt: string | null; status: 'verified' | 'unverified' | 'invalid' | 'none' } | null;
 }
 
 /**
- * Viditelnost telefonu u inzerátů (výslovný souhlas, výchozí stav vypnuto) a stav ověření firmy v ARES.
+ * Telefon u inzerátů: uložení čísla (bez ověření SMS), viditelnost u inzerátů (výslovný souhlas, výchozí stav vypnuto) a stav ověření firmy v ARES.
  * `refreshKey` = objekt, který se po uložení profilu změní (router.refresh) → údaje se načtou znovu.
  */
 export function SellerSettings({ refreshKey }: { refreshKey?: unknown }) {
   const [d, setD] = useState<SellerSettingsData | null>(null);
   const [busy, setBusy] = useState(false);
+  const [phoneEdit, setPhoneEdit] = useState(false);
+  const [phone, setPhone] = useState('');
   const router = useRouter(); const toast = useToast();
   const load = () => call<SellerSettingsData>('/me/seller-settings').then(setD).catch(() => undefined);
   useEffect(() => { void load(); }, [refreshKey]);
@@ -29,28 +31,50 @@ export function SellerSettings({ refreshKey }: { refreshKey?: unknown }) {
   }
   if (!d) return null;
   const c = d.company;
+  // Ověření SMS se zatím nevyžaduje; když se zapne (PHONE_REQUIRE_VERIFIED), zobrazit jde jen ověřené číslo.
+  const canShow = !!d.phone && (!d.phoneRequiresVerification || d.phoneVerified);
+  const editing = phoneEdit || !d.phone;
 
   return (
     <section className="card p-5 sm:p-6">
       <h2 className="text-lg font-bold">Kontakt u inzerátů</h2>
       <p className="mt-1 text-sm text-muted">E-mail nikdy nezveřejňujeme. Kupující vám mohou vždy napsat přes zprávy.</p>
       <div className="mt-5 space-y-4">
-        <label className={`flex items-start gap-3 ${d.phoneVerified ? '' : 'opacity-60'}`}>
-          <input type="checkbox" className="mt-0.5 size-5 shrink-0 accent-[var(--brand)]" checked={d.showPhone && d.phoneVerified} disabled={!d.phoneVerified || busy}
+        <div>
+          <label className="label" htmlFor="seller-phone">Telefon</label>
+          {editing ? (
+            <form className="flex flex-wrap gap-2" onSubmit={(e) => {
+              e.preventDefault();
+              void act(async () => { await call('/me/phone', 'PUT', { phone }); setPhoneEdit(false); }, 'Telefon uložen');
+            }}>
+              <input id="seller-phone" className="input min-w-0 flex-1 sm:max-w-64" type="tel" inputMode="tel" autoComplete="tel" placeholder="+420 777 123 456" required maxLength={30}
+                value={phone} onChange={(e) => setPhone(e.target.value)} />
+              <button className="btn btn-dark h-11" disabled={busy}>Uložit telefon</button>
+              {d.phone && <button type="button" onClick={() => setPhoneEdit(false)} className="btn btn-ghost h-11">Zrušit</button>}
+            </form>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl bg-surface-2 p-3 text-sm">
+              <Phone className="size-4 text-muted" /><span className="flex-1 font-medium">{d.phone}</span>
+              {d.phoneVerified && <span className="inline-flex items-center gap-1 font-semibold text-trust"><BadgeCheck className="size-4" />Ověřeno</span>}
+              <button type="button" disabled={busy} onClick={() => { setPhone(d.phone ?? ''); setPhoneEdit(true); }} className="btn btn-ghost btn-sm">Změnit</button>
+              <button type="button" disabled={busy} onClick={() => { if (confirm('Odebrat telefon z účtu? U inzerátů se přestane zobrazovat.')) void act(() => call('/me/phone', 'DELETE'), 'Telefon odebrán'); }} className="btn btn-ghost btn-sm">Odebrat</button>
+            </div>
+          )}
+          <p className="mt-1.5 text-xs text-muted">České nebo slovenské číslo. Bez vašeho souhlasu níže ho nikomu neukážeme.</p>
+        </div>
+
+        <label className={`flex items-start gap-3 ${canShow ? '' : 'opacity-60'}`}>
+          <input type="checkbox" className="mt-0.5 size-5 shrink-0 accent-[var(--brand)]" checked={d.showPhone && canShow} disabled={!canShow || busy}
             onChange={(e) => { const v = e.target.checked; setD({ ...d, showPhone: v }); void act(() => call('/me/phone-visibility', 'PATCH', { showPhone: v }), v ? 'Telefon se u inzerátů zobrazí' : 'Telefon je skrytý'); }} />
           <span>
             <span className="font-semibold">Zobrazovat telefon u mých inzerátů</span>
             <span className="mt-0.5 block text-sm text-muted">
-              {d.phoneVerified ? 'Číslo uvidí jen přihlášení uživatelé po kliknutí na „Zobrazit telefon“.' : 'Nejdřív si v části Ověření potvrďte telefon SMS kódem. Neověřené číslo nikomu neukážeme.'}
+              {canShow ? 'Číslo uvidí jen přihlášení uživatelé po kliknutí na „Zobrazit telefon“.'
+                : d.phone ? 'Nejdřív si v části E-mail a telefon potvrďte číslo SMS kódem. Neověřené číslo nikomu neukážeme.'
+                : 'Nejdřív výše uložte telefonní číslo.'}
             </span>
           </span>
         </label>
-        {d.phoneVerified && d.phone && (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl bg-surface-2 p-3 text-sm">
-            <Phone className="size-4 text-muted" /><span className="flex-1">{d.phone}</span>
-            <button type="button" disabled={busy} onClick={() => { if (confirm('Odebrat telefon z účtu? Přijdete i o odznak ověřeného telefonu.')) void act(() => call('/me/phone', 'DELETE'), 'Telefon odebrán'); }} className="btn btn-ghost btn-sm">Odebrat telefon</button>
-          </div>
-        )}
 
         {c && (
           <div className="border-t border-line pt-4">

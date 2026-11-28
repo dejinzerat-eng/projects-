@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { landingMetadata, LandingPage, resolveLanding, type SP } from '@/components/category-landing';
 
-/** Vstupní stránka podkategorie v konkrétním městě, např. /kategorie/reality/byty/mesto/brno */
+/** Vstupní stránka podkategorie v konkrétním městě, např. /kategorie/reality/byty-na-prodej/mesto/brno */
 type Props = { params: Promise<{ slug: string; sub: string; mesto: string }>; searchParams: Promise<SP> };
 
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {

@@ -4,17 +4,17 @@
  */
 export const LEGACY_CATEGORY_PATHS: Record<string, string> = {
   'auto-moto-lode': '/kategorie/auto-moto',
-  'prace-a-podnikani': '/kategorie/prace',
+  'prace-a-podnikani': '/kategorie/prace-a-brigady',
   nemovitosti: '/kategorie/reality',
   'elektro-a-pocitace': '/kategorie/elektronika',
-  domacnost: '/kategorie/nabytek',
-  'obleceni-a-obuv': '/kategorie/obleceni',
-  zvirata: '/kategorie/zvirata',
-  'stavba-zahrada-stroje': '/kategorie/dum-zahrada',
-  'zdravi-a-krasa': '/kategorie/sluzby/krasa',
-  'pro-deti': '/kategorie/deti',
-  'hobby-a-zaliby': '/kategorie/hobby',
-  'volny-cas-a-zabava': '/kategorie/hobby',
+  domacnost: '/kategorie/nabytek-a-bydleni',
+  'obleceni-a-obuv': '/kategorie/obleceni-a-obuv',
+  zvirata: '/kategorie/zvirata-a-chovatelske-potreby',
+  'stavba-zahrada-stroje': '/kategorie/dum-a-zahrada',
+  'zdravi-a-krasa': '/kategorie/sluzby-a-remesla/krasa-a-zdravi',
+  'pro-deti': '/kategorie/deti-a-kojenecke-potreby',
+  'hobby-a-zaliby': '/kategorie/hobby-a-volny-cas',
+  'volny-cas-a-zabava': '/kategorie/hobby-a-volny-cas',
 };
 
 export const LEGACY_PAGE_PATHS: Record<string, string> = {

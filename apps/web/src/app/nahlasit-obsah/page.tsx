@@ -6,7 +6,7 @@ import { api, getMe } from '@/lib/api';
 import { social } from '@/lib/seo';
 
 const title = 'Nahlásit nezákonný obsah';
-const description = 'Oznamte nám nezákonný obsah na Dejinzerat.cz podle nařízení o digitálních službách (DSA). Formulář funguje i bez registrace.';
+const description = 'Oznamte nám nezákonný obsah na DEJINZERAT.cz podle nařízení o digitálních službách (DSA). Formulář funguje i bez registrace.';
 export const metadata: Metadata = { title, description, alternates: { canonical: '/nahlasit-obsah' }, ...social({ title, description, path: '/nahlasit-obsah' }) };
 
 type Cat = { value: string; label: string; anonymous: boolean };

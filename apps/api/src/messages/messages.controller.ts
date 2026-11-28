@@ -212,7 +212,7 @@ export class MessagesController {
   private async notify(c: { id: string; listing: { title: string } | null }, u: AuthUser, otherId: string, body: string, hasImage: boolean) {
     const name = safeName(u.name);
     const risky = !!assessMessageSafety(body, ownHosts()) || foreignPhones(body).length > 0;
-    const preview = body ? (risky ? 'Zpráva obsahuje odkaz nebo kontakt – zobrazte ji přímo na Dejinzerat.cz.' : cleanPreview(body)) : '📷 Fotografie';
+    const preview = body ? (risky ? 'Zpráva obsahuje odkaz nebo kontakt – zobrazte ji přímo na DEJINZERAT.cz.' : cleanPreview(body)) : '📷 Fotografie';
     const link = `/zpravy/${c.id}`;
     const title = `Nová zpráva od ${name}`;
     const existing = await this.prisma.notification.findFirst({ where: { userId: otherId, type: 'message', link, readAt: null }, select: { id: true } });

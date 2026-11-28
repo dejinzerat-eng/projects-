@@ -39,19 +39,19 @@ describe('převod kategorií', () => {
     for (const [id, [p, s]] of Object.entries(LEGACY_SUBCATEGORIES)) assert.ok(slugs.has(`${p}/${s}`), `podkategorie ${id} → ${p}/${s}`);
   });
   it('mapuje podle podkategorie a bez ní podle hlavní kategorie', () => {
-    assert.deepEqual(mapCategory({ ...base, CategoryId: 7, SubcategoryId: 76 }), ['zvirata', 'psi']);
-    assert.deepEqual(mapCategory({ ...base, CategoryId: 1, SubcategoryId: null, InzeratName: 'Opel Meriva' }), ['auto-moto', 'osobni-auta']);
+    assert.deepEqual(mapCategory({ ...base, CategoryId: 7, SubcategoryId: 76 }), ['zvirata-a-chovatelske-potreby', 'psi']);
+    assert.deepEqual(mapCategory({ ...base, CategoryId: 1, SubcategoryId: null, InzeratName: 'Opel Meriva' }), ['auto-moto', 'osobni-automobily']);
     assert.deepEqual(mapCategory({ ...base, CategoryId: 99, SubcategoryId: null }), ['ostatni', 'ruzne']);
   });
   it('upřesní služby, reality a zvířata podle textu', () => {
-    assert.deepEqual(mapCategory({ ...base, CategoryId: 8, SubcategoryId: 71, InzeratName: 'Zateplíme vám dům' }), ['sluzby', 'remesla']);
-    assert.deepEqual(mapCategory({ ...base, CategoryId: 2, SubcategoryId: 4, InzeratName: 'Nabízíme tvorbu moderního prodejního webu' }), ['sluzby', 'it-sluzby']);
+    assert.deepEqual(mapCategory({ ...base, CategoryId: 8, SubcategoryId: 71, InzeratName: 'Zateplíme vám dům' }), ['sluzby-a-remesla', 'remesla-a-opravy']);
+    assert.deepEqual(mapCategory({ ...base, CategoryId: 2, SubcategoryId: 4, InzeratName: 'Nabízíme tvorbu moderního prodejního webu' }), ['sluzby-a-remesla', 'it-a-web']);
     assert.deepEqual(mapCategory({ ...base, CategoryId: 3, SubcategoryId: 2, InzeratName: 'Montované garáže s omítkou' }), ['reality', 'garaze']);
-    assert.deepEqual(mapCategory({ ...base, CategoryId: 3, SubcategoryId: 1, InzeratName: 'Pronájem bytu 2+1 Plzeň' }), ['reality', 'byty-pronajem']);
-    assert.deepEqual(mapCategory({ ...base, CategoryId: 7, SubcategoryId: null, InzeratName: 'Prodám britská krátkosrstá koťata.' }), ['zvirata', 'kocky']);
-    assert.deepEqual(mapCategory({ ...base, CategoryId: 7, SubcategoryId: 85, InzeratName: 'Maltézsky psík' }), ['zvirata', 'psi']);
-    assert.deepEqual(mapCategory({ ...base, CategoryId: 8, SubcategoryId: null, InzeratName: 'Plastové okno 90x90 bílé' }), ['dum-zahrada', 'stavebniny']);
-    assert.deepEqual(mapCategory({ ...base, CategoryId: 6, SubcategoryId: 89, InzeratName: 'Pánská zimní bunda' }), ['obleceni', 'panske']);
+    assert.deepEqual(mapCategory({ ...base, CategoryId: 3, SubcategoryId: 1, InzeratName: 'Pronájem bytu 2+1 Plzeň' }), ['reality', 'byty-k-pronajmu']);
+    assert.deepEqual(mapCategory({ ...base, CategoryId: 7, SubcategoryId: null, InzeratName: 'Prodám britská krátkosrstá koťata.' }), ['zvirata-a-chovatelske-potreby', 'kocky']);
+    assert.deepEqual(mapCategory({ ...base, CategoryId: 7, SubcategoryId: 85, InzeratName: 'Maltézsky psík' }), ['zvirata-a-chovatelske-potreby', 'psi']);
+    assert.deepEqual(mapCategory({ ...base, CategoryId: 8, SubcategoryId: null, InzeratName: 'Plastové okno 90x90 bílé' }), ['dum-a-zahrada', 'stavebniny']);
+    assert.deepEqual(mapCategory({ ...base, CategoryId: 6, SubcategoryId: 89, InzeratName: 'Pánská zimní bunda' }), ['obleceni-a-obuv', 'panske-obleceni']);
   });
   it('pozná pronájem a poptávku', () => {
     assert.equal(mapOfferType({ ...base, CategoryId: 3, InzeratName: 'Pronájem skladu' }), 'RENT');

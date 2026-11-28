@@ -36,7 +36,7 @@ export async function resolveCompany(
   }
   if (ico === cur.companyId && cur.companyVerifiedAt) return { data: { isBusiness: true }, status: 'verified' };
 
-  if (await isTaken(ico)) throw new BadRequestException({ message: `IČO ${ico} už má ověřené jiný účet. Pokud jde o vaši firmu, kontaktujte prosím podporu Dejinzerat.cz.`, field: 'companyId' });
+  if (await isTaken(ico)) throw new BadRequestException({ message: `IČO ${ico} už má ověřené jiný účet. Pokud jde o vaši firmu, kontaktujte prosím podporu DEJINZERAT.cz.`, field: 'companyId' });
 
   const r = await lookup(ico);
   if (r.status === 'found') return { data: { isBusiness: true, companyId: ico, companyName: r.name, companyAddress: r.address, vatId: r.vatId, companyVerifiedAt: now }, status: 'verified' };

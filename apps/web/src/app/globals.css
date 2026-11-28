@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 
-/* ===== Dejinzerat.cz – design tokens ===== */
+/* ===== DEJINZERAT.cz – design tokens ===== */
 :root {
   /* Světlý režim je výchozí. Tmavý se zapne přes <html data-theme="dark"> (přepínač v patičce). */
   --paper: #f6f7f8;

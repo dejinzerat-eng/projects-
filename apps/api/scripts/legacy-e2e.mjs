@@ -137,7 +137,7 @@ try {
     assert.equal(car.price, 57000);
     assert.equal(car.city, 'Praha');
     assert.equal(car.region, 'PHA');
-    assert.equal(`${car.category.parent.slug}/${car.category.slug}`, 'auto-moto/osobni-auta');
+    assert.equal(`${car.category.parent.slug}/${car.category.slug}`, 'auto-moto/osobni-automobily');
     assert.equal(car.images.length, 2);
     assert.equal(car.publishedAt.toISOString(), '2025-03-01T10:00:00.000Z');
     assert.ok(car.expiresAt > new Date());
