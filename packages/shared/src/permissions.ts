@@ -36,6 +36,7 @@ export const PERMISSIONS = {
   'categories.manage': 'Kategorie a SEO',
   'pages.edit': 'Texty a informační stránky',
   'prices.edit': 'Ceník prémiových služeb',
+  'banners.manage': 'Reklamní bannery na úvodní stránce',
   'settings.manage': 'Systémová nastavení',
   'audit.read': 'Auditní log',
   'search.reindex': 'Přeindexování vyhledávání',
@@ -47,7 +48,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   USER: [],
   SUPPORT: ['admin.access', 'stats.read', 'listings.read', 'reports.read', 'users.read', 'users.unblock', 'users.resendVerification'],
   MODERATOR: ['admin.access', 'stats.read', 'listings.read', 'listings.moderate', 'listings.edit', 'reports.read', 'reports.handle', 'users.read', 'users.block', 'users.unblock', 'users.restrict'],
-  BUSINESS_MANAGER: ['admin.access', 'stats.read', 'listings.read', 'listings.promote', 'users.read', 'businesses.manage', 'prices.edit'],
+  BUSINESS_MANAGER: ['admin.access', 'stats.read', 'listings.read', 'listings.promote', 'users.read', 'businesses.manage', 'prices.edit', 'banners.manage'],
   ADMIN: ALL.filter((p) => p !== 'admins.manage' && p !== 'settings.manage'),
   SUPERADMIN: ALL,
 };

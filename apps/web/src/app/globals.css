@@ -104,6 +104,9 @@ body { background: var(--paper); color: var(--ink); font-feature-settings: 'ss01
   .chip { @apply inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 h-8 text-sm text-ink-2 hover:border-ink-2 transition-colors whitespace-nowrap; }
   .chip-active { @apply border-ink bg-ink text-paper hover:border-ink; }
   .badge { @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide; }
+  /* Kompaktní panel filtrů ve výsledcích hledání (menší pole a štítky, víc filtrů na jednu obrazovku) */
+  .filters-compact .input { @apply h-10 text-sm; }
+  .filters-compact .chip { @apply h-7 px-2.5 text-[13px]; }
   .h-display { font-family: var(--font-display); letter-spacing: -0.02em; }
   .scrollbar-none { scrollbar-width: none; }
   .scrollbar-none::-webkit-scrollbar { display: none; }

@@ -559,3 +559,23 @@ model ModerationAppeal {
   @@index([listingId])
 
 }
+
+/// Reklamní banner na úvodní stránce – řada nejvýše 3 bannerů (spravuje se v administraci › Reklamní bannery).
+model Banner {
+  id        String   @id @default(cuid())
+  /// Obrázek v našem úložišti (nahraný v administraci)
+  imageUrl  String
+  /// Kam banner vede (https://… nebo /cesta na našem webu); bez odkazu je banner jen obrázek
+  linkUrl   String?
+  /// Popis obrázku pro nevidomé a vyhledávače
+  alt       String
+  active    Boolean  @default(true)
+  /// Pořadí zleva doprava (nižší číslo = dřív)
+  position  Int      @default(0)
+  /// Počet kliknutí návštěvníků
+  clicks    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, position])
+}

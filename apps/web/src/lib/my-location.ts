@@ -1,7 +1,10 @@
 'use client';
 
-/** Zvolená poloha návštěvníka pro „Nabídky v okolí“ – jen v prohlížeči (localStorage). */
-export interface MyLocation { name: string; lat: number; lng: number; radius: number; source: 'gps' | 'city' }
+/**
+ * Zvolená poloha návštěvníka pro hledání v okolí (lokalita ve vyhledávání na úvodní stránce, filtry) – jen v prohlížeči (localStorage).
+ * `label` = jednoznačný název obce z našeptávače (např. „Říčany (Praha-východ)“), podle něj se hledá parametrem `mesto`.
+ */
+export interface MyLocation { name: string; label?: string; lat: number; lng: number; radius: number; source: 'gps' | 'city' }
 const KEY = 'dej_location';
 
 export function readMyLocation(): MyLocation | null {

@@ -16,17 +16,3 @@ export function HomeSection({ id, title, subtitle, href, compact, children }: { 
     </section>
   );
 }
-
-/** Zástupné karty při načítání mřížky. */
-export function GridSkeleton({ n = 4 }: { n?: number }) {
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4" aria-hidden>
-      {Array.from({ length: n }, (_, i) => (
-        <div key={i} className={`overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface ${i >= 2 ? 'hidden md:block' : ''}`}>
-          <div className="aspect-[4/3] animate-pulse bg-surface-2" />
-          <div className="space-y-2 p-3"><div className="h-4 w-1/2 rounded bg-surface-2" /><div className="h-3 w-4/5 rounded bg-surface-2" /></div>
-        </div>
-      ))}
-    </div>
-  );
-}
