@@ -37,9 +37,13 @@ export function pagePlan(existing: { content: string; seededHash: string | null 
   return 'skip';
 }
 
-/** Značka se píše „DEJINZERAT.cz“ (rozhodnutí 2026-11-28). Starší zápis „Dejinzerat.cz“ v textech nahradíme. */
+/**
+ * Značka se píše „DEJINZERAT.cz“ (rozhodnutí 2026-11-28). Jiné zápisy v textech („Dejinzerat.cz“, „DEJinzerat.cz“,
+ * „DEJINZERAT.CZ“…) nahradíme. Malými písmeny („dejinzerat.cz“) a uvnitř adresy či e-mailu (www., @, /) nic neměníme.
+ * Stejný vzor používá migrace 20261128160000_brand_variants.
+ */
 export const BRAND = 'DEJINZERAT.cz';
-const OLD_BRAND = /Dejinzerat\.cz/g;
+const OLD_BRAND = /(?<![A-Za-z0-9_./@-])(?!DEJINZERAT\.cz)(?!dejinzerat\.cz)[Dd][Ee][Jj][Ii][Nn][Zz][Ee][Rr][Aa][Tt]\.[Cc][Zz](?![A-Za-z0-9_])/g;
 export const rebrand = (s: string) => s.replace(OLD_BRAND, BRAND);
 
 /**

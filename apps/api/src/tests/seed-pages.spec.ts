@@ -61,6 +61,12 @@ describe('rebrandPage', () => {
     assert.equal(rebrandPage({ title: 'T', content, description: 'x', seededHash: hashContent(content) })!.seededHash, hashContent('Text DEJINZERAT.cz'));
     assert.equal(rebrandPage({ title: 'T', content, description: 'x', seededHash: 'jiny' })!.seededHash, 'jiny');
   });
+  it('sjednotí i jiné zápisy, adresy a e-maily nechá', () => {
+    const r = rebrandPage({ title: 'DEJinzerat.cz - moderní inzerce', content: 'DEJINZERAT.CZ, DejInzerat.cz, www.Dejinzerat.cz, info@Dejinzerat.cz, https://Dejinzerat.cz/x, dejinzerat.cz', description: '(Dejinzerat.cz)', seededHash: null })!;
+    assert.equal(r.title, 'DEJINZERAT.cz - moderní inzerce');
+    assert.equal(r.content, 'DEJINZERAT.cz, DEJINZERAT.cz, www.Dejinzerat.cz, info@Dejinzerat.cz, https://Dejinzerat.cz/x, dejinzerat.cz');
+    assert.equal(r.description, '(DEJINZERAT.cz)');
+  });
   it('je opakovatelné – podruhé už nic nemění', () => {
     assert.equal(rebrandPage({ title: 'DEJINZERAT.cz', content: 'DEJINZERAT.cz', description: 'DEJINZERAT.cz', seededHash: null }), null);
   });

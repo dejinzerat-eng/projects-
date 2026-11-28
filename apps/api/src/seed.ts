@@ -197,7 +197,8 @@ async function main() {
   }
 
   // Starý zápis značky „Dejinzerat.cz“ → „DEJINZERAT.cz“ i ve stránkách upravených v administraci
-  for (const page of await prisma.page.findMany({ where: { OR: [{ title: { contains: 'Dejinzerat.cz' } }, { content: { contains: 'Dejinzerat.cz' } }, { description: { contains: 'Dejinzerat.cz' } }] } })) {
+  const anyBrand = { contains: 'dejinzerat.cz', mode: 'insensitive' as const };
+  for (const page of await prisma.page.findMany({ where: { OR: [{ title: anyBrand }, { content: anyBrand }, { description: anyBrand }] } })) {
     const data = rebrandPage(page);
     if (data) { await prisma.page.update({ where: { slug: page.slug }, data: { ...data, updatedAt: page.updatedAt } }); console.log(`  stránka ${page.slug}: název značky přepsán na DEJINZERAT.cz`); }
   }
