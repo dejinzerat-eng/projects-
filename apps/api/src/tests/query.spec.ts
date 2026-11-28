@@ -25,7 +25,7 @@ describe('parseNaturalQuery (chytré hledání)', () => {
 
   it('rozpozná podkategorii', () => {
     const { params } = parseNaturalQuery('kočárky použitý');
-    assert.equal(params.category, 'deti');
+    assert.equal(params.category, 'deti-a-kojenecke-potreby');
     assert.equal(params.sub, 'kocarky');
     assert.equal(params.q, undefined);
   });
