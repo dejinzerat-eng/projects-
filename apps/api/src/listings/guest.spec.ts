@@ -53,6 +53,10 @@ describe('cíl potvrzovacího odkazu', () => {
     assert.equal(pendingFromTarget('pending:{rozbité'), null);
     assert.equal(pendingFromTarget('pending:null'), null);
   });
+  it('telefon z formuláře čeká v tokenu spolu s inzerátem', () => {
+    const p = { listing: { title: 'Kolo' }, guestOwner: null, contact: { phone: '777123456', showPhone: false, showEmail: true } };
+    assert.deepEqual(pendingFromTarget(pendingTarget(p)), p);
+  });
 });
 
 describe('guestName', () => {

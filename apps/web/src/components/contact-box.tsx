@@ -1,5 +1,5 @@
 'use client';
-import { Phone, Send, ShieldCheck } from 'lucide-react';
+import { Mail, Phone, Send, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { call } from '@/lib/client';
@@ -7,10 +7,11 @@ import { useToast } from './toast';
 
 const QUICK = ['Je inzerát ještě aktuální?', 'Byla by možná sleva?', 'Kdy a kde by šlo zboží vyzvednout?', 'Posíláte i poštou / Zásilkovnou?'];
 
-export function ContactBox({ listingId, loggedIn, hasPhone, sellerName }: { listingId: string; loggedIn: boolean; hasPhone: boolean; sellerName: string }) {
+export function ContactBox({ listingId, loggedIn, hasPhone, hasEmail = false, sellerName }: { listingId: string; loggedIn: boolean; hasPhone: boolean; hasEmail?: boolean; sellerName: string }) {
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [phone, setPhone] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
   const router = useRouter(); const toast = useToast();
   const login = () => router.push(`/prihlaseni?zpet=${encodeURIComponent(location.pathname)}`);
 
@@ -28,6 +29,10 @@ export function ContactBox({ listingId, loggedIn, hasPhone, sellerName }: { list
     if (!loggedIn) return login();
     try { setPhone((await call<{ phone: string }>(`/listings/${listingId}/phone`)).phone); } catch (err) { toast((err as Error).message, 'error'); }
   }
+  async function revealEmail() {
+    if (!loggedIn) return login();
+    try { setEmail((await call<{ email: string }>(`/listings/${listingId}/email`)).email); } catch (err) { toast((err as Error).message, 'error'); }
+  }
 
   return (
     <form onSubmit={send} className="space-y-3">
@@ -39,6 +44,8 @@ export function ContactBox({ listingId, loggedIn, hasPhone, sellerName }: { list
       <button className="btn btn-primary w-full" disabled={busy}><Send className="size-4" />{loggedIn ? 'Odeslat zprávu' : 'Přihlásit se a napsat'}</button>
       {hasPhone && (phone ? <a href={`tel:${phone.replace(/\s/g, '')}`} className="btn btn-outline w-full"><Phone className="size-4" />{phone}</a>
         : <button type="button" onClick={reveal} className="btn btn-outline w-full"><Phone className="size-4" />Zobrazit telefon</button>)}
+      {hasEmail && (email ? <a href={`mailto:${email}`} className="btn btn-outline w-full min-w-0"><Mail className="size-4 shrink-0" /><span className="truncate">{email}</span></a>
+        : <button type="button" onClick={revealEmail} className="btn btn-outline w-full"><Mail className="size-4" />Zobrazit e-mail</button>)}
       <p className="flex items-start gap-2 text-xs leading-relaxed text-muted"><ShieldCheck className="mt-px size-4 shrink-0 text-trust" />Nikdy neplaťte předem neznámým prodejcům a neposílejte údaje z karty. Komunikujte přes zprávy DEJINZERAT.cz.</p>
     </form>
   );

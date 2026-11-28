@@ -10,7 +10,7 @@ describe('GDPR export', () => {
 
   it('obsahuje všechny části a rozliší odeslané a přijaté zprávy', async () => {
     const asked: string[] = [];
-    const user = { id: 'u1', email: 'a@b.cz', name: 'Jana', createdAt: new Date(0), passwordHash: 'hash', googleId: null, appleId: null, isBusiness: true, companyName: 'Firma', companyId: '27082440', companyAddress: 'Praha', vatId: null, companyVerifiedAt: new Date(0), showPhone: true };
+    const user = { id: 'u1', email: 'a@b.cz', name: 'Jana', createdAt: new Date(0), passwordHash: 'hash', googleId: null, appleId: null, isBusiness: true, companyName: 'Firma', companyId: '27082440', companyAddress: 'Praha', vatId: null, companyVerifiedAt: new Date(0), showPhone: true, showEmail: null };
     const conv = { id: 'c1', buyerId: 'u1', listing: { id: 'l1', title: 'Kolo' }, buyer: { id: 'u1', name: 'Jana' }, seller: { id: 'u2', name: 'Petr' },
       messages: [{ id: 'm1', senderId: 'u1', body: 'Dobrý den' }, { id: 'm2', senderId: 'u2', body: 'Ahoj' }] };
     const selects: Record<string, unknown> = {};
@@ -32,6 +32,7 @@ describe('GDPR export', () => {
     assert.equal(out.account.hasPassword, true);
     assert.equal(out.company.companyId, '27082440');
     assert.equal(out.consents.showPhoneOnListings, true);
+    assert.equal(out.consents.showEmailOnListings, false);
     assert.equal(out.conversations[0].role, 'kupující');
     assert.deepEqual(out.conversations[0].messages.map((m) => m.direction), ['odeslaná', 'přijatá']);
     assert.deepEqual(out.messageCounts, { sent: 1, received: 1 });
