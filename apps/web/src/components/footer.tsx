@@ -51,7 +51,7 @@ export async function Footer() {
           <Col title="Právní" links={LEGAL as [string, string][]} />
         </div>
       </div>
-      <div className="border-t border-line"><div className="container-x flex items-center justify-between gap-4 py-5 text-xs text-muted"><span>© {new Date().getFullYear()} DEJINZERAT.cz · <CookieSettingsLink className="hover:text-ink hover:underline" /></span><ThemeToggle /></div></div>
+      <div className="border-t border-line"><div className="container-x flex items-center justify-between gap-4 py-5 text-xs text-muted"><span>© 2008 – {new Date().getFullYear()} DEJINZERAT.cz · <CookieSettingsLink className="hover:text-ink hover:underline" /></span><ThemeToggle /></div></div>
     </footer>
   );
 }
